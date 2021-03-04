@@ -2,9 +2,5 @@
 
 Hi，我是胡进，从事openstack开发五年，从事SDN开发两年，当前从事kubernetes相关研发工作，欢迎交流。
 
-邮箱：guokehujin@163.com
-微信: HJ_njutcm
-
-##### 测试
-
-- [test](http://2017.jsconf.cn/)
+- 邮箱：guokehujin@163.com
+- 微信: HJ_njutcm

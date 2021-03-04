@@ -1,11 +1,10 @@
 ---
-title: "Kuberntes OIDC"
+title: "Kuberntes OIDC Keycloak"
 subtitle: "Keycloak"
 layout: post
 author: "hujin"
 header-style: text
 tags:
-  - 笔记
   - kubernetes
   - oidc
   - keycloak

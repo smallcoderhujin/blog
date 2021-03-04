@@ -1,11 +1,10 @@
 ---
-title: "Kuberntes Webhook"
+title: "Kuberntes Webhook Keystone"
 subtitle: "keystone"
 layout: post
 author: "hujin"
 header-style: text
 tags:
-  - 笔记
   - kubernetes
   - webhook
   - keystone
