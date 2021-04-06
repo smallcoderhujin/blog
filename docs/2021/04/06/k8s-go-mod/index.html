@@ -11,31 +11,28 @@
     <meta name="theme-color" content="#000000">
     
     <!-- Open Graph -->
-    <meta property="og:title" content="CSI之Cinder - 胡进的博客 | Hujin's Blog">
+    <meta property="og:title" content="GO MOD使用私有仓库 - 胡进的博客 | Hujin's Blog">
     
     <meta property="og:type" content="article">
     <meta property="og:description" content="背景
-由于openstack cinder提供丰富的后端存储服务，当k8s部署在openstack的虚拟机中时，使用cinder 的csi提供存储服务可以非常方便对接不同的后端存储
 ">
     
-    <meta property="article:published_time" content="2021-03-24T00:00:00Z">
+    <meta property="article:published_time" content="2021-04-06T00:00:00Z">
     
     
     <meta property="article:author" content="hujin">
     
     
-    <meta property="article:tag" content="k8s">
+    <meta property="article:tag" content="go mod">
     
-    <meta property="article:tag" content="csi">
-    
-    <meta property="article:tag" content="cinder">
+    <meta property="article:tag" content="gerrit">
     
     
     <meta property="og:image" content="http://0.0.0.0:4000/img/avatar-hux-ny.jpg">
-    <meta property="og:url" content="http://0.0.0.0:4000/2021/03/24/k8s-csi-cinder/">
+    <meta property="og:url" content="http://0.0.0.0:4000/2021/04/06/k8s-go-mod/">
     <meta property="og:site_name" content="胡进的博客 | Hujin's Blog">
     
-    <title>CSI之Cinder - 胡进的博客 | Hujin's Blog</title>
+    <title>GO MOD使用私有仓库 - 胡进的博客 | Hujin's Blog</title>
 
     <!-- Web App Manifest -->
     <link rel="manifest" href="/blog/pwa/manifest.json">
@@ -44,7 +41,7 @@
     <link rel="shortcut icon" href="/blog/img/favicon.ico">
     
     <!-- Canonical URL -->
-    <link rel="canonical" href="http://0.0.0.0:4000/blog/2021/03/24/k8s-csi-cinder/">
+    <link rel="canonical" href="http://0.0.0.0:4000/blog/2021/04/06/k8s-go-mod/">
 
     <!-- Bootstrap Core CSS -->
     <link rel="stylesheet" href="/blog/css/bootstrap.min.css">
@@ -233,17 +230,15 @@
                 <div class="post-heading">
                     <div class="tags">
                         
-                        <a class="tag" href="/blog/archive/?tag=k8s" title="k8s">k8s</a>
+                        <a class="tag" href="/blog/archive/?tag=go+mod" title="go mod">go mod</a>
                         
-                        <a class="tag" href="/blog/archive/?tag=csi" title="csi">csi</a>
-                        
-                        <a class="tag" href="/blog/archive/?tag=cinder" title="cinder">cinder</a>
+                        <a class="tag" href="/blog/archive/?tag=gerrit" title="gerrit">gerrit</a>
                         
                     </div>
-                    <h1>CSI之Cinder</h1>
+                    <h1>GO MOD使用私有仓库</h1>
                     
-                    <h2 class="subheading">k8s csi</h2>
-                    <span class="meta">Posted by hujin on March 24, 2021</span>
+                    <h2 class="subheading">go mod gerrit</h2>
+                    <span class="meta">Posted by hujin on April 6, 2021</span>
                 </div>
             </div>
         </div>
@@ -270,51 +265,35 @@
                 
 
 				<h2 id="背景">背景</h2>
-<p>由于openstack cinder提供丰富的后端存储服务，当k8s部署在openstack的虚拟机中时，使用cinder 的csi提供存储服务可以非常方便对接不同的后端存储</p>
 
-<h2 id="要求">要求</h2>
+<p>在常见的项目中使用go mod做包管理，在引用第三方包时这个包可能维护在内部私有仓库中，需要解决几个问题：</p>
+
 <ul>
-  <li>分别部署openstack和k8s集群</li>
-  <li>openstack cinder使用v3 api</li>
-  <li>openstack nova和cinder在keystone中的endpoint url对应的ip地址，k8s的虚机可以访问到</li>
-  <li>openstack开启metadata服务</li>
-  <li>openstack虚机中需要安装cloud-init
-    <blockquote>
-      <p>/var/lib/cloud/data/instance-id虚机中这个目录必须是虚机的uuid，这个是通过cloud-init注入的</p>
-    </blockquote>
-  </li>
-  <li>虚机挂盘后要求在/dev/disk/by-id目录下有对应volume的设备存在</li>
+  <li>引用第三方库</li>
+  <li>引用私有仓库时不使用代理</li>
+  <li>使用git方式获取代码</li>
 </ul>
 
-<h2 id="部署">部署</h2>
+<h2 id="替换引用的仓库地址">替换引用的仓库地址</h2>
+<p>这里直接修改代码中的引用工作量太大了，可以通过在go.mod中添加replace的方式：</p>
 
-<p>获取k8s-openstack-provider源码（非必须）</p>
+<ul>
+  <li>github.com/gophercloud/gophercloud =&gt; gerrit-infrastructure.xxx.org/gerrit/a/container/gophercloud.git xxx-v0.7</li>
+</ul>
 
-<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
-2
-</pre></td><td class="rouge-code"><pre>git clone https://github.com/kubernetes/cloud-provider-openstack
-cd cloud-provider-openstack
-</pre></td></tr></tbody></table></code></pre></div></div>
+<blockquote>
+  <p>注意这里末尾要加.git，否则默认使用https获取代码</p>
+</blockquote>
 
-<p>编译（需要docker-ce 17.05以上的版本， docker需要翻墙）</p>
+<h2 id="私有仓库">私有仓库</h2>
 
-<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
-2
-3
-</pre></td><td class="rouge-code"><pre>export ARCH=amd64 # Defaults to amd64
-编译： make build-cmd-cinder-csi-plugin
-生成镜像：make image-cinder-csi-plugin
-</pre></td></tr></tbody></table></code></pre></div></div>
+<p>设置GOPRIVATE</p>
 
-<p>修改kubelet配置</p>
+<ul>
+  <li>export GOPRIVATE=gerrit-infrastructure.xxx.org</li>
+</ul>
 
-<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
-2
-</pre></td><td class="rouge-code"><pre>vim /etc/kubernetes/kubelet.env
-KUBELET_CLOUDPROVIDER="--cloud-provider=external"
-</pre></td></tr></tbody></table></code></pre></div></div>
-
-<p>配置openstack信息并使用base64加密</p>
+<h2 id="使用git方式获取代码">使用git方式获取代码</h2>
 
 <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
 2
@@ -322,274 +301,19 @@ KUBELET_CLOUDPROVIDER="--cloud-provider=external"
 4
 5
 6
-7
-8
-9
-10
-11
-</pre></td><td class="rouge-code"><pre>vim cloud.conf
-[Global]
-username = ArcherAdmin
-password = ArcherAdmin@123
-domain-name = Default
-auth-url = http://172.118.23.20:45357/v3
-tenant-id = ad88dd5d24ce4e2189a6ae7491c33e9d
-region = RegionOne
-
-[Metadata]
-search-order = configDrive,metadataService
+</pre></td><td class="rouge-code"><pre>[root@localhost cloud-provider-openstack]# cat /root/.gitconfig
+[user]
+    name = xxx
+    email = xxx@xxxx.com
+[url "ssh://xxx@gerrit-infrastructure.xxx.org:29418/container/gophercloud"]
+    insteadOf = https://gerrit-infrastructure.xxx.org/gerrit/a/container/gophercloud
 </pre></td></tr></tbody></table></code></pre></div></div>
-
-<p>使用base64对openstack配置加密</p>
-
-<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
-</pre></td><td class="rouge-code"><pre>cat cloud.conf | base64 -w 0
-</pre></td></tr></tbody></table></code></pre></div></div>
-
-<p>获取社区yaml文件</p>
-
-<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
-</pre></td><td class="rouge-code"><pre>https://github.com/kubernetes/cloud-provider-openstack/tree/master/manifests/cinder-csi-plugin
-</pre></td></tr></tbody></table></code></pre></div></div>
-
-<p>将之前openstack的配置对应的base64结果更新到csi-secret-cinderplugin.yaml文件中</p>
-
-<p>创建cinder csi资源</p>
-
-<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
-</pre></td><td class="rouge-code"><pre>kubectl apply -f cinder-csi-plugin
-</pre></td></tr></tbody></table></code></pre></div></div>
-
-<p>查看cinder csi pod状态</p>
-
-<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
-2
-3
-4
-5
-</pre></td><td class="rouge-code"><pre>[root@node1 csi-cinder]# kubectl get pods -n kube-system
-NAME                                       READY   STATUS        RESTARTS   AGE
-csi-cinder-controllerplugin-0              5/5     Running       25         4h12m
-csi-cinder-nodeplugin-cwzpr                2/2     Running       0          7m28s
-csi-cinder-nodeplugin-wxl6f                2/2     Running       0          7m29s
-</pre></td></tr></tbody></table></code></pre></div></div>
-
-<p>创建storeageclass和pvc</p>
-
-<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-20
-</pre></td><td class="rouge-code"><pre>cat sc.yaml
-apiVersion: storage.k8s.io/v1
-kind: StorageClass
-metadata:
-  name: csi-sc-cinderplugin
-provisioner: cinder.csi.openstack.org
-
-
-cat pvc.yaml
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: csi-pvc-cinderplugin
-spec:
-  accessModes:
-  - ReadWriteOnce
-  resources:
-    requests:
-      storage: 1Gi
-  storageClassName: csi-sc-cinderplugin
-</pre></td></tr></tbody></table></code></pre></div></div>
-
-<p>确认sc和pvc状态</p>
-
-<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
-2
-3
-4
-5
-6
-7
-8
-</pre></td><td class="rouge-code"><pre>[root@node1 resource-yamls]# kubectl get sc
-NAME                  PROVISIONER                RECLAIMPOLICY   VOLUMEBINDINGMODE   ALLOWVOLUMEEXPANSION   AGE
-csi-sc-cinderplugin   cinder.csi.openstack.org   Delete          Immediate           false                  26h
-csi-sc-hujin          arstor.csi.huayun.io       Delete          Immediate           false                  4d9h
-[root@node1 resource-yamls]# kubectl get pvc
-NAME                   STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS          AGE
-csi-pvc-cinderplugin   Bound    pvc-e5aec543-ff37-40ad-85d5-ce038975e14c   1Gi        RWO            csi-sc-cinderplugin   12m
-[root@node1 resource-yamls]#
-</pre></td></tr></tbody></table></code></pre></div></div>
-
-<p>创建pod</p>
-
-<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-20
-21
-</pre></td><td class="rouge-code"><pre>cat pod.yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: nginx
-spec:
-  containers:
-  - image: nginx:alpine
-    imagePullPolicy: IfNotPresent
-    name: nginx
-    ports:
-    - containerPort: 80
-      protocol: TCP
-    volumeMounts:
-      - mountPath: /var/lib/www/html
-        name: csi-data-cinderplugin
-  volumes:
-  - name: csi-data-cinderplugin
-    persistentVolumeClaim:
-      claimName: csi-pvc-cinderplugin
-      readOnly: false
-</pre></td></tr></tbody></table></code></pre></div></div>
-
-<p>从pv中获取volume id</p>
-
-<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-20
-21
-22
-23
-</pre></td><td class="rouge-code"><pre>[root@node1 resource-yamls]# kubectl describe pv pvc-e5aec543-ff37-40ad-85d5-ce038975e14c
-Name:            pvc-e5aec543-ff37-40ad-85d5-ce038975e14c
-Labels:          &lt;none&gt;
-Annotations:     pv.kubernetes.io/provisioned-by: cinder.csi.openstack.org
-Finalizers:      [kubernetes.io/pv-protection external-attacher/cinder-csi-openstack-org]
-StorageClass:    csi-sc-cinderplugin
-Status:          Bound
-Claim:           default/csi-pvc-cinderplugin
-Reclaim Policy:  Delete
-Access Modes:    RWO
-VolumeMode:      Filesystem
-Capacity:        1Gi
-Node Affinity:   &lt;none&gt;
-Message:
-Source:
-    Type:              CSI (a Container Storage Interface (CSI) volume source)
-    Driver:            cinder.csi.openstack.org
-    FSType:            ext4
-    VolumeHandle:      ef9037a7-9a67-408a-9f92-adbd2badc5db
-    ReadOnly:          false
-    VolumeAttributes:      storage.kubernetes.io/csiProvisionerIdentity=1616250534343-8081-cinder.csi.openstack.org
-Events:                &lt;none&gt;
-[root@node1 resource-yamls]#
-</pre></td></tr></tbody></table></code></pre></div></div>
-
-<p>在openstack中查看volume状态</p>
-
-<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
-2
-</pre></td><td class="rouge-code"><pre>[root@controller01 ~]# cinder list |grep ef9037a7
-| ef9037a7-9a67-408a-9f92-adbd2badc5db |   in-use  | pvc-e5aec543-ff37-40ad-85d5-ce038975e14c |  1   | basic-replica2 |  false   | 94a932d0-79da-4ed2-a228-a4e96264d1c0 |
-</pre></td></tr></tbody></table></code></pre></div></div>
-
-<p>确认pod状态</p>
-
-<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
-2
-3
-4
-5
-6
-7
-8
-</pre></td><td class="rouge-code"><pre>[root@node1 csi-cinder]# kubectl get pods     -owide
-NAME    READY   STATUS    RESTARTS   AGE   IP             NODE    NOMINATED NODE   READINESS GATES
-nginx   1/1     Running   0          35s   10.244.28.16   node3   &lt;none&gt;           &lt;none&gt;
-
-[root@node1 resource-yamls]# kubectl exec -it nginx -- sh
-/ # ls /var/lib/www/html/
-lost+found
-/ #
-</pre></td></tr></tbody></table></code></pre></div></div>
-
-<h2 id="测试场景">测试场景</h2>
-
-<h3 id="命令行删除deployment-pod">命令行删除deployment pod</h3>
-<p>删除后正常新建pod，且使用原来的volume</p>
-
-<h3 id="k8s虚机网络故障">k8s虚机网络故障</h3>
-<p>deployment中其中一个pod所在节点down机后，新建pod失败，报volume in-use
-statefulset中其中一个pod所在节点down机后，不新建pod</p>
-
-<h3 id="k8s虚机重启">k8s虚机重启</h3>
-<p>同节点down机</p>
-
-<h3 id="虚机迁移">虚机迁移</h3>
-<p>热迁移不影响pod使用
-冷迁移：同节点down机</p>
-
-<h3 id="k8s虚机对应计算节点故障">k8s虚机对应计算节点故障</h3>
-<p>此时原来的pod一直是删除状态，新建的pod也无法正常创建，必须等待down机的节点恢复
-这是一种安全的做法</p>
-
-<h3 id="虚机挂在最大磁盘个数">虚机挂在最大磁盘个数</h3>
-<p>这是一个bug，升级qemu后可以解决</p>
 
 <h2 id="参考">参考</h2>
 <ul>
-  <li>https://github.com/kubernetes/cloud-provider-openstack/blob/master/docs/cinder-csi-plugin/using-cinder-csi-plugin.md</li>
-  <li>https://www.jianshu.com/p/87b02040991c</li>
-  <li>https://silenceper.com/kubernetes-book/csi/how-to-write-csi-driver.html</li>
+  <li>https://goproxy.io/zh/</li>
+  <li>https://segmentfault.com/a/1190000021127791</li>
+  <li>https://juejin.cn/post/6844903975859257352</li>
 </ul>
 
 
@@ -597,19 +321,12 @@ statefulset中其中一个pod所在节点down机后，不新建pod</p>
                 <ul class="pager">
                     
                     <li class="previous">
-                        <a href="/blog/2021/03/04/k8s-gdb/" data-toggle="tooltip" data-placement="top" title="Golang gdb">
+                        <a href="/blog/2021/03/24/k8s-csi-cinder/" data-toggle="tooltip" data-placement="top" title="CSI之Cinder">
                         Previous<br>
-                        <span>Golang gdb</span>
+                        <span>CSI之Cinder</span>
                         </a>
                     </li>
                     
-                    
-                    <li class="next">
-                        <a href="/blog/2021/04/06/k8s-go-mod/" data-toggle="tooltip" data-placement="top" title="GO MOD使用私有仓库">
-                        Next<br>
-                        <span>GO MOD使用私有仓库</span>
-                        </a>
-                    </li>
                     
                 </ul>
                 <hr style="visibility: hidden;">
