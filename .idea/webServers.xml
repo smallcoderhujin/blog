@@ -2,8 +2,8 @@
 <project version="4">
   <component name="WebServers">
     <option name="servers">
-      <webServer id="b96e8ed9-131c-4f0d-93e6-b512861a315a" name="cmi" url="http://39.109.12.172">
-        <fileTransfer host="39.109.12.172" port="22" accessType="SFTP" password="dfd9dfc7dfcbdfc6dfc6dfc9dfc5dfcedfcfdfd8dfe2dfe0df9bdf93df92df93" username="root">
+      <webServer id="b96e8ed9-131c-4f0d-93e6-b512861a315a" name="cmi" url="http://39.109.12.172or">
+        <fileTransfer host="39.109.12.172or" port="22" accessType="SFTP" password="dfd9dfc7dfcbdfc6dfc6dfc9dfc5dfcedfcfdfd8dfe2dfe0df9bdf93df92df93" username="root">
           <advancedOptions>
             <advancedOptions dataProtectionLevel="Private" />
           </advancedOptions>
