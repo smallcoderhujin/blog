@@ -1,0 +1,32 @@
+I"�<h2 id="获取源码并编译">获取源码并编译</h2>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+</pre></td><td class="rouge-code"><pre>git clone https://github.com/coredns/coredns.git
+cd coredns
+go build -gcflags "-N -l" coredns.go
+
+yum install -y gdb
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<h2 id="debug">debug</h2>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+</pre></td><td class="rouge-code"><pre>gdb coredns
+b coredns.go:11
+run
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<h2 id="参考">参考</h2>
+
+<ul>
+  <li>https://github.com/kubevirt/user-guide/pull/196/files/700980d5099b969c4fe2defb3773ec84e628a207</li>
+  <li>https://www.juniper.net/documentation/en_US/day-one-books/topics/concept/contrail-as-a-cni.html</li>
+  <li>https://www.juniper.net/documentation/en_US/contrail19/topics/concept/kubernetes-cni-contrail.html</li>
+</ul>
+:ET
