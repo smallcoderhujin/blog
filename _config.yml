@@ -5,8 +5,8 @@ header-img: img/home-bg.jpg
 email: guokehujin@163.com
 description: "Hujin，Openstack & SDN & Kubernetes Lover，Software Engineer，| 与你一起发现更大的世界"
 keyword: "Openstack, Kubernetes, Neutron， SDN， Tungsten Fabric"
-url: "https://ellen.cf"
-baseurl: ""
+url: "https://smallcoderhujin.github.io/blog/"
+baseurl: "/blog"
 
 # Publish posts or collection documents with a future date.
 future: true
