@@ -3,10 +3,10 @@
   <channel>
     <title>Hujin Blog</title>
     <description>Hujin，Openstack &amp; SDN &amp; Kubernetes Lover，Software Engineer，| 与你一起发现更大的世界</description>
-    <link>http://0.0.0.0:4000/</link>
-    <atom:link href="http://0.0.0.0:4000/feed.xml" rel="self" type="application/rss+xml" />
-    <pubDate>Tue, 06 Apr 2021 07:02:40 +0000</pubDate>
-    <lastBuildDate>Tue, 06 Apr 2021 07:02:40 +0000</lastBuildDate>
+    <link>http://0.0.0.0:4000/blog/</link>
+    <atom:link href="http://0.0.0.0:4000/blog/feed.xml" rel="self" type="application/rss+xml" />
+    <pubDate>Tue, 06 Apr 2021 07:42:29 +0000</pubDate>
+    <lastBuildDate>Tue, 06 Apr 2021 07:42:29 +0000</lastBuildDate>
     <generator>Jekyll v4.2.0</generator>
     
       <item>
@@ -335,8 +335,8 @@ statefulset中其中一个pod所在节点down机后，不新建pod&lt;/p&gt;
 &lt;/ul&gt;
 </description>
         <pubDate>Wed, 24 Mar 2021 00:00:00 +0000</pubDate>
-        <link>http://0.0.0.0:4000/2021/03/24/k8s-csi-cinder/</link>
-        <guid isPermaLink="true">http://0.0.0.0:4000/2021/03/24/k8s-csi-cinder/</guid>
+        <link>http://0.0.0.0:4000/blog/2021/03/24/k8s-csi-cinder/</link>
+        <guid isPermaLink="true">http://0.0.0.0:4000/blog/2021/03/24/k8s-csi-cinder/</guid>
         
         <category>k8s</category>
         
@@ -382,8 +382,8 @@ run
 &lt;/ul&gt;
 </description>
         <pubDate>Thu, 04 Mar 2021 00:00:00 +0000</pubDate>
-        <link>http://0.0.0.0:4000/2021/03/04/k8s-gdb/</link>
-        <guid isPermaLink="true">http://0.0.0.0:4000/2021/03/04/k8s-gdb/</guid>
+        <link>http://0.0.0.0:4000/blog/2021/03/04/k8s-gdb/</link>
+        <guid isPermaLink="true">http://0.0.0.0:4000/blog/2021/03/04/k8s-gdb/</guid>
         
         <category>golang</category>
         
@@ -447,8 +447,8 @@ run
 &lt;/ul&gt;
 </description>
         <pubDate>Wed, 27 Jan 2021 00:00:00 +0000</pubDate>
-        <link>http://0.0.0.0:4000/2021/01/27/tf-k8s-annotation/</link>
-        <guid isPermaLink="true">http://0.0.0.0:4000/2021/01/27/tf-k8s-annotation/</guid>
+        <link>http://0.0.0.0:4000/blog/2021/01/27/tf-k8s-annotation/</link>
+        <guid isPermaLink="true">http://0.0.0.0:4000/blog/2021/01/27/tf-k8s-annotation/</guid>
         
         <category>kubernetes</category>
         
@@ -1076,8 +1076,8 @@ PING nginx.me.test (10.244.0.4): 56 data bytes
 &lt;/ul&gt;
 </description>
         <pubDate>Mon, 18 Jan 2021 00:00:00 +0000</pubDate>
-        <link>http://0.0.0.0:4000/2021/01/18/k8s-coredns/</link>
-        <guid isPermaLink="true">http://0.0.0.0:4000/2021/01/18/k8s-coredns/</guid>
+        <link>http://0.0.0.0:4000/blog/2021/01/18/k8s-coredns/</link>
+        <guid isPermaLink="true">http://0.0.0.0:4000/blog/2021/01/18/k8s-coredns/</guid>
         
         <category>kubernetes</category>
         
@@ -1694,8 +1694,8 @@ list_ingress(token)
 &lt;/ul&gt;
 </description>
         <pubDate>Fri, 15 Jan 2021 00:00:00 +0000</pubDate>
-        <link>http://0.0.0.0:4000/2021/01/15/k8s-webhook-keystone/</link>
-        <guid isPermaLink="true">http://0.0.0.0:4000/2021/01/15/k8s-webhook-keystone/</guid>
+        <link>http://0.0.0.0:4000/blog/2021/01/15/k8s-webhook-keystone/</link>
+        <guid isPermaLink="true">http://0.0.0.0:4000/blog/2021/01/15/k8s-webhook-keystone/</guid>
         
         <category>kubernetes</category>
         
@@ -2100,8 +2100,8 @@ list_ingress(tokes[&apos;id_token&apos;])
 &lt;/ul&gt;
 </description>
         <pubDate>Fri, 15 Jan 2021 00:00:00 +0000</pubDate>
-        <link>http://0.0.0.0:4000/2021/01/15/k8s-oidc-keycloak/</link>
-        <guid isPermaLink="true">http://0.0.0.0:4000/2021/01/15/k8s-oidc-keycloak/</guid>
+        <link>http://0.0.0.0:4000/blog/2021/01/15/k8s-oidc-keycloak/</link>
+        <guid isPermaLink="true">http://0.0.0.0:4000/blog/2021/01/15/k8s-oidc-keycloak/</guid>
         
         <category>kubernetes</category>
         
