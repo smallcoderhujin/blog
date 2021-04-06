@@ -13,10 +13,7 @@ future: true
 
 # SNS settings
 RSS: false
-weibo_username:     guokehujin
-zhihu_username:     guokehujin
 github_username:    guokehujin
-twitter_username:   guokehujin
 #facebook_username:  huxpro
 #linkedin_username:  firstname-lastname-idxxxx
 
@@ -71,8 +68,7 @@ netease_comment: false
 
 # Google Analytics
 ga_track_id: 'UA-49627206-1'            # Format: UA-xxxxxx-xx
-ga_domain: ellen.cf
-
+ga_domain: smallcoderhujin.github.io/blog/
 
 
 # Sidebar settings
@@ -96,15 +92,5 @@ service-worker: true
 
 # MathJax rendering for layout:page (e.g. post preview)
 page-mathjax: false
-
-
-
-# Friends
-friends: [
-    {
-        title: "test",
-        href: "http://baidu.com/"
-    },
-]
 
 theme: jekyll-theme-cayman
