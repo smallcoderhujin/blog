@@ -1,0 +1,2116 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Hujin Blog</title>
+    <description>Hujin，Openstack &amp; SDN &amp; Kubernetes Lover，Software Engineer，| 与你一起发现更大的世界</description>
+    <link>http://0.0.0.0:4000/</link>
+    <atom:link href="http://0.0.0.0:4000/feed.xml" rel="self" type="application/rss+xml" />
+    <pubDate>Tue, 06 Apr 2021 07:02:40 +0000</pubDate>
+    <lastBuildDate>Tue, 06 Apr 2021 07:02:40 +0000</lastBuildDate>
+    <generator>Jekyll v4.2.0</generator>
+    
+      <item>
+        <title>CSI之Cinder</title>
+        <description>&lt;h2 id=&quot;背景&quot;&gt;背景&lt;/h2&gt;
+&lt;p&gt;由于openstack cinder提供丰富的后端存储服务，当k8s部署在openstack的虚拟机中时，使用cinder 的csi提供存储服务可以非常方便对接不同的后端存储&lt;/p&gt;
+
+&lt;h2 id=&quot;要求&quot;&gt;要求&lt;/h2&gt;
+&lt;ul&gt;
+  &lt;li&gt;分别部署openstack和k8s集群&lt;/li&gt;
+  &lt;li&gt;openstack cinder使用v3 api&lt;/li&gt;
+  &lt;li&gt;openstack nova和cinder在keystone中的endpoint url对应的ip地址，k8s的虚机可以访问到&lt;/li&gt;
+  &lt;li&gt;openstack开启metadata服务&lt;/li&gt;
+  &lt;li&gt;openstack虚机中需要安装cloud-init
+    &lt;blockquote&gt;
+      &lt;p&gt;/var/lib/cloud/data/instance-id虚机中这个目录必须是虚机的uuid，这个是通过cloud-init注入的&lt;/p&gt;
+    &lt;/blockquote&gt;
+  &lt;/li&gt;
+  &lt;li&gt;虚机挂盘后要求在/dev/disk/by-id目录下有对应volume的设备存在&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&quot;部署&quot;&gt;部署&lt;/h2&gt;
+
+&lt;p&gt;获取k8s-openstack-provider源码（非必须）&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;git clone https://github.com/kubernetes/cloud-provider-openstack
+cd cloud-provider-openstack
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;编译（需要docker-ce 17.05以上的版本， docker需要翻墙）&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;export ARCH=amd64 # Defaults to amd64
+编译： make build-cmd-cinder-csi-plugin
+生成镜像：make image-cinder-csi-plugin
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;修改kubelet配置&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;vim /etc/kubernetes/kubelet.env
+KUBELET_CLOUDPROVIDER=&quot;--cloud-provider=external&quot;
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;配置openstack信息并使用base64加密&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;vim cloud.conf
+[Global]
+username = ArcherAdmin
+password = ArcherAdmin@123
+domain-name = Default
+auth-url = http://172.118.23.20:45357/v3
+tenant-id = ad88dd5d24ce4e2189a6ae7491c33e9d
+region = RegionOne
+
+[Metadata]
+search-order = configDrive,metadataService
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;使用base64对openstack配置加密&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;cat cloud.conf | base64 -w 0
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;获取社区yaml文件&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;https://github.com/kubernetes/cloud-provider-openstack/tree/master/manifests/cinder-csi-plugin
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;将之前openstack的配置对应的base64结果更新到csi-secret-cinderplugin.yaml文件中&lt;/p&gt;
+
+&lt;p&gt;创建cinder csi资源&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;kubectl apply -f cinder-csi-plugin
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;查看cinder csi pod状态&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;[root@node1 csi-cinder]# kubectl get pods -n kube-system
+NAME                                       READY   STATUS        RESTARTS   AGE
+csi-cinder-controllerplugin-0              5/5     Running       25         4h12m
+csi-cinder-nodeplugin-cwzpr                2/2     Running       0          7m28s
+csi-cinder-nodeplugin-wxl6f                2/2     Running       0          7m29s
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;创建storeageclass和pvc&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;cat sc.yaml
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: csi-sc-cinderplugin
+provisioner: cinder.csi.openstack.org
+
+
+cat pvc.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: csi-pvc-cinderplugin
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: csi-sc-cinderplugin
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;确认sc和pvc状态&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;[root@node1 resource-yamls]# kubectl get sc
+NAME                  PROVISIONER                RECLAIMPOLICY   VOLUMEBINDINGMODE   ALLOWVOLUMEEXPANSION   AGE
+csi-sc-cinderplugin   cinder.csi.openstack.org   Delete          Immediate           false                  26h
+csi-sc-hujin          arstor.csi.huayun.io       Delete          Immediate           false                  4d9h
+[root@node1 resource-yamls]# kubectl get pvc
+NAME                   STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS          AGE
+csi-pvc-cinderplugin   Bound    pvc-e5aec543-ff37-40ad-85d5-ce038975e14c   1Gi        RWO            csi-sc-cinderplugin   12m
+[root@node1 resource-yamls]#
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;创建pod&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;cat pod.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx
+spec:
+  containers:
+  - image: nginx:alpine
+    imagePullPolicy: IfNotPresent
+    name: nginx
+    ports:
+    - containerPort: 80
+      protocol: TCP
+    volumeMounts:
+      - mountPath: /var/lib/www/html
+        name: csi-data-cinderplugin
+  volumes:
+  - name: csi-data-cinderplugin
+    persistentVolumeClaim:
+      claimName: csi-pvc-cinderplugin
+      readOnly: false
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;从pv中获取volume id&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;[root@node1 resource-yamls]# kubectl describe pv pvc-e5aec543-ff37-40ad-85d5-ce038975e14c
+Name:            pvc-e5aec543-ff37-40ad-85d5-ce038975e14c
+Labels:          &amp;lt;none&amp;gt;
+Annotations:     pv.kubernetes.io/provisioned-by: cinder.csi.openstack.org
+Finalizers:      [kubernetes.io/pv-protection external-attacher/cinder-csi-openstack-org]
+StorageClass:    csi-sc-cinderplugin
+Status:          Bound
+Claim:           default/csi-pvc-cinderplugin
+Reclaim Policy:  Delete
+Access Modes:    RWO
+VolumeMode:      Filesystem
+Capacity:        1Gi
+Node Affinity:   &amp;lt;none&amp;gt;
+Message:
+Source:
+    Type:              CSI (a Container Storage Interface (CSI) volume source)
+    Driver:            cinder.csi.openstack.org
+    FSType:            ext4
+    VolumeHandle:      ef9037a7-9a67-408a-9f92-adbd2badc5db
+    ReadOnly:          false
+    VolumeAttributes:      storage.kubernetes.io/csiProvisionerIdentity=1616250534343-8081-cinder.csi.openstack.org
+Events:                &amp;lt;none&amp;gt;
+[root@node1 resource-yamls]#
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;在openstack中查看volume状态&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;[root@controller01 ~]# cinder list |grep ef9037a7
+| ef9037a7-9a67-408a-9f92-adbd2badc5db |   in-use  | pvc-e5aec543-ff37-40ad-85d5-ce038975e14c |  1   | basic-replica2 |  false   | 94a932d0-79da-4ed2-a228-a4e96264d1c0 |
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;确认pod状态&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;[root@node1 csi-cinder]# kubectl get pods     -owide
+NAME    READY   STATUS    RESTARTS   AGE   IP             NODE    NOMINATED NODE   READINESS GATES
+nginx   1/1     Running   0          35s   10.244.28.16   node3   &amp;lt;none&amp;gt;           &amp;lt;none&amp;gt;
+
+[root@node1 resource-yamls]# kubectl exec -it nginx -- sh
+/ # ls /var/lib/www/html/
+lost+found
+/ #
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h2 id=&quot;测试场景&quot;&gt;测试场景&lt;/h2&gt;
+
+&lt;h3 id=&quot;命令行删除deployment-pod&quot;&gt;命令行删除deployment pod&lt;/h3&gt;
+&lt;p&gt;删除后正常新建pod，且使用原来的volume&lt;/p&gt;
+
+&lt;h3 id=&quot;k8s虚机网络故障&quot;&gt;k8s虚机网络故障&lt;/h3&gt;
+&lt;p&gt;deployment中其中一个pod所在节点down机后，新建pod失败，报volume in-use
+statefulset中其中一个pod所在节点down机后，不新建pod&lt;/p&gt;
+
+&lt;h3 id=&quot;k8s虚机重启&quot;&gt;k8s虚机重启&lt;/h3&gt;
+&lt;p&gt;同节点down机&lt;/p&gt;
+
+&lt;h3 id=&quot;虚机迁移&quot;&gt;虚机迁移&lt;/h3&gt;
+&lt;p&gt;热迁移不影响pod使用
+冷迁移：同节点down机&lt;/p&gt;
+
+&lt;h3 id=&quot;k8s虚机对应计算节点故障&quot;&gt;k8s虚机对应计算节点故障&lt;/h3&gt;
+&lt;p&gt;此时原来的pod一直是删除状态，新建的pod也无法正常创建，必须等待down机的节点恢复
+这是一种安全的做法&lt;/p&gt;
+
+&lt;h3 id=&quot;虚机挂在最大磁盘个数&quot;&gt;虚机挂在最大磁盘个数&lt;/h3&gt;
+&lt;p&gt;这是一个bug，升级qemu后可以解决&lt;/p&gt;
+
+&lt;h2 id=&quot;参考&quot;&gt;参考&lt;/h2&gt;
+&lt;ul&gt;
+  &lt;li&gt;https://github.com/kubernetes/cloud-provider-openstack/blob/master/docs/cinder-csi-plugin/using-cinder-csi-plugin.md&lt;/li&gt;
+  &lt;li&gt;https://www.jianshu.com/p/87b02040991c&lt;/li&gt;
+  &lt;li&gt;https://silenceper.com/kubernetes-book/csi/how-to-write-csi-driver.html&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+        <pubDate>Wed, 24 Mar 2021 00:00:00 +0000</pubDate>
+        <link>http://0.0.0.0:4000/2021/03/24/k8s-csi-cinder/</link>
+        <guid isPermaLink="true">http://0.0.0.0:4000/2021/03/24/k8s-csi-cinder/</guid>
+        
+        <category>k8s</category>
+        
+        <category>csi</category>
+        
+        <category>cinder</category>
+        
+        
+      </item>
+    
+      <item>
+        <title>Golang gdb</title>
+        <description>&lt;h2 id=&quot;获取源码并编译&quot;&gt;获取源码并编译&lt;/h2&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;git clone https://github.com/coredns/coredns.git
+cd coredns
+go build -gcflags &quot;-N -l&quot; coredns.go
+
+yum install -y gdb
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h2 id=&quot;debug&quot;&gt;debug&lt;/h2&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;gdb coredns
+b coredns.go:11
+run
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h2 id=&quot;参考&quot;&gt;参考&lt;/h2&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;https://github.com/kubevirt/user-guide/pull/196/files/700980d5099b969c4fe2defb3773ec84e628a207&lt;/li&gt;
+  &lt;li&gt;https://www.juniper.net/documentation/en_US/day-one-books/topics/concept/contrail-as-a-cni.html&lt;/li&gt;
+  &lt;li&gt;https://www.juniper.net/documentation/en_US/contrail19/topics/concept/kubernetes-cni-contrail.html&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+        <pubDate>Thu, 04 Mar 2021 00:00:00 +0000</pubDate>
+        <link>http://0.0.0.0:4000/2021/03/04/k8s-gdb/</link>
+        <guid isPermaLink="true">http://0.0.0.0:4000/2021/03/04/k8s-gdb/</guid>
+        
+        <category>golang</category>
+        
+        <category>gdb</category>
+        
+        
+      </item>
+    
+      <item>
+        <title>TungstenFabric Kubernetes Annotation</title>
+        <description>&lt;h2 id=&quot;annotation整理&quot;&gt;Annotation整理&lt;/h2&gt;
+
+&lt;table&gt;
+  &lt;thead&gt;
+    &lt;tr&gt;
+      &lt;th&gt;名称&lt;/th&gt;
+      &lt;th&gt;值&lt;/th&gt;
+      &lt;th&gt;说明&lt;/th&gt;
+    &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+    &lt;tr&gt;
+      &lt;td&gt;opencontrail.org/fip-pool&lt;/td&gt;
+      &lt;td&gt;”{‘domain’: ‘default-domain’, ‘project’: ‘ArcherAdmin’, ‘network’: ‘public1420’, ‘name’: ‘floating-ip-pool’}”&lt;/td&gt;
+      &lt;td&gt;指定fip-pool&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;opencontrail.org/network&lt;/td&gt;
+      &lt;td&gt;‘opencontrail.org/network’: ‘{“domain”:”default-domain”, “project”: “ArcherAdmin”, “name”:”test-net”}’&lt;/td&gt;
+      &lt;td&gt;指定network,如果设置在pod中，pod使用指定网络建网卡，如果指定在namespace中，则namespace中所有pod使用指定网络建网卡&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;opencontrail.org/isolation&lt;/td&gt;
+      &lt;td&gt;‘opencontrail.org/isolation’: ‘true’&lt;/td&gt;
+      &lt;td&gt;设置namespace是否隔离&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;opencontrail.org/ip_fabric_forwarding&lt;/td&gt;
+      &lt;td&gt;“opencontrail.org/ip_fabric_forwarding” : “true”&lt;/td&gt;
+      &lt;td&gt;使用fabric网络创建pod网卡&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;opencontrail.org/ip_fabric_snat&lt;/td&gt;
+      &lt;td&gt;“opencontrail.org/ip_fabric_snat” : “true”&lt;/td&gt;
+      &lt;td&gt;启用pod网络的fabric_snat&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;opencontrail.org/cidr&lt;/td&gt;
+      &lt;td&gt;“opencontrail.org/cidr” : “1.0.0.0/24”&lt;/td&gt;
+      &lt;td&gt;使用自定义网络（非contrail网络）时指定&lt;/td&gt;
+    &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+
+&lt;h2 id=&quot;参考&quot;&gt;参考&lt;/h2&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;https://github.com/kubevirt/user-guide/pull/196/files/700980d5099b969c4fe2defb3773ec84e628a207&lt;/li&gt;
+  &lt;li&gt;https://www.juniper.net/documentation/en_US/day-one-books/topics/concept/contrail-as-a-cni.html&lt;/li&gt;
+  &lt;li&gt;https://www.juniper.net/documentation/en_US/contrail19/topics/concept/kubernetes-cni-contrail.html&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+        <pubDate>Wed, 27 Jan 2021 00:00:00 +0000</pubDate>
+        <link>http://0.0.0.0:4000/2021/01/27/tf-k8s-annotation/</link>
+        <guid isPermaLink="true">http://0.0.0.0:4000/2021/01/27/tf-k8s-annotation/</guid>
+        
+        <category>kubernetes</category>
+        
+        <category>tungstenfabric</category>
+        
+        <category>annotation</category>
+        
+        
+      </item>
+    
+      <item>
+        <title>Kuberntes CoreDNS</title>
+        <description>&lt;h2 id=&quot;架构&quot;&gt;架构&lt;/h2&gt;
+&lt;p&gt;&lt;img src=&quot;https://img.draveness.me/2018-11-07-coredns-architecture.png&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;h2 id=&quot;搭建&quot;&gt;搭建&lt;/h2&gt;
+
+&lt;p&gt;正常使用kubeadm等工具部署的集群中默认都已经部署有coredns，以下为手动部署的流程：&lt;/p&gt;
+&lt;ul&gt;
+  &lt;li&gt;创建一个serviceaccount用来做鉴权用&lt;/li&gt;
+  &lt;li&gt;创建clusterrole对象system:coredns&lt;/li&gt;
+  &lt;li&gt;绑定serviceaccount和clusterrole&lt;/li&gt;
+  &lt;li&gt;创建coredns的配置configmap，在后面创建deployment时引用。这里需要注意根据需要修改forward和pods属性&lt;/li&gt;
+  &lt;li&gt;创建coredns的deployment，容器引用对应的configmap，限制资源、暴露端口、配置调度策略等到&lt;/li&gt;
+  &lt;li&gt;创建service，设置podselector和端口&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;coredns.yaml&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+55
+56
+57
+58
+59
+60
+61
+62
+63
+64
+65
+66
+67
+68
+69
+70
+71
+72
+73
+74
+75
+76
+77
+78
+79
+80
+81
+82
+83
+84
+85
+86
+87
+88
+89
+90
+91
+92
+93
+94
+95
+96
+97
+98
+99
+100
+101
+102
+103
+104
+105
+106
+107
+108
+109
+110
+111
+112
+113
+114
+115
+116
+117
+118
+119
+120
+121
+122
+123
+124
+125
+126
+127
+128
+129
+130
+131
+132
+133
+134
+135
+136
+137
+138
+139
+140
+141
+142
+143
+144
+145
+146
+147
+148
+149
+150
+151
+152
+153
+154
+155
+156
+157
+158
+159
+160
+161
+162
+163
+164
+165
+166
+167
+168
+169
+170
+171
+172
+173
+174
+175
+176
+177
+178
+179
+180
+181
+182
+183
+184
+185
+186
+187
+188
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;cat coredns.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: coredns
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    kubernetes.io/bootstrapping: rbac-defaults
+  name: system:coredns
+rules:
+- apiGroups:
+  - &quot;&quot;
+  resources:
+  - endpoints
+  - services
+  - pods
+  - namespaces
+  verbs:
+  - list
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  annotations:
+    rbac.authorization.kubernetes.io/autoupdate: &quot;true&quot;
+  labels:
+    kubernetes.io/bootstrapping: rbac-defaults
+  name: system:coredns
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:coredns
+subjects:
+- kind: ServiceAccount
+  name: coredns
+  namespace: kube-system
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coredns
+  namespace: kube-system
+data:
+  Corefile: |
+    .:53 {
+        errors
+        health
+        kubernetes cluster.local in-addr.arpa ip6.arpa {
+            pods insecure
+            fallthrough in-addr.arpa ip6.arpa
+        }
+        prometheus :9153
+        forward . /etc/resolv.conf
+        cache 30
+        loop
+        reload
+        loadbalance
+}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: coredns
+  namespace: kube-system
+  labels:
+    k8s-app: kube-dns
+    kubernetes.io/name: &quot;CoreDNS&quot;
+spec:
+  # replicas: not specified here:
+  # 1. Default is 1.
+  # 2. Will be tuned in real time if DNS horizontal auto-scaling is turned on.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      k8s-app: kube-dns
+  template:
+    metadata:
+      labels:
+        k8s-app: kube-dns
+    spec:
+      priorityClassName: system-cluster-critical
+      serviceAccountName: coredns
+      tolerations:
+        - key: &quot;CriticalAddonsOnly&quot;
+          operator: &quot;Exists&quot;
+      nodeSelector:
+        kubernetes.io/os: linux
+      affinity:
+         podAntiAffinity:
+           preferredDuringSchedulingIgnoredDuringExecution:
+           - weight: 100
+             podAffinityTerm:
+               labelSelector:
+                 matchExpressions:
+                   - key: k8s-app
+                     operator: In
+                     values: [&quot;kube-dns&quot;]
+               topologyKey: kubernetes.io/hostname
+      containers:
+      - name: coredns
+        image: coredns/coredns:1.8.0
+        imagePullPolicy: IfNotPresent
+        resources:
+          limits:
+            memory: 170Mi
+          requests:
+            cpu: 100m
+            memory: 70Mi
+        args: [ &quot;-conf&quot;, &quot;/etc/coredns/Corefile&quot; ]
+        volumeMounts:
+        - name: config-volume
+          mountPath: /etc/coredns
+          readOnly: true
+        ports:
+        - containerPort: 53
+          name: dns
+          protocol: UDP
+        - containerPort: 53
+          name: dns-tcp
+          protocol: TCP
+        - containerPort: 9153
+          name: metrics
+          protocol: TCP
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            add:
+            - NET_BIND_SERVICE
+            drop:
+            - all
+          readOnlyRootFilesystem: true
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+            scheme: HTTP
+          initialDelaySeconds: 60
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 5
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8181
+            scheme: HTTP
+      dnsPolicy: Default
+      volumes:
+        - name: config-volume
+          configMap:
+            name: coredns
+            items:
+            - key: Corefile
+              path: Corefile
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kube-dns
+  namespace: kube-system
+  annotations:
+    prometheus.io/port: &quot;9153&quot;
+    prometheus.io/scrape: &quot;true&quot;
+  labels:
+    k8s-app: kube-dns
+    kubernetes.io/cluster-service: &quot;true&quot;
+    kubernetes.io/name: &quot;CoreDNS&quot;
+spec:
+  selector:
+    k8s-app: kube-dns
+  clusterIP: CLUSTER_DNS_IP
+  ports:
+  - name: dns
+    port: 53
+    protocol: UDP
+  - name: dns-tcp
+    port: 53
+    protocol: TCP
+  - name: metrics
+    port: 9153
+    protocol: TCP
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;创建后：&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;[root@none-nested-master hujin]# kubectl get service -n kube-system
+NAME                        TYPE        CLUSTER-IP     EXTERNAL-IP   PORT(S)         AGE
+k8s-keystone-auth-service   ClusterIP   10.233.40.69   &amp;lt;none&amp;gt;        8443/TCP        4d20h
+kube-dns                    ClusterIP   10.233.0.110   &amp;lt;none&amp;gt;        53/UDP,53/TCP   7d2h
+[root@none-nested-master hujin]# kubectl get deploy -n kube-system
+NAME                READY   UP-TO-DATE   AVAILABLE   AGE
+coredns             1/1     1            1           7d2h
+k8s-keystone-auth   1/1     1            1           4d18h
+[root@none-nested-master hujin]# kubectl get deploy -n kube-system
+NAME                READY   UP-TO-DATE   AVAILABLE   AGE
+coredns             1/1     1            1           7d2h
+k8s-keystone-auth   1/1     1            1           4d18h
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;修改集群cluster dns配置，这里如果集群默认部署coredns，会设置成pod的ip，修改后，新建的pod中/etc/resolv.conf文件会获取配置后的ip&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;vim /etc/kubernetes/kubelet-config.yaml
+clusterDNS:
+- 10.233.0.110
+
+service kubelet restart
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h2 id=&quot;使用&quot;&gt;使用&lt;/h2&gt;
+
+&lt;h3 id=&quot;通过使用busybox中的nslookup命令访问域名&quot;&gt;通过使用busybox中的nslookup命令访问域名&lt;/h3&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;cat busybox.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: busybox2
+  namespace: default
+spec:
+  containers:
+  - image: aarch64/busybox
+    command:
+      - sleep
+      - &quot;3600&quot;
+    imagePullPolicy: IfNotPresent
+    name: busybox2
+  restartPolicy: Always
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h3 id=&quot;访问service&quot;&gt;访问service&lt;/h3&gt;
+
+&lt;p&gt;格式：[svc-name].[namespace].svc.[self-defined cluster domain]&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;# 查询域名：
+/ # nslookup my-apache.default.svc.cluster.local
+Server:    10.233.0.110
+Address 1: 10.233.0.110 kube-dns.kube-system.svc.cluster.local
+
+Name:      my-apache.default.svc.cluster.local
+Address 1: 10.233.4.36 my-apache.default.svc.cluster.local
+
+# 通过域名访问服务
+sh-4.2# curl my-apache.default.svc.cluster.local
+&amp;lt;html&amp;gt;&amp;lt;body&amp;gt;&amp;lt;h1&amp;gt;It works!&amp;lt;/h1&amp;gt;&amp;lt;/body&amp;gt;&amp;lt;/html&amp;gt;
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h3 id=&quot;访问pod&quot;&gt;访问pod&lt;/h3&gt;
+
+&lt;p&gt;格式：[pod-ip].[namespace].pod.[self-defined cluster domain]&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;# 查询域名
+/ # nslookup 10-233-127-250.default.pod.cluster.local
+Server:    10.233.0.110
+Address 1: 10.233.0.110 kube-dns.kube-system.svc.cluster.local
+
+Name:      10-233-127-250.default.pod.cluster.local
+Address 1: 10.233.127.250 10-233-127-250.my-apache.default.svc.cluster.local
+
+# 通过域名访问服务
+sh-4.2# curl 10-233-127-250.default.pod.cluster.local
+&amp;lt;html&amp;gt;&amp;lt;body&amp;gt;&amp;lt;h1&amp;gt;It works!&amp;lt;/h1&amp;gt;&amp;lt;/body&amp;gt;&amp;lt;/html&amp;gt;
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h2 id=&quot;自定义域名&quot;&gt;自定义域名&lt;/h2&gt;
+
+&lt;p&gt;一般情况下我们使用coredns是在k8s中的，但是实际coredns提供了很多插件，这里我们可以通过hosts插件实现自定义域名的功能,&lt;/p&gt;
+
+&lt;p&gt;hosts插件的配置参数参考：
+    hosts [FILE [ZONES…]] {
+        [INLINE]
+        ttl SECONDS
+        no_reverse
+        reload DURATION
+        fallthrough [ZONES…]
+    }&lt;/p&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;FILE：需要读取与解析的hosts文件；如果省略，默认取值”/etc/hosts”；每5s扫描一次hosts文件的变更。&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;ZONES：如果为空，取配置块中的zone。&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;INLINE：宿主机hosts文件在corefile中的内联；在”fallthrough”之前的所有”INLINE”都可视为hosts文件的附加内容，hosts文件中相同条目将被覆盖，以”INLINE”为准。&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;fallthrough：如果zone匹配且无法生成记录，将请求传递给下一个插件；如果省略，对所有zones有效，如果列出特定zone，则只有列出的zone受到影响。&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;修改coredns的configmap，这里修改完成后需要等待短暂时间重新加载配置&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;kubectl edit configmaps -n kube-system coredns
+apiVersion: v1
+data:
+  Corefile: |
+    .:53 {
+        kubernetes cluster.local in-addr.arpa ip6.arpa {
+           pods insecure
+           fallthrough in-addr.arpa ip6.arpa
+           ttl 30
+        }
+        hosts /etc/hosts {
+           10.244.0.4 nginx.me.test
+           fallthrough
+        }
+    }
+
+[root@hujin-test ~]# kubectl exec -it my-busybox-6dffd8765-pkcl7 -- sh
+/ # ping nginx.me.test
+PING nginx.me.test (10.244.0.4): 56 data bytes
+64 bytes from 10.244.0.4: seq=0 ttl=63 time=0.281 ms
+64 bytes from 10.244.0.4: seq=1 ttl=63 time=0.254 ms
+64 bytes from 10.244.0.4: seq=2 ttl=63 time=0.195 ms
+64 bytes from 10.244.0.4: seq=3 ttl=63 time=0.166 ms
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h2 id=&quot;参考&quot;&gt;参考&lt;/h2&gt;
+&lt;ul&gt;
+  &lt;li&gt;https://github.com/coredns/deployment/tree/master/kubernetes&lt;/li&gt;
+  &lt;li&gt;https://coredns.io/plugins/hosts/&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+        <pubDate>Mon, 18 Jan 2021 00:00:00 +0000</pubDate>
+        <link>http://0.0.0.0:4000/2021/01/18/k8s-coredns/</link>
+        <guid isPermaLink="true">http://0.0.0.0:4000/2021/01/18/k8s-coredns/</guid>
+        
+        <category>kubernetes</category>
+        
+        <category>coredns</category>
+        
+        
+      </item>
+    
+      <item>
+        <title>Kuberntes Webhook Keystone</title>
+        <description>&lt;h2 id=&quot;背景&quot;&gt;背景&lt;/h2&gt;
+&lt;p&gt;k8s本身不提供用户和项目管理功能，需要依赖第三方组件来实现。
+由于k8s和openstack的融合需求，需要提供一种统一的用户鉴权机制，本次重点介绍k8s如何使用keystone进行鉴权。通过调用keystone获取token，并使用这个token调用k8s的接口获取资源信息。&lt;/p&gt;
+
+&lt;h2 id=&quot;架构图&quot;&gt;架构图&lt;/h2&gt;
+&lt;p&gt;&lt;img src=&quot;https://superuser.openstack.org/wp-content/uploads/2019/03/fig2.png&quot; alt=&quot;k8s-keystone-auth&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;主要流程：&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;客户端通过rest api调用openstack keystone获取token&lt;/li&gt;
+  &lt;li&gt;通过获取到的token调用k8s api&lt;/li&gt;
+  &lt;li&gt;kube-apiserver 根据配置调用webhook程序，校验token并获取token对应用户的权限&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&quot;部署&quot;&gt;部署&lt;/h2&gt;
+&lt;p&gt;webhook和odic一样也是集成外部认证系统的一种方式，当client发起api-server请求时会触发webhook服务TokenReview调用，webhook会检查用户的凭证信息，如果是合法则返回authenticated”: true等信息。api-server会等待webhook服务返回，如果返回的authenticated结果为true，则表明认证成功，否则拒绝访问。&lt;/p&gt;
+
+&lt;h3 id=&quot;配置openstack&quot;&gt;配置openstack&lt;/h3&gt;
+
+&lt;p&gt;在openstack中创建资源&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;openstack role create k8s-admin
+openstack user create demo_admin --project demo --password secret
+openstack role add --user demo_admin --project demo k8s-admin
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;创建demo-rc,用来后面获取token&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;export OS_AUTH_URL=&quot;http://172.16.41.80:35357/v3&quot;
+export OS_USERNAME=&quot;demo_admin&quot;
+export OS_PASSWORD=&quot;secret&quot;
+export OS_PROJECT_NAME=&quot;demo&quot;
+export OS_USER_DOMAIN_NAME=Default
+export OS_PROJECT_DOMAIN_NAME=Default
+export OS_REGION_NAME=RegionTwo
+export OS_IDENTITY_API_VERSION=3
+export OS_IMAGE_API_VERSION=2
+export PYTHONIOENCODING=&apos;utf-8&apos;
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h3 id=&quot;kubernetes中创建k8s-keystone-auth-webhook&quot;&gt;kubernetes中创建k8s-keystone-auth webhook&lt;/h3&gt;
+
+&lt;p&gt;创建keystone权限configmap&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;cat keystone_configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: k8s-auth-policy
+  namespace: kube-system
+data:
+  policies: |
+    [
+      {
+        &quot;users&quot;: {
+          &quot;projects&quot;: [&quot;demo&quot;],
+          &quot;roles&quot;: [&quot;member&quot;]
+        },
+        &quot;resource_permissions&quot;: {
+          &quot;*/pods&quot;: [&quot;get&quot;, &quot;list&quot;, &quot;watch&quot;]
+        }
+      }
+    ]
+
+kubectl apply -f keystone_configmap.yaml
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;创建证书，给keystone-webhook容器使用&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes -subj /CN=k8s-keystone-auth.kube-system/
+kubectl --namespace kube-system create secret tls keystone-auth-certs --cert=cert.pem --key=key.pem
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;创建keystone rbac&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;cat keystone-rbac.yaml
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  labels:
+    k8s-app: k8s-keystone-auth
+  name: k8s-keystone-auth
+rules:
+  # Allow k8s-keystone-auth to get k8s-auth-policy configmap
+- apiGroups: [&quot;&quot;]
+  resources: [&quot;configmaps&quot;]
+  verbs: [&quot;get&quot;, &quot;watch&quot;, &quot;list&quot;]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: k8s-keystone-auth
+  labels:
+    k8s-app: k8s-keystone-auth
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: k8s-keystone-auth
+subjects:
+- kind: ServiceAccount
+  name: k8s-keystone
+  namespace: kube-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: k8s-keystone
+  namespace: kube-system
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;部署 k8s-keystone-auth，注意替换&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;keystone-url&lt;/code&gt;&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;cat keystone-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: k8s-keystone-auth
+  namespace: kube-system
+  labels:
+    app: k8s-keystone-auth
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: k8s-keystone-auth
+  template:
+    metadata:
+      labels:
+        app: k8s-keystone-auth
+    spec:
+      serviceAccountName: k8s-keystone
+      containers:
+        - name: k8s-keystone-auth
+          image: k8scloudprovider/k8s-keystone-auth:latest
+          args:
+            - ./bin/k8s-keystone-auth
+            - --tls-cert-file
+            - /etc/pki/tls.crt
+            - --tls-private-key-file
+            - /etc/pki/tls.key
+            - --policy-configmap-name
+            - k8s-auth-policy
+            - --keystone-url
+            - http://172.16.41.80:35357/v3
+          volumeMounts:
+            - mountPath: /etc/pki
+              name: certs
+              readOnly: true
+          ports:
+            - containerPort: 8443
+      volumes:
+      - name: certs
+        secret:
+          secretName: keystone-auth-certs
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;创建keystone_service，这里建议创建后给service绑定浮动IP，方便用来给外部调用用&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;cat keystone-service.yaml
+kind: Service
+apiVersion: v1
+metadata:
+  name: k8s-keystone-auth-service
+  namespace: kube-system
+spec:
+  selector:
+    app: k8s-keystone-auth
+  ports:
+    - protocol: TCP
+      port: 8443
+      targetPort: 8443
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;验证k8s-keystone-auth服务&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;# input:
+token = `source demo-rc;openstack token issue -f yaml -c id |awk &apos;{print $2}&apos;`
+kubectl run curl --rm -it --restart=Never --image curlimages/curl -- \
+  -k -XPOST https://k8s-keystone-auth-service.kube-system:8443/webhook -d &apos;
+{
+  &quot;apiVersion&quot;: &quot;authentication.k8s.io/v1beta1&quot;,
+  &quot;kind&quot;: &quot;TokenReview&quot;,
+  &quot;metadata&quot;: {
+    &quot;creationTimestamp&quot;: null
+  },
+  &quot;spec&quot;: {
+    &quot;token&quot;: &quot;&apos;$token&apos;&quot;
+  }
+}&apos;
+
+# output:
+{
+  &quot;apiVersion&quot;: &quot;authentication.k8s.io/v1beta1&quot;,
+  &quot;kind&quot;: &quot;TokenReview&quot;,
+  &quot;metadata&quot;: {
+    &quot;creationTimestamp&quot;: null
+  },
+  &quot;spec&quot;: {
+    &quot;token&quot;: &quot;gAAAAABf_7dmngBBu9cThzYmRs8Hkqv9Gm1FBRL0duTFAv7xl5dwwHA3yhKnCo_cqvsnKt90ukdmV5crq1s6EgBjh_e5cvhGBejFdRADViH9Vmmr6KI2L9I8gG4Dkj52whKNVqxZ-2R81rOj_Amqj83Iwa5TEWURXVfKNaL9ktLPR3-qY4TkjWU&quot;
+  },
+  &quot;status&quot;: {
+    &quot;authenticated&quot;: true,
+    &quot;user&quot;: {
+      &quot;username&quot;: &quot;demo_admin&quot;,
+      &quot;uid&quot;: &quot;b9b167f5e86b48839a879e111e20a0b1&quot;,
+      &quot;groups&quot;: [
+        &quot;bf37908a629b4d2ca02dfc840da027cd&quot;
+      ],
+      &quot;extra&quot;: {
+        &quot;alpha.kubernetes.io/identity/project/id&quot;: [
+          &quot;bf37908a629b4d2ca02dfc840da027cd&quot;
+        ],
+        &quot;alpha.kubernetes.io/identity/project/name&quot;: [
+          &quot;demo&quot;
+        ],
+        &quot;alpha.kubernetes.io/identity/roles&quot;: [
+          &quot;k8s-admin&quot;
+        ],
+        &quot;alpha.kubernetes.io/identity/user/domain/id&quot;: [
+          &quot;default&quot;
+        ],
+        &quot;alpha.kubernetes.io/identity/user/domain/name&quot;: [
+          &quot;Default&quot;
+        ]
+      }
+    }
+  }
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h3 id=&quot;配置kube-apisever&quot;&gt;配置kube-apisever&lt;/h3&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;mkdir /etc/kubernetes/webhooks
+cat &amp;lt;&amp;lt;EOF &amp;gt; /etc/kubernetes/webhooks/webhookconfig.yaml
+---
+apiVersion: v1
+kind: Config
+preferences: {}
+clusters:
+  - cluster:
+      insecure-skip-tls-verify: true
+      server: https://178.119.220.88:8443/webhook
+    name: webhook
+users:
+  - name: webhook
+contexts:
+  - context:
+      cluster: webhook
+      user: webhook
+    name: webhook
+current-context: webhook
+EOF
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;178.119.220.88是k8s-keystone-auth的浮动IP&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;vim /etc/kubernetes/manifests/kube-apiserver.yaml
+spec:
+  containers:
+  - command:
+  ...
+  - --authentication-token-webhook-config-file=/etc/kubernetes/webhooks/webhookconfig.yaml
+  - --authorization-webhook-config-file=/etc/kubernetes/webhooks/webhookconfig.yaml
+  - --authorization-mode=Node,RBAC,Webhook
+
+  volumeMounts:
+  ...
+  - mountPath: /etc/kubernetes/webhooks
+    name: webhooks
+    readOnly: true
+volumes:
+...
+- hostPath:
+    path: /etc/kubernetes/webhooks
+    type: DirectoryOrCreate
+  name: webhooks
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;修改完成后kube-apiserver会自动重启，注意查看日志是否有报错&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;h2 id=&quot;测试&quot;&gt;测试&lt;/h2&gt;
+
+&lt;p&gt;脚本：&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;import eventlet
+eventlet.monkey_patch()
+
+from keystoneclient.v3 import client as keystone_client
+import requests
+from pprint import pprint
+import json
+
+
+def get_openstack_token():
+    keystone = keystone_client.Client(username=&apos;demo_admin&apos;, password=&apos;secret&apos;,
+                                      auth_url=&apos;http://172.16.41.80:35357/v3&apos;,
+                                      tenant_name=&apos;demo&apos;,
+                                      project_domain_name=&apos;Default&apos;,
+                                      user_domain_name=&apos;Default&apos;,
+                                      project_name=&apos;demo&apos;)
+    print(keystone.auth_token)
+    return keystone.auth_token
+
+
+def check_token(token):
+    data = {&quot;apiVersion&quot;: &quot;authentication.k8s.io/v1beta1&quot;,
+            &quot;kind&quot;: &quot;TokenReview&quot;,
+            &quot;metadata&quot;: {
+                &quot;creationTimestamp&quot;: None
+            },
+            &quot;spec&quot;: {
+                &quot;token&quot;:  token
+            }}
+    headers = {&apos;Content-Type&apos;: &apos;application/json&apos;, &apos;Connection&apos;: &apos;Keep-Alive&apos;}
+    req = requests.post(&apos;https://178.119.220.88:8443/webhook&apos;,
+                        data=json.dumps(data), headers=headers, verify=False, timeout=5)
+    print(req.content)
+
+
+def list_ingress(tk):
+    auth_url = &apos;https://179.18.3.180:6443&apos;
+    headers = {&apos;Connection&apos;: &apos;Keep-Alive&apos;,
+               &apos;Authorization&apos;: &apos;Bearer %s&apos; % tk}
+    req_url = &apos;%s/api/v1/namespaces&apos; % auth_url
+    print(&apos;=&apos;*20, req_url, headers)
+    req = requests.get(req_url, headers=headers, verify=False)
+    pprint(json.loads(req.content))
+
+token = get_openstack_token()
+list_ingress(token)
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h2 id=&quot;参考文档&quot;&gt;参考文档：&lt;/h2&gt;
+&lt;ul&gt;
+  &lt;li&gt;https://github.com/kubernetes/cloud-provider-openstack/blob/master/docs/keystone-auth/using-keystone-webhook-authenticator-and-authorizer.md&lt;/li&gt;
+  &lt;li&gt;https://k2r2bai.com/2018/05/30/kubernetes/keystone-auth/&lt;/li&gt;
+  &lt;li&gt;https://zhuanlan.zhihu.com/p/97797321&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+        <pubDate>Fri, 15 Jan 2021 00:00:00 +0000</pubDate>
+        <link>http://0.0.0.0:4000/2021/01/15/k8s-webhook-keystone/</link>
+        <guid isPermaLink="true">http://0.0.0.0:4000/2021/01/15/k8s-webhook-keystone/</guid>
+        
+        <category>kubernetes</category>
+        
+        <category>webhook</category>
+        
+        <category>keystone</category>
+        
+        
+      </item>
+    
+      <item>
+        <title>Kuberntes OIDC Keycloak</title>
+        <description>&lt;h1 id=&quot;架构图&quot;&gt;架构图&lt;/h1&gt;
+&lt;p&gt;&lt;img src=&quot;http://langyxxl.dynv6.net:50008/data/User/admin/home/%E6%8A%80%E6%9C%AF/K8S/keyloak.png&quot; alt=&quot;keyloak.png&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;OIDC是一种 OAuth2 认证方式， 被某些 OAuth2 提供者支持，例如 Azure 活动目录、Salesforce 和 Google。 协议对 OAuth2 的主要扩充体现在有一个附加字段会和访问令牌一起返回， 这一字段称作 ID Token（ID 令牌）。 ID 令牌是一种由服务器签名的 JSON Web 令牌（JWT）&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;登录到你的身份服务（Identity Provider）&lt;/li&gt;
+  &lt;li&gt;你的身份服务将为你提供 access_token、id_token 和 refresh_token&lt;/li&gt;
+  &lt;li&gt;在使用 kubectl 时，将 id_token 设置为 –token 标志值，或者将其直接添加到 kubeconfig 中&lt;/li&gt;
+  &lt;li&gt;kubectl 将你的 id_token 放到一个称作 Authorization 的头部，发送给 API 服务器&lt;/li&gt;
+  &lt;li&gt;API 服务器将负责通过检查配置中引用的证书来确认 JWT 的签名是合法的&lt;/li&gt;
+  &lt;li&gt;检查确认 id_token 尚未过期&lt;/li&gt;
+  &lt;li&gt;确认用户有权限执行操作&lt;/li&gt;
+  &lt;li&gt;鉴权成功之后，API 服务器向 kubectl 返回响应&lt;/li&gt;
+  &lt;li&gt;kubectl 向用户提供反馈信息&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h1 id=&quot;部署keycloak&quot;&gt;部署keycloak&lt;/h1&gt;
+
+&lt;h2 id=&quot;准备&quot;&gt;准备&lt;/h2&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;# 安装java
+yum install java-11-openjdk
+# 获取源码包
+wget https://github.com/keycloak/keycloak/releases/download/12.0.1/keycloak-12.0.1.tar.gz
+tar xzvf keycloak-12.0.1.tar.gz
+cd keycloak-12.0.1
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h2 id=&quot;启用admin用户&quot;&gt;启用admin用户&lt;/h2&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;sh bin/add-user-keycloak.sh --user admin
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h2 id=&quot;创建证书注意修改ip地址证书创建到rootssl目录&quot;&gt;创建证书，注意修改ip地址，证书创建到/root/ssl目录&lt;/h2&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;vim /root/makessl.sh
+
+#!/bin/bash
+
+mkdir -p ssl
+
+cat &amp;lt;&amp;lt; EOF &amp;gt; ssl/ca.cnf
+[req]
+req_extensions = v3_req
+distinguished_name = req_distinguished_name
+
+[req_distinguished_name]
+
+[ v3_req ]
+basicConstraints = CA:TRUE
+EOF
+
+cat &amp;lt;&amp;lt; EOF &amp;gt; ssl/req.cnf
+[req]
+req_extensions = v3_req
+distinguished_name = req_distinguished_name
+
+[req_distinguished_name]
+
+[ v3_req ]
+basicConstraints = CA:FALSE
+keyUsage = nonRepudiation, digitalSignature, keyEncipherment
+subjectAltName = @alt_names
+
+[alt_names]
+IP.1 = 172.16.41.106   # 修改成当前机器的外网IP,否则会报错误：x509: cannot validate certificate for 172.16.41.106 because it doesn&apos;t contain any IP SANs
+EOF
+
+openssl genrsa -out ssl/ca-key.pem 2048
+openssl req -x509 -new -nodes -key ssl/ca-key.pem -days 365 -out ssl/ca.pem -subj &quot;/CN=keycloak-ca&quot; -extensions v3_req -config ssl/ca.cnf
+
+openssl genrsa -out ssl/keycloak.pem 2048
+openssl req -new -key ssl/keycloak.pem -out ssl/keycloak-csr.pem -subj &quot;/CN=keycloak&quot; -config ssl/req.cnf
+openssl x509 -req -in ssl/keycloak-csr.pem -CA ssl/ca.pem -CAkey ssl/ca-key.pem -CAcreateserial -out ssl/keycloak.crt -days 365 -extensions v3_req -extfile ssl/req.cnf
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h2 id=&quot;导入证书密码尽量保持一致&quot;&gt;导入证书（密码尽量保持一致）：&lt;/h2&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;cd ssl
+openssl pkcs12 -export -out keycloak.p12 -inkey keycloak.pem -in keycloak.crt -certfile ca.pem
+keytool -importkeystore -deststorepass &apos;passw0rd&apos; -destkeystore keycloak.jks -srckeystore keycloak.p12 -srcstoretype PKCS12
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h2 id=&quot;将证书拷贝至configuration目录&quot;&gt;将证书拷贝至configuration目录&lt;/h2&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;cp keycloak.jks ../keycloak-12.0.1/standalone/configuration
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h2 id=&quot;检查证书&quot;&gt;检查证书&lt;/h2&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;# 确认证书的Alias Name，会在下面的standalone.xml中引用
+cd ../keycloak-12.0.1/standalone/configuration
+keytool -list -keystore keycloak.jks -v
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h2 id=&quot;修改keycloak配置&quot;&gt;修改keycloak配置&lt;/h2&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;vim /root/keycloak-12.0.1/standalone/configuration/standalone.xml
+
+&amp;lt;management&amp;gt;
+&amp;lt;management&amp;gt;
+&amp;lt;security-realms&amp;gt;
+    &amp;lt;security-realm name=&quot;ApplicationRealm&quot;&amp;gt;
+        &amp;lt;server-identities&amp;gt;
+         &amp;lt;ssl&amp;gt;
+            &amp;lt;keystore path=&quot;keycloak.jks&quot; relative-to=&quot;jboss.server.config.dir&quot; keystore-password=&quot;passw0rd&quot; alias=&quot;server&quot; key-password=&quot;passw0rd&quot; generate-self-signed-certificate-host=&quot;localhost&quot;/&amp;gt;
+          &amp;lt;/ssl&amp;gt;
+        &amp;lt;/server-identities&amp;gt;
+        ...
+    &amp;lt;/security-realm&amp;gt;
+    &amp;lt;security-realm name=&quot;UndertowRealm&quot;&amp;gt;
+        &amp;lt;server-identities&amp;gt;
+            &amp;lt;ssl&amp;gt;
+                &amp;lt;keystore path=&quot;keycloak.jks&quot; relative-to=&quot;jboss.server.config.dir&quot; keystore-password=&quot;passw0rd&quot; /&amp;gt;
+            &amp;lt;/ssl&amp;gt;
+        &amp;lt;/server-identities&amp;gt;
+    &amp;lt;/security-realm&amp;gt;
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h2 id=&quot;运行程序-指定外网ip地址&quot;&gt;运行程序, 指定外网IP地址&lt;/h2&gt;
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;sh bin/standalone.sh -Djboss.bind.address=172.16.41.106 -Djboss.bind.address.management=172.16.41.106
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h2 id=&quot;访问页面&quot;&gt;访问页面&lt;/h2&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;登录：https://172.16.41.106:8443/auth/admin
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h1 id=&quot;初始化keycloak&quot;&gt;初始化keycloak&lt;/h1&gt;
+
+&lt;h2 id=&quot;创建realm-kubernetes&quot;&gt;创建realm kubernetes&lt;/h2&gt;
+&lt;p&gt;页面菜单栏顶部有个“v”图标，点击并创建realm“Add realm”&lt;/p&gt;
+
+&lt;h2 id=&quot;创建client-kubernetes&quot;&gt;创建client kubernetes&lt;/h2&gt;
+&lt;p&gt;&lt;img src=&quot;https://developer.ibm.com/developer/default/articles/cl-lo-openid-connect-kubernetes-authentication2/images/image001.png&quot; alt=&quot;create realm kubernetes&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://developer.ibm.com/developer/default/articles/cl-lo-openid-connect-kubernetes-authentication2/images/image002.png&quot; alt=&quot;secret key&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;注意：&lt;/p&gt;
+&lt;ul&gt;
+  &lt;li&gt;access type要设置成confidential，否则后面无法获取secret key&lt;/li&gt;
+  &lt;li&gt;valid redirect url随意填写，这里填的：http://localhost:32768&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&quot;创建用户&quot;&gt;创建用户&lt;/h2&gt;
+
+&lt;p&gt;创建用户&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;菜单栏选择“Users”后点击“Add user”，创建用户：theone（名字随意，保持一致即可）
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;设置密码&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://developer.ibm.com/developer/default/articles/cl-lo-openid-connect-kubernetes-authentication2/images/image003.png&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;激活用户&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;访问https://172.16.41.106:8443/auth/admin/kubernetes/console
+使用theone用户登录，登录后404 没有权限，可以忽略；登录后要求重新设置密码，还可以设置成之前的密码，没有关系
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h1 id=&quot;配置kubernetes&quot;&gt;配置kubernetes&lt;/h1&gt;
+
+&lt;p&gt;拷贝证书&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;将/root/ssl/ca.pem或者keycloak.crt证书文件，从keycloak节点拷贝到k8s master节点的/etc/kubernetes/ssl/目录下
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;修改kube apiserver配置&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;vim /etc/kubernetes/manifests/kube-apiserver.yaml
+spec:
+containers:
+- command:
+...
+- --oidc-issuer-url=https://172.16.41.106:8443/auth/realms/kubernetes
+- --oidc-client-id=kubernetes
+- --oidc-username-claim=preferred_username
+- --oidc-username-prefix=-
+- --oidc-ca-file=/etc/kubernetes/pki/ca.pem
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;此时kube api server会自动重启，注意查看容器日志&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;kubectl logs kube-apiserver-xxx -f -n kube-system
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;权限设置&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;#cat rolebing.yaml
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  annotations:
+    rbac.authorization.kubernetes.io/autoupdate: &quot;true&quot;
+  labels:
+    kubernetes.io/bootstrapping: rbac-defaults
+  name: cluster-readonly
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+- apiGroup: rbac.authorization.k8s.io
+  kind: User
+  name: theone   # 替换成之前在keycloak中创建的用户名
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h1 id=&quot;测试脚本&quot;&gt;测试脚本&lt;/h1&gt;
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;import requests
+from pprint import pprint
+import json
+
+
+auth_url = &apos;https://179.18.3.180:6443&apos;
+headers = {&apos;Connection&apos;: &apos;Keep-Alive&apos;}
+
+def get_token():
+    url = &apos;https://172.16.41.106:8443/auth/realms/kubernetes/protocol/openid-connect/token&apos;
+    req = requests.post(url, data={&apos;client_id&apos;: &apos;kubernetes&apos;,
+                                   &apos;client_secret&apos;: &apos;aa3e7e64-d947-493e-93ca-d43faae6585e&apos;,
+                                   &apos;response_type&apos;: &apos;code token&apos;,
+                                   &apos;grant_type&apos;: &apos;password&apos;,
+                                   &apos;username&apos;: &apos;theone&apos;,
+                                   &apos;password&apos;: &apos;test&apos;,
+                                   &apos;scope&apos;: &apos;openid&apos;},
+                       verify=False)
+    r = json.loads(req.content)
+    pprint(r)
+    return r
+
+
+def list_ingress(tk):
+    req_url = &apos;%s/api/v1/pods&apos; % auth_url
+    headers[&apos;Authorization&apos;] = &apos;Bearer %s&apos; % tk
+    print(req_url, headers)
+    req = requests.get(req_url, headers=headers, verify=False)
+    pprint(json.loads(req.content))
+
+tokes = get_token()
+list_ingress(tokes[&apos;id_token&apos;])
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;参考&lt;/p&gt;
+&lt;ul&gt;
+  &lt;li&gt;https://developer.ibm.com/zh/depmodels/cloud/articles/cl-lo-openid-connect-kubernetes-authentication/&lt;/li&gt;
+  &lt;li&gt;https://developer.ibm.com/zh/articles/cl-lo-openid-connect-kubernetes-authentication2/&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+        <pubDate>Fri, 15 Jan 2021 00:00:00 +0000</pubDate>
+        <link>http://0.0.0.0:4000/2021/01/15/k8s-oidc-keycloak/</link>
+        <guid isPermaLink="true">http://0.0.0.0:4000/2021/01/15/k8s-oidc-keycloak/</guid>
+        
+        <category>kubernetes</category>
+        
+        <category>oidc</category>
+        
+        <category>keycloak</category>
+        
+        
+      </item>
+    
+  </channel>
+</rss>
