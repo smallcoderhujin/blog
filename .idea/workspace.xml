@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="9e6d72b4-18db-4bdb-a46a-650ff6cad7ce" name="Default" comment="">
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/.gitignore" afterPath="$PROJECT_DIR$/.gitignore" />
+      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/_posts/kubernetes/2021-04-06-k8s-go-mod.md" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/.idea/workspace.xml" afterPath="$PROJECT_DIR$/.idea/workspace.xml" />
     </list>
     <ignored path="huxpro.github.io.iws" />
@@ -25,71 +25,11 @@
   </component>
   <component name="FileEditorManager">
     <leaf SIDE_TABS_SIZE_LIMIT_KEY="300">
-      <file leaf-file-name="_config.yml" pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/_config.yml">
+      <file leaf-file-name="2021-04-06-k8s-go-mod.md" pinned="false" current-in-tab="true">
+        <entry file="file://$PROJECT_DIR$/_posts/kubernetes/2021-04-06-k8s-go-mod.md">
           <provider selected="true" editor-type-id="text-editor">
-            <state vertical-scroll-proportion="-4.8">
-              <caret line="8" column="11" selection-start-line="8" selection-start-column="11" selection-end-line="8" selection-end-column="11" />
-              <folding />
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file leaf-file-name=".gitignore" pinned="false" current-in-tab="true">
-        <entry file="file://$PROJECT_DIR$/.gitignore">
-          <provider selected="true" editor-type-id="text-editor">
-            <state vertical-scroll-proportion="0.26174498">
-              <caret line="13" column="5" selection-start-line="13" selection-start-column="5" selection-end-line="13" selection-end-column="5" />
-              <folding />
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file leaf-file-name="2021-01-18-k8s-coredns.md" pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/_posts/kubernetes/2021-01-18-k8s-coredns.md">
-          <provider selected="true" editor-type-id="text-editor">
-            <state vertical-scroll-proportion="0.0">
-              <caret line="307" column="0" selection-start-line="307" selection-start-column="0" selection-end-line="307" selection-end-column="0" />
-              <folding />
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file leaf-file-name="2021-03-04-k8s-gdb.md" pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/_posts/kubernetes/2021-03-04-k8s-gdb.md">
-          <provider selected="true" editor-type-id="text-editor">
-            <state vertical-scroll-proportion="0.0">
-              <caret line="19" column="0" selection-start-line="19" selection-start-column="0" selection-end-line="19" selection-end-column="0" />
-              <folding />
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file leaf-file-name="2021-03-24-k8s-csi-cinder.md" pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/_posts/kubernetes/2021-03-24-k8s-csi-cinder.md">
-          <provider selected="true" editor-type-id="text-editor">
-            <state vertical-scroll-proportion="-19.892857">
-              <caret line="193" column="12" selection-start-line="193" selection-start-column="12" selection-end-line="193" selection-end-column="12" />
-              <folding />
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file leaf-file-name="README.md" pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/README.md">
-          <provider selected="true" editor-type-id="text-editor">
-            <state vertical-scroll-proportion="-0.0">
-              <caret line="0" column="6" selection-start-line="0" selection-start-column="1" selection-end-line="0" selection-end-column="6" />
-              <folding />
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file leaf-file-name="LICENSE" pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/LICENSE">
-          <provider selected="true" editor-type-id="text-editor">
-            <state vertical-scroll-proportion="0.0">
-              <caret line="206" column="0" selection-start-line="206" selection-start-column="0" selection-end-line="206" selection-end-column="0" />
+            <state vertical-scroll-proportion="0.1039261">
+              <caret line="5" column="18" selection-start-line="5" selection-start-column="18" selection-end-line="5" selection-end-column="18" />
               <folding />
             </state>
           </provider>
@@ -133,10 +73,13 @@
         <option value="$PROJECT_DIR$/_posts/kubernetes/2021-03-04-k8s-gdb.md" />
         <option value="$PROJECT_DIR$/_posts/kubernetes/2021-03-24-k8s-csi-cinder.md" />
         <option value="$PROJECT_DIR$/CNAME" />
-        <option value="$PROJECT_DIR$/README.md" />
         <option value="$PROJECT_DIR$/LICENSE" />
-        <option value="$PROJECT_DIR$/_config.yml" />
         <option value="$PROJECT_DIR$/.gitignore" />
+        <option value="$PROJECT_DIR$/README.md" />
+        <option value="$PROJECT_DIR$/_doc/Manual.md" />
+        <option value="$PROJECT_DIR$/docs/sw.js" />
+        <option value="$PROJECT_DIR$/_config.yml" />
+        <option value="$PROJECT_DIR$/_posts/kubernetes/2021-04-06-k8s-go-mod.md" />
       </list>
     </option>
   </component>
@@ -176,8 +119,6 @@
       <foldersAlwaysOnTop value="true" />
     </navigator>
     <panes>
-      <pane id="Scope" />
-      <pane id="Scratches" />
       <pane id="ProjectPane">
         <subPane>
           <PATH>
@@ -196,8 +137,28 @@
               <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
             </PATH_ELEMENT>
           </PATH>
+          <PATH>
+            <PATH_ELEMENT>
+              <option name="myItemId" value="huxpro.github.io" />
+              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.ProjectViewProjectNode" />
+            </PATH_ELEMENT>
+            <PATH_ELEMENT>
+              <option name="myItemId" value="blog" />
+              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
+            </PATH_ELEMENT>
+            <PATH_ELEMENT>
+              <option name="myItemId" value="_posts" />
+              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
+            </PATH_ELEMENT>
+            <PATH_ELEMENT>
+              <option name="myItemId" value="kubernetes" />
+              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
+            </PATH_ELEMENT>
+          </PATH>
         </subPane>
       </pane>
+      <pane id="Scratches" />
+      <pane id="Scope" />
     </panes>
   </component>
   <component name="PropertiesComponent">
@@ -207,12 +168,13 @@
     <property name="settings.editor.splitter.proportion" value="0.2" />
   </component>
   <component name="RecentsManager">
-    <key name="MoveFile.RECENT_KEYS">
-      <recent name="E:\git-pro\self\blog\huxpro.github.io\_posts\kubernetes" />
-    </key>
     <key name="CopyFile.RECENT_KEYS">
+      <recent name="D:\GitHub\blog\_posts\kubernetes" />
       <recent name="E:\git-pro\blog\_posts\kubernetes" />
       <recent name="E:\git-pro\self\blog\huxpro.github.io\img" />
+      <recent name="E:\git-pro\self\blog\huxpro.github.io\_posts\kubernetes" />
+    </key>
+    <key name="MoveFile.RECENT_KEYS">
       <recent name="E:\git-pro\self\blog\huxpro.github.io\_posts\kubernetes" />
     </key>
   </component>
@@ -237,7 +199,6 @@
           <option name="mySupportsDeletion" value="false" />
           <option name="myCanBeAbsent" value="false" />
           <option name="myId" value="CREATED" />
-          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/_config.yml</PATH>
         </FILE-GROUP>
         <FILE-GROUP>
           <option name="myUpdateName" value="Deleted" />
@@ -245,8 +206,148 @@
           <option name="mySupportsDeletion" value="false" />
           <option name="myCanBeAbsent" value="true" />
           <option name="myId" value="REMOVED_FROM_REPOSITORY" />
-          <PATH vcs="Git" revision="">$PROJECT_DIR$/CNAME</PATH>
-          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/CNAME</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/2021/01/15/k8s-oidc-keycloak/index.html</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/2021/01/15/k8s-webhook-keystone/index.html</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/2021/01/18/k8s-coredns/index.html</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/2021/01/27/tf-k8s-annotation/index.html</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/2021/03/04/k8s-gdb/index.html</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/2021/03/24/k8s-csi-cinder/index.html</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/404.html</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/LICENSE</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/Rakefile</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/_config.yml</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/about/index.html</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/archive/index.html</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/assets/css/style.css</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/assets/css/style.css.map</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/css/bootstrap.css</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/css/bootstrap.min.css</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/css/hux-blog.css</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/css/hux-blog.min.css</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/feed.xml</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/fonts/glyphicons-halflings-regular.eot</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/fonts/glyphicons-halflings-regular.svg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/fonts/glyphicons-halflings-regular.ttf</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/fonts/glyphicons-halflings-regular.woff</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/fonts/glyphicons-halflings-regular.woff2</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/404-bg.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/about-bg-walle.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/about-bg.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/avatar-hux-home.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/avatar-hux-ny.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/avatar-hux.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/blog-desktop.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/blog-keynote.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/blog-md-navbar.gif</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/blog-sidebar.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/contact-bg.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/favicon.ico</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/home-bg-art.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/home-bg-geek.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/home-bg-o.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/home-bg.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/icon_wechat.png</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/in-post/forcify.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/in-post/open-source-license.png</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/in-post/post-alitrip-pd/post-alitrip-pd.013.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/in-post/post-alitrip-pd/post-alitrip-pd.014.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/in-post/post-alitrip-pd/post-alitrip-pd.016.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/in-post/post-alitrip-pd/post-alitrip-pd.018.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/in-post/post-alitrip-pd/post-alitrip-pd.019.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/in-post/post-alitrip-pd/post-alitrip-pd.020.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/in-post/post-alitrip-pd/post-alitrip-pd.021.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/in-post/post-alitrip-pd/post-alitrip-pd.023.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/in-post/post-alitrip-pd/post-alitrip-pd.026.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/in-post/post-alitrip-pd/post-alitrip-pd.028.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/in-post/post-alitrip-pd/post-alitrip-pd.029.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/in-post/post-alitrip-pd/post-alitrip-pd.030.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/in-post/post-alitrip-pd/post-alitrip-pd.031.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/in-post/post-c-u-ali-079717.png</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/in-post/post-c-u-ali-memo.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/in-post/post-c-u-ali-team.png</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/in-post/post-eleme-pwa/Architecture.png</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/in-post/post-eleme-pwa/Lighthouse-after.png</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/in-post/post-eleme-pwa/Lighthouse-before.png</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/in-post/post-eleme-pwa/PRECACHE-future-routes.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/in-post/post-eleme-pwa/PUSH-link-rel-preload.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/in-post/post-eleme-pwa/after-skeleton.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/in-post/post-eleme-pwa/before-skeleton.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/in-post/post-eleme-pwa/eleme-at-io.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/in-post/post-eleme-pwa/msite-After-Optim.png</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/in-post/post-eleme-pwa/msite-Before-Optim.png</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/in-post/post-eleme-pwa/nextTick-&amp;-Load.png</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/in-post/post-eleme-pwa/thisTick-&amp;-Load.png</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/in-post/post-f-f-weibo.png</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/in-post/post-js-version/javascript-java.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/in-post/post-js-version/keep-calm-and-learn-javascript.png</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/in-post/post-kuaidi-1.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/in-post/post-kuaidi-2.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/in-post/post-metro-panorama.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/in-post/post-metro-real.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/in-post/post-metro-ui.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/in-post/post-nextgen-web-pwa/PWAR-007.jpeg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/in-post/post-nextgen-web-pwa/PWAR-014+PWA.jpeg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/in-post/post-nextgen-web-pwa/flipkart-1.jpeg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/in-post/post-nextgen-web-pwa/flipkart-2.jpeg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/in-post/post-nextgen-web-pwa/flipkart-3.jpeg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/in-post/post-nextgen-web-pwa/ios2-a2hs.gif</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/in-post/post-nextgen-web-pwa/qcon-hybridzation.png</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/in-post/post-nextgen-web-pwa/qcon-trend.png</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/in-post/post-nextgen-web-pwa/sw-lifecycle.png</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/in-post/post-nextgen-web-pwa/sw-race.png</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/in-post/post-nextgen-web-pwa/sw-sw.png</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/in-post/post-wmu/maoyan.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/in-post/post-wmu/question.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/in-post/post-wmu/wepiao.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/post-bg-2015.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/post-bg-alibaba.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/post-bg-alitrip.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/post-bg-android.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/post-bg-apple-event-2015.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/post-bg-css.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/post-bg-digital-native.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/post-bg-dreamer.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/post-bg-e2e-ux.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/post-bg-farewell-flash.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/post-bg-halting.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/post-bg-infinity.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/post-bg-ios9-web.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/post-bg-js-module.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/post-bg-js-version.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/post-bg-kuaidi.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/post-bg-miui-ux.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/post-bg-miui6.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/post-bg-nextgen-web-pwa.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/post-bg-os-metro.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/post-bg-re-vs-ng2.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/post-bg-rwd.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/post-bg-see-u-ali.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/post-bg-universe.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/post-bg-unix-linux.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/post-bg-web.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/post-sample-image.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/img/tag-bg.jpg</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/index.html</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/js/animatescroll.min.js</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/js/archive.js</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/js/bootstrap.js</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/js/bootstrap.min.js</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/js/hux-blog.js</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/js/hux-blog.min.js</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/js/jquery.js</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/js/jquery.min.js</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/js/jquery.nav.js</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/js/jquery.tagcloud.js</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/js/simple-jekyll-search.min.js</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/js/snackbar.js</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/js/sw-registration.js</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/offline.html</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/package-lock.json</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/pwa/icons/128.png</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/pwa/icons/512.png</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/pwa/manifest.json</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/search.json</PATH>
+          <PATH vcs="Git" revision="">$PROJECT_DIR$/docs/sw.js</PATH>
         </FILE-GROUP>
         <FILE-GROUP>
           <option name="myUpdateName" value="Restored" />
@@ -558,19 +659,25 @@
       <option name="project" value="LOCAL" />
       <updated>1617693068427</updated>
     </task>
-    <option name="localTasksCounter" value="5" />
+    <task id="LOCAL-00005" summary="init blog">
+      <created>1617695192088</created>
+      <option name="number" value="00005" />
+      <option name="project" value="LOCAL" />
+      <updated>1617695192088</updated>
+    </task>
+    <option name="localTasksCounter" value="6" />
     <servers />
   </component>
   <component name="ToolWindowManager">
     <frame x="-8" y="-8" width="1936" height="1056" extended-state="6" />
     <editor active="true" />
     <layout>
-      <window_info id="Project" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" show_stripe_button="true" weight="0.15191898" sideWeight="0.5" order="0" side_tool="false" content_ui="combo" />
+      <window_info id="Project" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" show_stripe_button="true" weight="0.20095949" sideWeight="0.5" order="0" side_tool="false" content_ui="combo" />
       <window_info id="TODO" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="0" side_tool="false" content_ui="tabs" />
       <window_info id="Messages" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="1" side_tool="false" content_ui="tabs" />
       <window_info id="Event Log" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="0" side_tool="true" content_ui="tabs" />
       <window_info id="Database" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="0" side_tool="false" content_ui="tabs" />
-      <window_info id="Find" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.32900432" sideWeight="0.5" order="0" side_tool="false" content_ui="tabs" />
+      <window_info id="Find" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.32827735" sideWeight="0.5" order="0" side_tool="false" content_ui="tabs" />
       <window_info id="Python Console" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="0" side_tool="false" content_ui="tabs" />
       <window_info id="Version Control" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.32936078" sideWeight="0.5" order="0" side_tool="false" content_ui="tabs" />
       <window_info id="Structure" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="0" side_tool="true" content_ui="tabs" />
@@ -593,13 +700,38 @@
   <component name="VcsManagerConfiguration">
     <MESSAGE value="write blog coredns" />
     <MESSAGE value="update blog coredns" />
-    <option name="LAST_COMMIT_MESSAGE" value="update blog coredns" />
+    <MESSAGE value="init blog" />
+    <option name="LAST_COMMIT_MESSAGE" value="init blog" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager />
     <watches-manager />
   </component>
   <component name="editorHistoryManager">
+    <entry file="file://$PROJECT_DIR$/_posts/kubernetes/2021-03-24-k8s-csi-cinder.md">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0">
+          <caret line="193" column="12" selection-start-line="193" selection-start-column="12" selection-end-line="193" selection-end-column="12" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/README.md">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0">
+          <caret line="0" column="6" selection-start-line="0" selection-start-column="1" selection-end-line="0" selection-end-column="6" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/LICENSE">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0">
+          <caret line="206" column="0" selection-start-line="206" selection-start-column="0" selection-end-line="206" selection-end-column="0" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
     <entry file="file://$PROJECT_DIR$/_config.yml">
       <provider selected="true" editor-type-id="text-editor">
         <state vertical-scroll-proportion="0.0">
@@ -629,20 +761,6 @@
         <state vertical-scroll-proportion="0.0">
           <caret line="0" column="0" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
           <folding />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/_doc/Manual.md">
-      <provider selected="true" editor-type-id="text-editor">
-        <state vertical-scroll-proportion="0.0">
-          <caret line="15" column="7" selection-start-line="15" selection-start-column="7" selection-end-line="15" selection-end-column="7" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/_doc/README.zh.md">
-      <provider selected="true" editor-type-id="text-editor">
-        <state vertical-scroll-proportion="0.0">
-          <caret line="218" column="0" selection-start-line="218" selection-start-column="0" selection-end-line="218" selection-end-column="0" />
         </state>
       </provider>
     </entry>
@@ -699,20 +817,6 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/_doc/Manual.md">
-      <provider selected="true" editor-type-id="text-editor">
-        <state vertical-scroll-proportion="0.0">
-          <caret line="15" column="7" selection-start-line="15" selection-start-column="7" selection-end-line="15" selection-end-column="7" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/_doc/README.zh.md">
-      <provider selected="true" editor-type-id="text-editor">
-        <state vertical-scroll-proportion="0.0">
-          <caret line="218" column="0" selection-start-line="218" selection-start-column="0" selection-end-line="218" selection-end-column="0" />
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/_includes/featured-tags.html">
       <provider selected="true" editor-type-id="text-editor">
         <state vertical-scroll-proportion="0.0">
@@ -724,13 +828,6 @@
       <provider selected="true" editor-type-id="text-editor">
         <state vertical-scroll-proportion="0.0">
           <caret line="9" column="27" selection-start-line="9" selection-start-column="27" selection-end-line="9" selection-end-column="27" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/_includes/footer.html">
-      <provider selected="true" editor-type-id="text-editor">
-        <state vertical-scroll-proportion="-7.296296">
-          <caret line="11" column="61" selection-start-line="11" selection-start-column="61" selection-end-line="11" selection-end-column="61" />
         </state>
       </provider>
     </entry>
@@ -776,20 +873,6 @@
       <provider selected="true" editor-type-id="text-editor">
         <state vertical-scroll-proportion="0.0">
           <caret line="16" column="0" selection-start-line="16" selection-start-column="0" selection-end-line="16" selection-end-column="0" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/_doc/Manual.md">
-      <provider selected="true" editor-type-id="text-editor">
-        <state vertical-scroll-proportion="0.0">
-          <caret line="15" column="7" selection-start-line="15" selection-start-column="7" selection-end-line="15" selection-end-column="7" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/_doc/README.zh.md">
-      <provider selected="true" editor-type-id="text-editor">
-        <state vertical-scroll-proportion="0.0">
-          <caret line="218" column="0" selection-start-line="218" selection-start-column="0" selection-end-line="218" selection-end-column="0" />
         </state>
       </provider>
     </entry>
@@ -886,7 +969,7 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/_posts/kubernetes/2021-01-18-k8s-coredns.md">
       <provider selected="true" editor-type-id="text-editor">
-        <state vertical-scroll-proportion="0.0">
+        <state vertical-scroll-proportion="6.3810625">
           <caret line="307" column="0" selection-start-line="307" selection-start-column="0" selection-end-line="307" selection-end-column="0" />
           <folding />
         </state>
@@ -894,7 +977,7 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/_posts/kubernetes/2021-03-04-k8s-gdb.md">
       <provider selected="true" editor-type-id="text-editor">
-        <state vertical-scroll-proportion="0.0">
+        <state vertical-scroll-proportion="0.39491916">
           <caret line="19" column="0" selection-start-line="19" selection-start-column="0" selection-end-line="19" selection-end-column="0" />
           <folding />
         </state>
@@ -902,32 +985,16 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/_posts/kubernetes/2021-03-24-k8s-csi-cinder.md">
       <provider selected="true" editor-type-id="text-editor">
-        <state vertical-scroll-proportion="-19.892857">
+        <state vertical-scroll-proportion="4.0115476">
           <caret line="193" column="12" selection-start-line="193" selection-start-column="12" selection-end-line="193" selection-end-column="12" />
-          <folding />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/README.md">
-      <provider selected="true" editor-type-id="text-editor">
-        <state vertical-scroll-proportion="-0.0">
-          <caret line="0" column="6" selection-start-line="0" selection-start-column="1" selection-end-line="0" selection-end-column="6" />
           <folding />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/LICENSE">
       <provider selected="true" editor-type-id="text-editor">
-        <state vertical-scroll-proportion="0.0">
+        <state vertical-scroll-proportion="4.147651">
           <caret line="206" column="0" selection-start-line="206" selection-start-column="0" selection-end-line="206" selection-end-column="0" />
-          <folding />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/_config.yml">
-      <provider selected="true" editor-type-id="text-editor">
-        <state vertical-scroll-proportion="-4.8">
-          <caret line="8" column="11" selection-start-line="8" selection-start-column="11" selection-end-line="8" selection-end-column="11" />
           <folding />
         </state>
       </provider>
@@ -936,6 +1003,46 @@
       <provider selected="true" editor-type-id="text-editor">
         <state vertical-scroll-proportion="0.26174498">
           <caret line="13" column="5" selection-start-line="13" selection-start-column="5" selection-end-line="13" selection-end-column="5" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/README.md">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.02078522">
+          <caret line="1" column="12" selection-start-line="1" selection-start-column="12" selection-end-line="1" selection-end-column="12" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/_config.yml">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0">
+          <caret line="15" column="30" selection-start-line="15" selection-start-column="30" selection-end-line="15" selection-end-column="30" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/sw.js">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0">
+          <caret line="3" column="19" selection-start-line="3" selection-start-column="19" selection-end-line="3" selection-end-column="19" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/_includes/footer.html">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.2272203">
+          <caret line="14" column="69" selection-start-line="14" selection-start-column="69" selection-end-line="14" selection-end-column="69" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/_posts/kubernetes/2021-04-06-k8s-go-mod.md">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.1039261">
+          <caret line="5" column="18" selection-start-line="5" selection-start-column="18" selection-end-line="5" selection-end-column="18" />
           <folding />
         </state>
       </provider>
