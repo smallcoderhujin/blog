@@ -106,3 +106,5 @@ friends: [
         href: "http://baidu.com/"
     },
 ]
+
+theme: jekyll-theme-cayman
