@@ -232,33 +232,24 @@
 <div class="post-preview">
     <a href="/blog/2021/05/14/k8s-kuryr-neutron/">
         <h2 class="post-title">
-            K8s Kuryr Neutron
+            kuryr - kubernetes
         </h2>
+        
+        <h3 class="post-subtitle">
+            cni
+        </h3>
         
         <div class="post-content-preview">
             
-                
-title: “kuryr - kubernetes”
-subtitle: “cni”
-layout: post
-author: “hujin”
-header-style: text
-tags:
+                背景
 
-  k8s
-  cni
-  neutron
-  kuryr
-
-
-##　背景
-
-当k8s部署在openstack节点或者虚拟机中时，可以使用openstack提供的网络功能实现k8s cni，这里...
+当k8s部署在openstack节点或者虚拟机中时，可以使用openstack提供的网络功能实现k8s cni，这里主要对接的是neutron和lbaas模块，社区提供了kuryr的实现方案。
+Kuryr 是 OpenStack Neutron 的子项目，其主要目标是透过该项目来集成 OpenStack 与 Kubernetes 的网络。该项目在 Kubernetes 中实作了原生 ...
             
         </div>
     </a>
     <p class="post-meta">
-        Posted by Hujin Blog on May 14, 2021
+        Posted by hujin on May 14, 2021
     </p>
 </div>
 <hr>
@@ -572,6 +563,11 @@ OIDC是一种 OAuth2 认证方式， 被某些 OAuth2 提供者支持，例如 A
                     title="kubernetes"
                     rel="4">kubernetes</a>
         
+                <a data-sort="0006" 
+                    href="/blog/archive/?tag=k8s"
+                    title="k8s"
+                    rel="3">k8s</a>
+        
                 <a data-sort="0007" 
                     href="/blog/archive/?tag=cinder"
                     title="cinder"
@@ -581,11 +577,6 @@ OIDC是一种 OAuth2 认证方式， 被某些 OAuth2 提供者支持，例如 A
                     href="/blog/archive/?tag=csi"
                     title="csi"
                     rel="2">csi</a>
-        
-                <a data-sort="0007" 
-                    href="/blog/archive/?tag=k8s"
-                    title="k8s"
-                    rel="2">k8s</a>
     </div>
 </section>
 

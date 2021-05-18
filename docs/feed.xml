@@ -5,34 +5,20 @@
     <description>Hujin，Openstack &amp; SDN &amp; Kubernetes Lover，Software Engineer，| 与你一起发现更大的世界</description>
     <link>http://0.0.0.0:4000/blog/</link>
     <atom:link href="http://0.0.0.0:4000/blog/feed.xml" rel="self" type="application/rss+xml" />
-    <pubDate>Tue, 18 May 2021 08:35:02 +0000</pubDate>
-    <lastBuildDate>Tue, 18 May 2021 08:35:02 +0000</lastBuildDate>
+    <pubDate>Tue, 18 May 2021 09:54:20 +0000</pubDate>
+    <lastBuildDate>Tue, 18 May 2021 09:54:20 +0000</lastBuildDate>
     <generator>Jekyll v4.2.0</generator>
     
       <item>
-        <title>K8s Kuryr Neutron</title>
-        <description>&lt;hr /&gt;
-&lt;p&gt;title: “kuryr - kubernetes”
-subtitle: “cni”
-layout: post
-author: “hujin”
-header-style: text
-tags:&lt;/p&gt;
-&lt;ul&gt;
-  &lt;li&gt;k8s&lt;/li&gt;
-  &lt;li&gt;cni&lt;/li&gt;
-  &lt;li&gt;neutron&lt;/li&gt;
-  &lt;li&gt;kuryr&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;##　背景&lt;/p&gt;
+        <title>kuryr - kubernetes</title>
+        <description>&lt;h2 id=&quot;背景&quot;&gt;背景&lt;/h2&gt;
 
 &lt;p&gt;当k8s部署在openstack节点或者虚拟机中时，可以使用openstack提供的网络功能实现k8s cni，这里主要对接的是neutron和lbaas模块，社区提供了kuryr的实现方案。
 Kuryr 是 OpenStack Neutron 的子项目，其主要目标是透过该项目来集成 OpenStack 与 Kubernetes 的网络。该项目在 Kubernetes 中实作了原生 Neutron-based 的网络，
 因此使用 Kuryr-Kubernetes 可以让 OpenStack VM 与 Kubernetes Pods 能够选择在同一个子网络上运作，并且能够使用 Neutron L3 与 Security Group 来对网络进行路由，以及阻挡特定来源 Port，并且也提供基于 Neutron LBaaS 的 Service 集成。&lt;/p&gt;
 
-&lt;p&gt;&lt;img src=&quot;../pics/kuryr_k8s_arch.png&quot; alt=&quot;kuryr_kubernetes_arch&quot; /&gt;
-&lt;img src=&quot;../pics/kuryr_k8s_pipline.png&quot; alt=&quot;kuryr_kubernetes_arch&quot; /&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&quot;/blog/img/kuryr_k8s_arch.png&quot; alt=&quot;kuryr_kubernetes_arch&quot; /&gt;
+&lt;img src=&quot;/blog/img/kuryr_k8s_pipline.png&quot; alt=&quot;kuryr_kubernetes_arch&quot; /&gt;&lt;/p&gt;
 
 &lt;p&gt;控制节点&lt;/p&gt;
 
@@ -688,6 +674,14 @@ OFPT_GET_CONFIG_REPLY (xid=0x4): frags=normal miss_send_len=0
         <pubDate>Fri, 14 May 2021 00:00:00 +0000</pubDate>
         <link>http://0.0.0.0:4000/blog/2021/05/14/k8s-kuryr-neutron/</link>
         <guid isPermaLink="true">http://0.0.0.0:4000/blog/2021/05/14/k8s-kuryr-neutron/</guid>
+        
+        <category>k8s</category>
+        
+        <category>cni</category>
+        
+        <category>neutron</category>
+        
+        <category>kuryr</category>
         
         
       </item>
@@ -2534,7 +2528,7 @@ list_ingress(token)
   &lt;li&gt;在使用 kubectl 时，将 id_token 设置为 –token 标志值，或者将其直接添加到 kubeconfig 中&lt;/li&gt;
   &lt;li&gt;kubectl 将你的 id_token 放到一个称作 Authorization 的头部，发送给 API 服务器&lt;/li&gt;
   &lt;li&gt;API 服务器将负责通过检查配置中引用的证书来确认 JWT 的签名是合法的&lt;/li&gt;
-  &lt;li&gt;检查确认 id_token 尚未过期&lt;/li&gt;
+  &lt;li&gt;检查确认 id_token 尚未过期 x&lt;/li&gt;
   &lt;li&gt;确认用户有权限执行操作&lt;/li&gt;
   &lt;li&gt;鉴权成功之后，API 服务器向 kubectl 返回响应&lt;/li&gt;
   &lt;li&gt;kubectl 向用户提供反馈信息&lt;/li&gt;
