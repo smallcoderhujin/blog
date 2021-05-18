@@ -18,8 +18,8 @@ tags:
 Kuryr 是 OpenStack Neutron 的子项目，其主要目标是透过该项目来集成 OpenStack 与 Kubernetes 的网络。该项目在 Kubernetes 中实作了原生 Neutron-based 的网络，
 因此使用 Kuryr-Kubernetes 可以让 OpenStack VM 与 Kubernetes Pods 能够选择在同一个子网络上运作，并且能够使用 Neutron L3 与 Security Group 来对网络进行路由，以及阻挡特定来源 Port，并且也提供基于 Neutron LBaaS 的 Service 集成。
 
-![kuryr_kubernetes_arch](img/kuryr_k8s_arch.png)
-![kuryr_kubernetes_arch](img/kuryr_k8s_pipline.png)
+![kuryr_kubernetes_arch](/img/kuryr_k8s_arch.png)
+![kuryr_kubernetes_arch](/img/kuryr_k8s_pipline.png)
 
 
 控制节点
