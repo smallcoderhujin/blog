@@ -20,7 +20,7 @@ OIDC是一种 OAuth2 认证方式， 被某些 OAuth2 提供者支持，例如 A
 - 在使用 kubectl 时，将 id_token 设置为 --token 标志值，或者将其直接添加到 kubeconfig 中
 - kubectl 将你的 id_token 放到一个称作 Authorization 的头部，发送给 API 服务器
 - API 服务器将负责通过检查配置中引用的证书来确认 JWT 的签名是合法的
-- 检查确认 id_token 尚未过期
+- 检查确认 id_token 尚未过期 x
 - 确认用户有权限执行操作
 - 鉴权成功之后，API 服务器向 kubectl 返回响应
 - kubectl 向用户提供反馈信息
