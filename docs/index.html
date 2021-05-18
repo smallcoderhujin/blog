@@ -230,6 +230,40 @@
             ">
     			
 <div class="post-preview">
+    <a href="/blog/2021/05/14/k8s-kuryr-neutron/">
+        <h2 class="post-title">
+            K8s Kuryr Neutron
+        </h2>
+        
+        <div class="post-content-preview">
+            
+                
+title: “kuryr - kubernetes”
+subtitle: “cni”
+layout: post
+author: “hujin”
+header-style: text
+tags:
+
+  k8s
+  cni
+  neutron
+  kuryr
+
+
+##　背景
+
+当k8s部署在openstack节点或者虚拟机中时，可以使用openstack提供的网络功能实现k8s cni，这里...
+            
+        </div>
+    </a>
+    <p class="post-meta">
+        Posted by Hujin Blog on May 14, 2021
+    </p>
+</div>
+<hr>
+
+<div class="post-preview">
     <a href="/blog/2021/04/06/k8s-go-mod/">
         <h2 class="post-title">
             GO MOD使用私有仓库
@@ -261,6 +295,42 @@
     </a>
     <p class="post-meta">
         Posted by hujin on April 6, 2021
+    </p>
+</div>
+<hr>
+
+<div class="post-preview">
+    <a href="/blog/2021/03/24/k8s-go-mod/">
+        <h2 class="post-title">
+            GO MOD使用私有仓库
+        </h2>
+        
+        <h3 class="post-subtitle">
+            go mod
+        </h3>
+        
+        <div class="post-content-preview">
+            
+                背景
+
+在常见的项目中使用go mod做包管理，在引用第三方包时这个包可能维护在内部私有仓库中，需要解决几个问题：
+
+
+  引用第三方库
+  引用私有仓库时不使用代理
+  使用git方式获取代码
+
+
+替换引用的仓库地址
+这里直接修改代码中的引用工作量太大了，可以通过在go.mod中添加replace的方式：
+
+
+  github.com/gophercloud/gophercloud =&g...
+            
+        </div>
+    </a>
+    <p class="post-meta">
+        Posted by hujin on March 24, 2021
     </p>
 </div>
 <hr>
@@ -497,10 +567,25 @@ OIDC是一种 OAuth2 认证方式， 被某些 OAuth2 提供者支持，例如 A
         
         
         
-                <a data-sort="0003" 
+                <a data-sort="0005" 
                     href="/blog/archive/?tag=kubernetes"
                     title="kubernetes"
                     rel="4">kubernetes</a>
+        
+                <a data-sort="0007" 
+                    href="/blog/archive/?tag=cinder"
+                    title="cinder"
+                    rel="2">cinder</a>
+        
+                <a data-sort="0007" 
+                    href="/blog/archive/?tag=csi"
+                    title="csi"
+                    rel="2">csi</a>
+        
+                <a data-sort="0007" 
+                    href="/blog/archive/?tag=k8s"
+                    title="k8s"
+                    rel="2">k8s</a>
     </div>
 </section>
 
