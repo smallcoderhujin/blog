@@ -9,10 +9,10 @@ tags:
   - cni
   - neutron
   - kuryr
+---
 
 
-
-##　背景
+## 背景
 
 当k8s部署在openstack节点或者虚拟机中时，可以使用openstack提供的网络功能实现k8s cni，这里主要对接的是neutron和lbaas模块，社区提供了kuryr的实现方案。
 Kuryr 是 OpenStack Neutron 的子项目，其主要目标是透过该项目来集成 OpenStack 与 Kubernetes 的网络。该项目在 Kubernetes 中实作了原生 Neutron-based 的网络，
