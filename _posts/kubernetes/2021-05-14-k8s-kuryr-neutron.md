@@ -21,6 +21,10 @@ Kuryr 是 OpenStack Neutron 的子项目，其主要目标是透过该项目来�
 ![kuryr_kubernetes_arch](/blog/img/kuryr_k8s_arch.png)
 ![kuryr_kubernetes_arch](/blog/img/kuryr_k8s_pipline.png)
 
+kuryr kubernetes支持两种部署模式：
+
+- nested：嵌套部署，通过虚机网卡子接口的方式实现，依赖社区trunk port功能
+- none-nested：非嵌套部署，pod网卡类似虚机网卡直接添加到OVS网桥中，通过ovn-agent管理流表
 
 控制节点
 
@@ -46,7 +50,11 @@ Namespaces|	Network|
 
 计算节点
 
-计算节点中有两个服务： kuryr cni和kuryr daemon服务
+计算节点中有两个服务：
+
+- kuryr cni：kuryr cni当前有python和golang两种实现，golang实现是标准的cni方式，社区慢慢往这个方向切换
+- kuryr daemon服务：为cni提供api服务用来配置、更新和删除容器网卡
+
 当kubelet收到pod创建事件时，kubelet会调用kuryr cni的方法cmdAdd，这里kuryrcni会调用kuryr daemon的addNetwork接口
 
 kuryr daemon有三个线程：
