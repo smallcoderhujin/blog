@@ -5,8 +5,8 @@
     <description>Hujin，Openstack &amp; SDN &amp; Kubernetes Lover，Software Engineer，| 与你一起发现更大的世界</description>
     <link>http://0.0.0.0:4000/blog/</link>
     <atom:link href="http://0.0.0.0:4000/blog/feed.xml" rel="self" type="application/rss+xml" />
-    <pubDate>Tue, 18 May 2021 09:54:20 +0000</pubDate>
-    <lastBuildDate>Tue, 18 May 2021 09:54:20 +0000</lastBuildDate>
+    <pubDate>Wed, 19 May 2021 02:09:07 +0000</pubDate>
+    <lastBuildDate>Wed, 19 May 2021 02:09:07 +0000</lastBuildDate>
     <generator>Jekyll v4.2.0</generator>
     
       <item>
@@ -19,6 +19,13 @@ Kuryr 是 OpenStack Neutron 的子项目，其主要目标是透过该项目来�
 
 &lt;p&gt;&lt;img src=&quot;/blog/img/kuryr_k8s_arch.png&quot; alt=&quot;kuryr_kubernetes_arch&quot; /&gt;
 &lt;img src=&quot;/blog/img/kuryr_k8s_pipline.png&quot; alt=&quot;kuryr_kubernetes_arch&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;kuryr kubernetes支持两种部署模式：&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;nested：嵌套部署，通过虚机网卡子接口的方式实现，依赖社区trunk port功能&lt;/li&gt;
+  &lt;li&gt;none-nested：非嵌套部署，pod网卡类似虚机网卡直接添加到OVS网桥中，通过ovn-agent管理流表&lt;/li&gt;
+&lt;/ul&gt;
 
 &lt;p&gt;控制节点&lt;/p&gt;
 
@@ -70,8 +77,14 @@ Kubernetes|Neutron |说明&lt;/p&gt;
 
 &lt;p&gt;计算节点&lt;/p&gt;
 
-&lt;p&gt;计算节点中有两个服务： kuryr cni和kuryr daemon服务
-当kubelet收到pod创建事件时，kubelet会调用kuryr cni的方法cmdAdd，这里kuryrcni会调用kuryr daemon的addNetwork接口&lt;/p&gt;
+&lt;p&gt;计算节点中有两个服务：&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;kuryr cni：kuryr cni当前有python和golang两种实现，golang实现是标准的cni方式，社区慢慢往这个方向切换&lt;/li&gt;
+  &lt;li&gt;kuryr daemon服务：为cni提供api服务用来配置、更新和删除容器网卡&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;当kubelet收到pod创建事件时，kubelet会调用kuryr cni的方法cmdAdd，这里kuryrcni会调用kuryr daemon的addNetwork接口&lt;/p&gt;
 
 &lt;p&gt;kuryr daemon有三个线程：&lt;/p&gt;
 
