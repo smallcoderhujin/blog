@@ -230,6 +230,47 @@
             ">
     			
 <div class="post-preview">
+    <a href="/blog/2021/05/24/k8s-kubeovn-vpcnatgateway/">
+        <h2 class="post-title">
+            KubeOVN - VPCNatGateway
+        </h2>
+        
+        <h3 class="post-subtitle">
+            vpc nat gateway
+        </h3>
+        
+        <div class="post-content-preview">
+            
+                功能
+用来给k8s中pod/service/ingress等网络资源访问外部网络
+
+支持功能
+
+
+  指定外部网络出口物理网卡
+  指定多子网以及子网的网关
+  浮动IP功能
+  端口转发功能
+  静态路由规则
+  SNAT功能
+
+
+原理
+
+
+
+  创建一个nat gateway deployment，副本数是1
+  通过configmap获取pod对应的镜像文件路径，创建nat gatew...
+            
+        </div>
+    </a>
+    <p class="post-meta">
+        Posted by hujin on May 24, 2021
+    </p>
+</div>
+<hr>
+
+<div class="post-preview">
     <a href="/blog/2021/05/14/k8s-kuryr-neutron/">
         <h2 class="post-title">
             kuryr - kubernetes
@@ -558,7 +599,7 @@ OIDC是一种 OAuth2 认证方式， 被某些 OAuth2 提供者支持，例如 A
         
         
         
-                <a data-sort="0005" 
+                <a data-sort="0006" 
                     href="/blog/archive/?tag=kubernetes"
                     title="kubernetes"
                     rel="4">kubernetes</a>
@@ -566,14 +607,19 @@ OIDC是一种 OAuth2 认证方式， 被某些 OAuth2 提供者支持，例如 A
                 <a data-sort="0006" 
                     href="/blog/archive/?tag=k8s"
                     title="k8s"
-                    rel="3">k8s</a>
+                    rel="4">k8s</a>
         
-                <a data-sort="0007" 
+                <a data-sort="0008" 
                     href="/blog/archive/?tag=cinder"
                     title="cinder"
                     rel="2">cinder</a>
         
-                <a data-sort="0007" 
+                <a data-sort="0008" 
+                    href="/blog/archive/?tag=cni"
+                    title="cni"
+                    rel="2">cni</a>
+        
+                <a data-sort="0008" 
                     href="/blog/archive/?tag=csi"
                     title="csi"
                     rel="2">csi</a>

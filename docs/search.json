@@ -1,6 +1,14 @@
 [
   
     {
+      "title"    : "KubeOVN - VPCNatGateway",
+      "subtitle" : "vpc nat gateway",
+      "tags"     : "k8s, cni, kube-ovn, vpc-nat-gateway",
+      "url"      : "/blog/2021/05/24/k8s-kubeovn-vpcnatgateway/",
+      "date"     : "2021-05-24 00:00:00 +0000"
+    } ,
+  
+    {
       "title"    : "kuryr - kubernetes",
       "subtitle" : "cni",
       "tags"     : "k8s, cni, neutron, kuryr",

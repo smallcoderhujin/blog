@@ -5,9 +5,212 @@
     <description>Hujin，Openstack &amp; SDN &amp; Kubernetes Lover，Software Engineer，| 与你一起发现更大的世界</description>
     <link>http://0.0.0.0:4000/blog/</link>
     <atom:link href="http://0.0.0.0:4000/blog/feed.xml" rel="self" type="application/rss+xml" />
-    <pubDate>Wed, 19 May 2021 02:09:07 +0000</pubDate>
-    <lastBuildDate>Wed, 19 May 2021 02:09:07 +0000</lastBuildDate>
+    <pubDate>Mon, 24 May 2021 01:37:50 +0000</pubDate>
+    <lastBuildDate>Mon, 24 May 2021 01:37:50 +0000</lastBuildDate>
     <generator>Jekyll v4.2.0</generator>
+    
+      <item>
+        <title>KubeOVN - VPCNatGateway</title>
+        <description>&lt;h2 id=&quot;功能&quot;&gt;功能&lt;/h2&gt;
+&lt;p&gt;用来给k8s中pod/service/ingress等网络资源访问外部网络&lt;/p&gt;
+
+&lt;h3 id=&quot;支持功能&quot;&gt;支持功能&lt;/h3&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;指定外部网络出口物理网卡&lt;/li&gt;
+  &lt;li&gt;指定多子网以及子网的网关&lt;/li&gt;
+  &lt;li&gt;浮动IP功能&lt;/li&gt;
+  &lt;li&gt;端口转发功能&lt;/li&gt;
+  &lt;li&gt;静态路由规则&lt;/li&gt;
+  &lt;li&gt;SNAT功能&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&quot;原理&quot;&gt;原理&lt;/h2&gt;
+&lt;p&gt;&lt;img src=&quot;/blog/img/vpc-nat-gateway.png&quot; alt=&quot;kube-ovn vpc-nat-gateway&quot; /&gt;&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;创建一个nat gateway deployment，副本数是1&lt;/li&gt;
+  &lt;li&gt;通过configmap获取pod对应的镜像文件路径，创建nat gateway pod；重建策略是recreate&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;pod中设置annotations：&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;ovn.kubernetes.io/vpc_nat_gw： nat gateway的名称&lt;/li&gt;
+  &lt;li&gt;k8s.v1.cni.cncf.io/networks： 指定pod对应namespace的外部网络&lt;/li&gt;
+  &lt;li&gt;ovn.kubernetes.io/logical_switch：为nat gateway添加的子网列表&lt;/li&gt;
+  &lt;li&gt;ovn.kubernetes.io/ip_address：为nat gateway设置的网关IP列表&lt;/li&gt;
+  &lt;li&gt;等待nat gateway pod变成Running后，触发nat gateway初始化，执行命令： 
+  bash /kube-ovn/nat-gateway.sh init&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;init执行的命令：&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;ip link set net1 up
+ip rule add iif net1 table $ROUTE_TABLE
+ip rule add iif eth0 table $ROUTE_TABLE
+
+# add static chain
+iptables -t nat -N DNAT_FILTER
+iptables -t nat -N SNAT_FILTER
+iptables -t nat -N EXCLUSIVE_DNAT # floatingIp DNAT
+iptables -t nat -N EXCLUSIVE_SNAT # floatingIp SNAT
+iptables -t nat -N SHARED_DNAT
+iptables -t nat -N SHARED_SNAT
+
+iptables -t nat -A PREROUTING -j DNAT_FILTER
+iptables -t nat -A DNAT_FILTER -j EXCLUSIVE_DNAT
+iptables -t nat -A DNAT_FILTER -j SHARED_DNAT
+
+iptables -t nat -A POSTROUTING -j SNAT_FILTER
+iptables -t nat -A SNAT_FILTER -j EXCLUSIVE_SNAT
+iptables -t nat -A SNAT_FILTER -j SHARED_SNAT
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;vpc nat gateway相关线程说明:&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;addVpcWorker:监听vpc创建事件，并在ovn中创建logical router&lt;/li&gt;
+  &lt;li&gt;AddOrUpdateVpcNatGwWorker：监听vpc nat gateway创建或更新事件，创建或更新对应的nat gateway deployment&lt;/li&gt;
+  &lt;li&gt;initVpcNatGwWorker：初始化nat gateway deployment中对应的pod容器，执行命令见上文&lt;/li&gt;
+  &lt;li&gt;delVpcNatGwWorker：删除nat gateway deployment&lt;/li&gt;
+  &lt;li&gt;updateVpcEipWorker：找到nat gateway deployment对应的pod，获取annotations中eip相关字段，判断需要删除和新增的eip，并更新到annotations中&lt;/li&gt;
+  &lt;li&gt;updateVpcFloatingIpWorker：在nat gateway 中更新浮动IP的映射关系&lt;/li&gt;
+  &lt;li&gt;updateVpcDnatWorker：在nat gateway 中更新端口转发的映射关系&lt;/li&gt;
+  &lt;li&gt;updateVpcSnatWorker：在nat gateway 中更新子网和eip的snat的映射关系&lt;/li&gt;
+  &lt;li&gt;updateVpcSubnetWorker：在nat gateway 中新增、删除子网网卡，创建或者删除对应子网的路由信息&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&quot;使用方式&quot;&gt;使用方式&lt;/h2&gt;
+&lt;p&gt;开启VPC Nat Gatway功能&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: ovn-vpc-nat-gw-config
+  namespace: kube-system
+data:
+  image: &apos;kubeovn/vpc-nat-gateway:v1.7.0&apos;  # Docker image for vpc nat gateway
+  enable-vpc-nat-gw: true                  # &apos;true&apos; for enable, &apos;false&apos; for disable 
+  nic: eth1                                # The nic that connect to underlay network, use as the &apos;master&apos; for macvlan
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;创建VPC Nat Gateway&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;kind: VpcNatGateway
+apiVersion: kubeovn.io/v1
+  name: ngw
+spec:
+  vpc: test-vpc-1                  # Specifies which VPC the gateway belongs to 
+  subnet: sn                       # Subnet in VPC  
+  lanIp: 10.0.1.254                # Internal IP for nat gateway pod, IP should be within the range of the subnet 
+  eips:                            # Underlay IPs assigned to the gateway
+    - eipCIDR: 192.168.0.111/24
+       gateway: 192.168.0.254
+    - eipCIDR: 192.168.0.112/24
+       gateway: 192.168.0.254
+  floatingIpRules: 
+    - eip: 192.168.0.111
+      internalIp: 10.0.1.5
+  dnatRules:
+    - eip: 192.168.0.112
+      externalPort: 8888
+      protocol: tcp
+      internalIp: 10.0.1.10
+      internalPort: 80
+  snatRules:
+    - eip: 192.168.0.112
+       internalCIDR: 10.0.1.0/24
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;给VPC添加静态路由&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;kind: Vpc
+apiVersion: kubeovn.io/v1
+metadata:
+  name: test-vpc-1
+spec:
+  staticRoutes:
+    - cidr: 0.0.0.0/0
+      nextHopIP: 10.0.1.254     # Should be the same as the &apos;lanIp&apos; for vpc gateway
+      policy: policyDst
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+</description>
+        <pubDate>Mon, 24 May 2021 00:00:00 +0000</pubDate>
+        <link>http://0.0.0.0:4000/blog/2021/05/24/k8s-kubeovn-vpcnatgateway/</link>
+        <guid isPermaLink="true">http://0.0.0.0:4000/blog/2021/05/24/k8s-kubeovn-vpcnatgateway/</guid>
+        
+        <category>k8s</category>
+        
+        <category>cni</category>
+        
+        <category>kube-ovn</category>
+        
+        <category>vpc-nat-gateway</category>
+        
+        
+      </item>
     
       <item>
         <title>kuryr - kubernetes</title>
