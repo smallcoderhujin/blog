@@ -1,6 +1,6 @@
 ---
-title: "CSI之Cinder"
-subtitle: "k8s csi"
+title: "Cinder"
+subtitle: "csi"
 layout: post
 author: "hujin"
 header-style: text
