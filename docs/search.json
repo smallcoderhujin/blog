@@ -1,6 +1,14 @@
 [
   
     {
+      "title"    : "Multus",
+      "subtitle" : "cni",
+      "tags"     : "k8s, cni, multus",
+      "url"      : "/blog/2021/06/28/k8s-multus/",
+      "date"     : "2021-06-28 00:00:00 +0000"
+    } ,
+  
+    {
       "title"    : "KubeOVN - VPCNatGateway",
       "subtitle" : "vpc nat gateway",
       "tags"     : "k8s, cni, kube-ovn, vpc-nat-gateway",
@@ -9,7 +17,7 @@
     } ,
   
     {
-      "title"    : "kuryr - kubernetes",
+      "title"    : "Kuryr - Kubernetes",
       "subtitle" : "cni",
       "tags"     : "k8s, cni, neutron, kuryr",
       "url"      : "/blog/2021/05/14/k8s-kuryr-neutron/",
@@ -25,16 +33,8 @@
     } ,
   
     {
-      "title"    : "GO MOD使用私有仓库",
-      "subtitle" : "go mod",
-      "tags"     : "k8s, csi, cinder",
-      "url"      : "/blog/2021/03/24/k8s-go-mod/",
-      "date"     : "2021-03-24 00:00:00 +0000"
-    } ,
-  
-    {
-      "title"    : "CSI之Cinder",
-      "subtitle" : "k8s csi",
+      "title"    : "Cinder",
+      "subtitle" : "csi",
       "tags"     : "k8s, csi, cinder",
       "url"      : "/blog/2021/03/24/k8s-csi-cinder/",
       "date"     : "2021-03-24 00:00:00 +0000"

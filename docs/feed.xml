@@ -5,9 +5,228 @@
     <description>Hujin，Openstack &amp; SDN &amp; Kubernetes Lover，Software Engineer，| 与你一起发现更大的世界</description>
     <link>http://0.0.0.0:4000/blog/</link>
     <atom:link href="http://0.0.0.0:4000/blog/feed.xml" rel="self" type="application/rss+xml" />
-    <pubDate>Mon, 24 May 2021 01:37:50 +0000</pubDate>
-    <lastBuildDate>Mon, 24 May 2021 01:37:50 +0000</lastBuildDate>
+    <pubDate>Mon, 28 Jun 2021 05:50:10 +0000</pubDate>
+    <lastBuildDate>Mon, 28 Jun 2021 05:50:10 +0000</lastBuildDate>
     <generator>Jekyll v4.2.0</generator>
+    
+      <item>
+        <title>Multus</title>
+        <description>&lt;h2 id=&quot;背景&quot;&gt;背景&lt;/h2&gt;
+&lt;p&gt;当前社区支持多个cni插件，当前集群底层网络实现变化后存在切换CNI插件的需求。由于cni插件主要在pod网卡创建和删除流程中使用，切换CNI插件后，要求pod重建，服务和网络都会中断&lt;/p&gt;
+
+&lt;p&gt;这里需要一种更加平滑的切换方式，在保证页面和网络不中断的情况下切换CNI&lt;/p&gt;
+
+&lt;h2 id=&quot;架构&quot;&gt;架构&lt;/h2&gt;
+
+&lt;p&gt;&lt;img src=&quot;/blog/img/multus1.png&quot; alt=&quot;multus_arch&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;上图可以看到，一个pod可以同时有多个网卡，其中eth0是默认网卡，也就是默认路由指向的网卡&lt;/p&gt;
+
+&lt;p&gt;net0和net1是通过在pod的annotation中指定的网络创建的网卡&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/blog/img/multus2.png&quot; alt=&quot;multus_arch2&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;这里通过创建pod来看multus-cni的实现方法：&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;multus-cni实际是一个CNI插件，实现的接口也是CmdAdd CmdCheck CmdDel，这里通过提供CRD：NetworkAttachmentDefinition来定义其他CNI插件的内容，格式见下文&lt;/li&gt;
+  &lt;li&gt;在kubelet调用cni创建网卡时，multus-cni会通过查询pod annotation定义的key获取是否有指定使用的cni插件，并通过调用k8s api获取crd的具体数据&lt;/li&gt;
+  &lt;li&gt;将指定的pod和crd中定义的cni数据进行处理，最终得到符合CNI规范的格式，这个配置实际是保存在内存中的&lt;/li&gt;
+  &lt;li&gt;调用cni提供的AddNetwork方法，将内存中第三方的cni配置作为参数传递过去（默认网络在内存中也是一种CNI配置）&lt;/li&gt;
+  &lt;li&gt;最终实现动态创建POD网卡&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;annotations key：&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;k8s.v1.cni.cncf.io/resourceName：创建网络CRD时指定的资源名称，一般用来指定底层物理设备的名称，比如sriov场景&lt;/li&gt;
+  &lt;li&gt;v1.multus-cni.io/default-network：配置pod的默认网络，只能配置一个。用来替换k8s集群中原来默认的网络&lt;/li&gt;
+  &lt;li&gt;k8s.v1.cni.cncf.io/networks：配置pod的网络，支持配置多个&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;注意：&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;这里的网络是指通过multus crd建出来的network-attachment-definition对象&lt;/li&gt;
+  &lt;li&gt;指定网络时支持指定ip、mac、ifname、qos、portmap、gateway、device id&lt;/li&gt;
+  &lt;li&gt;默认路由对应的网卡名称不支持指定&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&quot;部署&quot;&gt;部署&lt;/h2&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;git clone https://github.com/k8snetworkplumbingwg/multus-cni.git
+cd multus-cni
+kubectl apply -f images/multus-daemonset.yml
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h2 id=&quot;打包&quot;&gt;打包&lt;/h2&gt;
+&lt;p&gt;编译可执行文件&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;cd multus-cni
+./build
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;打包镜像，使用分支：release-3.7&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;cd multus-cni
+docker build --file ./Dockerfile -t harbor.huayun.org/huayun-kubernetes/multus-cni:dev .
+docker push harbor.huayun.org/huayun-kubernetes/multus-cni:dev
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h2 id=&quot;功能验证&quot;&gt;功能验证&lt;/h2&gt;
+&lt;p&gt;创建macvlan NetworkAttachmentDefinition&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;apiVersion: &quot;k8s.cni.cncf.io/v1&quot;
+kind: NetworkAttachmentDefinition
+metadata:
+  name: macvlan-conf
+spec:
+  config: &apos;{
+      &quot;cniVersion&quot;: &quot;0.3.0&quot;,
+      &quot;type&quot;: &quot;macvlan&quot;,
+      &quot;master&quot;: &quot;ens192&quot;,
+      &quot;mode&quot;: &quot;bridge&quot;,
+      &quot;ipam&quot;: {
+        &quot;type&quot;: &quot;host-local&quot;,
+        &quot;subnet&quot;: &quot;192.168.1.0/24&quot;,
+        &quot;rangeStart&quot;: &quot;192.168.1.200&quot;,
+        &quot;rangeEnd&quot;: &quot;192.168.1.216&quot;,
+        &quot;routes&quot;: [
+          { &quot;dst&quot;: &quot;0.0.0.0/0&quot; }
+        ],
+        &quot;gateway&quot;: &quot;192.168.1.1&quot;
+      }
+    }&apos;
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;创建pod并指定使用macvlan cni&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;apiVersion: v1
+kind: Pod
+metadata:
+  name: samplepod
+  annotations:
+    k8s.v1.cni.cncf.io/networks: macvlan-conf
+spec:
+  containers:
+  - name: samplepod
+    command: [&quot;/bin/ash&quot;, &quot;-c&quot;, &quot;trap : TERM INT; sleep infinity &amp;amp; wait&quot;]
+    image: alpine
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;查看pod中网卡创建情况&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;[root@node1 multus]# kubectl get pods  -owide
+NAME        READY   STATUS    RESTARTS   AGE   IP            NODE    NOMINATED NODE   READINESS GATES
+busybox     1/1     Running   213        8d    10.244.1.12   node2   &amp;lt;none&amp;gt;           &amp;lt;none&amp;gt;
+samplepod   1/1     Running   0          8s    10.244.2.22   node3   &amp;lt;none&amp;gt;           &amp;lt;none&amp;gt;
+[root@node1 multus]# kubectl exec -it samplepod -- ip a 
+1: lo: &amp;lt;LOOPBACK,UP,LOWER_UP&amp;gt; mtu 65536 qdisc noqueue state UNKNOWN qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+2: tunl0@NONE: &amp;lt;NOARP&amp;gt; mtu 1480 qdisc noop state DOWN qlen 1000
+    link/ipip 0.0.0.0 brd 0.0.0.0
+4: eth0@if19: &amp;lt;BROADCAST,MULTICAST,UP,LOWER_UP,M-DOWN&amp;gt; mtu 1440 qdisc noqueue state UP 
+    link/ether a2:3e:de:3e:fd:d0 brd ff:ff:ff:ff:ff:ff
+    inet 10.244.2.22/32 scope global eth0
+       valid_lft forever preferred_lft forever
+5: net1@if14: &amp;lt;BROADCAST,MULTICAST,UP,LOWER_UP,M-DOWN&amp;gt; mtu 1500 qdisc noqueue state UNKNOWN 
+    link/ether 32:b2:70:77:50:df brd ff:ff:ff:ff:ff:ff
+    inet 192.168.1.201/24 brd 192.168.1.255 scope global net1
+       valid_lft forever preferred_lft forever
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h2 id=&quot;总结&quot;&gt;总结&lt;/h2&gt;
+&lt;p&gt;优点&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;创建pod时支持指定多种cni&lt;/li&gt;
+  &lt;li&gt;pod中存在多种cni的网卡，默认路由使用默认网络的&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;缺点&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;不支持更新，pod如果已经创建，不支持动态创建其他cni的网卡
+    &lt;blockquote&gt;
+      &lt;p&gt;查看代码发现multus实际也是走的CNI的流程，实现CmdAdd和CmdDelete接口
+也就是说在pod创建完成后，CNI是不响应增加和删除网卡操作的，只响应创建和删除POD的操作&lt;/p&gt;
+    &lt;/blockquote&gt;
+  &lt;/li&gt;
+&lt;/ul&gt;
+</description>
+        <pubDate>Mon, 28 Jun 2021 00:00:00 +0000</pubDate>
+        <link>http://0.0.0.0:4000/blog/2021/06/28/k8s-multus/</link>
+        <guid isPermaLink="true">http://0.0.0.0:4000/blog/2021/06/28/k8s-multus/</guid>
+        
+        <category>k8s</category>
+        
+        <category>cni</category>
+        
+        <category>multus</category>
+        
+        
+      </item>
     
       <item>
         <title>KubeOVN - VPCNatGateway</title>
@@ -213,7 +432,7 @@ spec:
       </item>
     
       <item>
-        <title>kuryr - kubernetes</title>
+        <title>Kuryr - Kubernetes</title>
         <description>&lt;h2 id=&quot;背景&quot;&gt;背景&lt;/h2&gt;
 
 &lt;p&gt;当k8s部署在openstack节点或者虚拟机中时，可以使用openstack提供的网络功能实现k8s cni，这里主要对接的是neutron和lbaas模块，社区提供了kuryr的实现方案。
@@ -968,74 +1187,7 @@ OFPT_GET_CONFIG_REPLY (xid=0x4): frags=normal miss_send_len=0
       </item>
     
       <item>
-        <title>GO MOD使用私有仓库</title>
-        <description>&lt;h2 id=&quot;背景&quot;&gt;背景&lt;/h2&gt;
-
-&lt;p&gt;在常见的项目中使用go mod做包管理，在引用第三方包时这个包可能维护在内部私有仓库中，需要解决几个问题：&lt;/p&gt;
-
-&lt;ul&gt;
-  &lt;li&gt;引用第三方库&lt;/li&gt;
-  &lt;li&gt;引用私有仓库时不使用代理&lt;/li&gt;
-  &lt;li&gt;使用git方式获取代码&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;h2 id=&quot;替换引用的仓库地址&quot;&gt;替换引用的仓库地址&lt;/h2&gt;
-&lt;p&gt;这里直接修改代码中的引用工作量太大了，可以通过在go.mod中添加replace的方式：&lt;/p&gt;
-
-&lt;ul&gt;
-  &lt;li&gt;github.com/gophercloud/gophercloud =&amp;gt; gerrit-infrastructure.xxx.org/gerrit/a/container/gophercloud.git xxx-v0.7&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;blockquote&gt;
-  &lt;p&gt;注意这里末尾要加.git，否则默认使用https获取代码&lt;/p&gt;
-&lt;/blockquote&gt;
-
-&lt;h2 id=&quot;私有仓库&quot;&gt;私有仓库&lt;/h2&gt;
-
-&lt;p&gt;设置GOPRIVATE&lt;/p&gt;
-
-&lt;ul&gt;
-  &lt;li&gt;export GOPRIVATE=gerrit-infrastructure.xxx.org&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;h2 id=&quot;使用git方式获取代码&quot;&gt;使用git方式获取代码&lt;/h2&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;[root@localhost cloud-provider-openstack]# cat /root/.gitconfig
-[user]
-    name = xxx
-    email = xxx@xxxx.com
-[url &quot;ssh://xxx@gerrit-infrastructure.xxx.org:29418/container/gophercloud&quot;]
-    insteadOf = https://gerrit-infrastructure.xxx.org/gerrit/a/container/gophercloud
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;h2 id=&quot;参考&quot;&gt;参考&lt;/h2&gt;
-&lt;ul&gt;
-  &lt;li&gt;https://goproxy.io/zh/&lt;/li&gt;
-  &lt;li&gt;https://segmentfault.com/a/1190000021127791&lt;/li&gt;
-  &lt;li&gt;https://juejin.cn/post/6844903975859257352&lt;/li&gt;
-&lt;/ul&gt;
-</description>
-        <pubDate>Wed, 24 Mar 2021 00:00:00 +0000</pubDate>
-        <link>http://0.0.0.0:4000/blog/2021/03/24/k8s-go-mod/</link>
-        <guid isPermaLink="true">http://0.0.0.0:4000/blog/2021/03/24/k8s-go-mod/</guid>
-        
-        <category>k8s</category>
-        
-        <category>csi</category>
-        
-        <category>cinder</category>
-        
-        
-      </item>
-    
-      <item>
-        <title>CSI之Cinder</title>
+        <title>Cinder</title>
         <description>&lt;h2 id=&quot;背景&quot;&gt;背景&lt;/h2&gt;
 &lt;p&gt;由于openstack cinder提供丰富的后端存储服务，当k8s部署在openstack的虚拟机中时，使用cinder 的csi提供存储服务可以非常方便对接不同的后端存储&lt;/p&gt;
 
