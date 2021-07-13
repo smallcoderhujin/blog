@@ -1,6 +1,6 @@
 ---
-title: "Kuberntes OIDC Keycloak"
-subtitle: "Keycloak"
+title: "Kuberntes OIDC -- Keycloak"
+subtitle: ""
 layout: post
 author: "hujin"
 header-style: text

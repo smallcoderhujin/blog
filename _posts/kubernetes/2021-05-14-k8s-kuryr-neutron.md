@@ -1,5 +1,5 @@
 ---
-title: "Kuryr - Kubernetes"
+title: "Kuryr CNI"
 subtitle: "cni"
 layout: post
 author: "hujin"
