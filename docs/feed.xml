@@ -5,12 +5,159 @@
     <description>Hujin，Openstack &amp; SDN &amp; Kubernetes Lover，Software Engineer，| 与你一起发现更大的世界</description>
     <link>http://0.0.0.0:4000/blog/</link>
     <atom:link href="http://0.0.0.0:4000/blog/feed.xml" rel="self" type="application/rss+xml" />
-    <pubDate>Mon, 28 Jun 2021 06:04:15 +0000</pubDate>
-    <lastBuildDate>Mon, 28 Jun 2021 06:04:15 +0000</lastBuildDate>
+    <pubDate>Tue, 10 Aug 2021 03:52:51 +0000</pubDate>
+    <lastBuildDate>Tue, 10 Aug 2021 03:52:51 +0000</lastBuildDate>
     <generator>Jekyll v4.2.0</generator>
     
       <item>
-        <title>Multus</title>
+        <title>Docker Containerd CRI-O Runc等概念的区别[译]</title>
+        <description>&lt;h2 id=&quot;背景&quot;&gt;背景&lt;/h2&gt;
+&lt;p&gt;从Docker引发这场热潮以来，越来越多的工具和标准涌现，来帮助用户使用“容器”这个技术
+大型的技术公司由于相互之间的竞争，引入越来越多的技术概念和实现，使得普通用户很容易困惑和不理解。
+本文将详细介绍所有相关的概念名称，并尝试解释具体术语，解释容器生态系统如何在2021年协同工作。&lt;/p&gt;
+
+&lt;p&gt;你不是唯一一个不理解这些概念的人，也不是最后一个…&lt;/p&gt;
+
+&lt;h2 id=&quot;理解docker&quot;&gt;理解Docker&lt;/h2&gt;
+&lt;p&gt;区别Docker这个公司，Docker容器，Docker镜像以及我们使用的Docker开发工具。
+我们需要认识一点：容器并不是和Docker紧密耦合，Docker只是容器整套工具的一种&lt;/p&gt;
+
+&lt;h2 id=&quot;架构&quot;&gt;架构&lt;/h2&gt;
+
+&lt;p&gt;&lt;img src=&quot;/blog/img/container-ecosystem.png&quot; alt=&quot;container_ecosystem_arch&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;容器生态系统由很多专业的技术、大量技术术语还包括大公司的竞争组成
+不过幸运的是，这些大公司偶尔会休战并站到一起，去制定一些标准，这些标准将有助于容器生态系统的操作便捷、跨平台、减少对某个公司或者项目的依赖&lt;/p&gt;
+
+&lt;p&gt;相关的主要标准有：&lt;/p&gt;
+&lt;ul&gt;
+  &lt;li&gt;Container Runtime Interface(CRI): 定义了容器runtime和K8S的交互API&lt;/li&gt;
+  &lt;li&gt;Open Container Initiative(OCI)：定义发布镜像和容器的规则&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&quot;docker&quot;&gt;Docker&lt;/h2&gt;
+&lt;p&gt;由于Docker是使用容器最流行的开发工具，必须先从Docker开始。对很多人来说，“Docker”和“Container”两个词是等价的
+Docker公司触发了整个容器革命，并且提供了一套非常易使用的容器开发工具，称为“Docker”&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/blog/img/container-ecosystem-docker.png&quot; alt=&quot;container_ecosystem_arch&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;Docker被设计安装在工作站或者服务器上，并附带一系列方便开发者build和run容器的工具&lt;/p&gt;
+
+&lt;p&gt;Docker命令行工具可以从registry pull镜像，可以build容器镜像，也可以create/start容器&lt;/p&gt;
+
+&lt;p&gt;Docker项目包含：&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;docker-cli： 这是和容器交互的docker命令行工具&lt;/li&gt;
+  &lt;li&gt;containerd： 这是一个daemon进程，用来管理并运行容器。可以push、pull镜像，管理存储和网络，监控运行中的容器&lt;/li&gt;
+  &lt;li&gt;runc: 这是底层容器runtime，主要包含使用GO语言实现的libcontainer组件&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;当使用docker运行一个容器时，执行流程是： docker daemon – containerd – runc&lt;/p&gt;
+
+&lt;h3 id=&quot;dockershim-docker-in-kubernetes&quot;&gt;Dockershim: Docker in Kubernetes&lt;/h3&gt;
+
+&lt;p&gt;Kubernetes包括一个叫dockershim的组件，用来支持docker&lt;/p&gt;
+
+&lt;p&gt;Kubernetes希望使用任意的容器runtime来运行容器，只需要支持CRI规范即可。&lt;/p&gt;
+
+&lt;p&gt;但是由于Docker比K8S出现还早，Docker出现时CRI规范还没有形成，所以在K8S发布后，K8S官方通过dockershim组件来支持Docker&lt;/p&gt;
+
+&lt;p&gt;K8S将会在后面直接移除对Docker的支持，也就是移除dockershim，只会使用支持CRI的runtime，类似containerd或者CRI-O&lt;/p&gt;
+
+&lt;p&gt;这个并不意味着K8S不能运行Docker格式的容器，Containerd和CRI-O都可以运行Docker格式的容器，因为他们属于OCI格式的镜像&lt;/p&gt;
+
+&lt;p&gt;所以如果你想在K8S中使用容器，并不一定要安装Docker，containerd或者CRI-O等实现了CRI接口的组件都可以成为你的选择&lt;/p&gt;
+
+&lt;h3 id=&quot;docker-images&quot;&gt;Docker images&lt;/h3&gt;
+&lt;p&gt;大家常说的Docker镜像，实际是OCI格式的镜像，属于同一个是一个标准规范&lt;/p&gt;
+
+&lt;p&gt;所以当你从docker hub或其他registry上pull一个镜像，你可以直接通过docker工具来使用它，也可以在K8S集群使用，也可以通过podman或者任意支持OCI标准的工具来使用这个镜像&lt;/p&gt;
+
+&lt;h2 id=&quot;cri&quot;&gt;CRI&lt;/h2&gt;
+
+&lt;p&gt;&lt;img src=&quot;/blog/img/container-ecosystem-cri.png&quot; alt=&quot;container_ecosystem_arch&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;CRI是K8S用来管理不同runtime 创建和管理容器的API规范&lt;/p&gt;
+
+&lt;p&gt;CRI使得K8S更容易使用不同的容器runtime，定义了K8S如何和每个runtime交互&lt;/p&gt;
+
+&lt;p&gt;因此实际上只取决于runtime本身如何管理容器，只要这个runtime支持CRI API的规范，类似的你可以根据喜好任意选择使用containerd或者CRI-O作为你的runtime，因为他们都支持CRI规范&lt;/p&gt;
+
+&lt;p&gt;CRI设计上是可插拔的，如果你是终端用户，那么CRI具体的实现细节其实你是不关心的，你只需要使用一个支持这个规范的组件，能实现某些功能即可。&lt;/p&gt;
+
+&lt;p&gt;当前Red Hat负责维护CRI-O，Docker负责维护自家的产品Containerd&lt;/p&gt;
+
+&lt;h3 id=&quot;containerd&quot;&gt;Containerd&lt;/h3&gt;
+&lt;p&gt;Containerd是Docker公司负责开发的高级容器runtime，支持CRI规范。从registry中pull镜像、管理镜像，负责和底层具体的runtime交互&lt;/p&gt;
+
+&lt;p&gt;Containerd已经从Docker项目分离出来，是一个独立的项目，使得Docker更加模块化&lt;/p&gt;
+
+&lt;p&gt;也就是说Docker内部会使用containerd，当前安装Docker时，也会安装Containerd&lt;/p&gt;
+
+&lt;p&gt;Conatinerd通过cri插件支持k8s CRI规范&lt;/p&gt;
+
+&lt;h3 id=&quot;cri-o&quot;&gt;CRI-O&lt;/h3&gt;
+
+&lt;p&gt;CRI-O是支持容器CRI规范的另一种高级容器runtime，它是containerd的一个替代选择，从registry获取镜像，在磁盘上管理镜像，然后调用底层runtime来运行容器进程&lt;/p&gt;
+
+&lt;p&gt;CRI-O是由Red Hat/IBM/Intel/SUSE等厂商提出并维护&lt;/p&gt;
+
+&lt;p&gt;在K8S中提供启动、停止、重启容器的能力，类似containerd&lt;/p&gt;
+
+&lt;h2 id=&quot;oci&quot;&gt;OCI&lt;/h2&gt;
+
+&lt;p&gt;OCI是一群技术公司组织定义的容器镜像格式、容器如何运行的规范&lt;/p&gt;
+
+&lt;p&gt;OCI的设计思想是允许用户选择任意符合规范的runtime，这些不同的runtime都有各自的实现，比如可以针对linux 有一个runtime，同时针对windows还有一个&lt;/p&gt;
+
+&lt;p&gt;OCI得益于：one standard, many implementations, 一种标准，多种实现&lt;/p&gt;
+
+&lt;h3 id=&quot;runc&quot;&gt;runc&lt;/h3&gt;
+
+&lt;p&gt;runc是一种支持OCI规范的容器runtime&lt;/p&gt;
+
+&lt;p&gt;runc为容器提供所有的底层功能，和底层Linux模块交互，类似namespace、cgroup等模块，通过这些模块来创建和运行容器进程&lt;/p&gt;
+
+&lt;p&gt;runc的可替代方案：&lt;/p&gt;
+&lt;ul&gt;
+  &lt;li&gt;crun： 使用C语言编写的runtime（runc使用Go语言编写）&lt;/li&gt;
+  &lt;li&gt;kata-runtime： 由katacontainers项目提供，在支持OCI规范下，提供一个轻量级虚拟机功能&lt;/li&gt;
+  &lt;li&gt;gVisor：Google提供，在支持OCI规范下，支持容器有独立的内核模块&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&quot;总结&quot;&gt;总结&lt;/h2&gt;
+
+&lt;p&gt;从上文可以发现，Docker只是很多容器组件的一小部分&lt;/p&gt;
+
+&lt;p&gt;K8S通过制定CRI来实现对不同runtime的交互，这里CRI包括：containerd和CRI-O，dockershim即将不支持&lt;/p&gt;
+
+&lt;p&gt;对应的runtime标准是OCI，这里包括runc、kata-runtime以及其他runtime，用来具体和底层的Linux交互，并最终创建和运行一个真正的容器&lt;/p&gt;
+
+&lt;h2 id=&quot;参考&quot;&gt;参考&lt;/h2&gt;
+&lt;ul&gt;
+  &lt;li&gt;https://www.tutorialworks.com/difference-docker-containerd-runc-crio-oci/&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+        <pubDate>Fri, 06 Aug 2021 00:00:00 +0000</pubDate>
+        <link>http://0.0.0.0:4000/blog/2021/08/06/cri-oci/</link>
+        <guid isPermaLink="true">http://0.0.0.0:4000/blog/2021/08/06/cri-oci/</guid>
+        
+        <category>k8s</category>
+        
+        <category>cni</category>
+        
+        <category>oci</category>
+        
+        <category>runc</category>
+        
+        <category>containerd</category>
+        
+        
+      </item>
+    
+      <item>
+        <title>Multus CNI</title>
         <description>&lt;h2 id=&quot;背景&quot;&gt;背景&lt;/h2&gt;
 &lt;p&gt;当前社区支持多个cni插件，当前集群底层网络实现变化后存在切换CNI插件的需求。由于cni插件主要在pod网卡创建和删除流程中使用，切换CNI插件后，要求pod重建，服务和网络都会中断&lt;/p&gt;
 
@@ -432,7 +579,7 @@ spec:
       </item>
     
       <item>
-        <title>Kuryr - Kubernetes</title>
+        <title>Kuryr CNI</title>
         <description>&lt;h2 id=&quot;背景&quot;&gt;背景&lt;/h2&gt;
 
 &lt;p&gt;当k8s部署在openstack节点或者虚拟机中时，可以使用openstack提供的网络功能实现k8s cni，这里主要对接的是neutron和lbaas模块，社区提供了kuryr的实现方案。
@@ -1187,7 +1334,7 @@ OFPT_GET_CONFIG_REPLY (xid=0x4): frags=normal miss_send_len=0
       </item>
     
       <item>
-        <title>Cinder</title>
+        <title>Cinder CSI</title>
         <description>&lt;h2 id=&quot;背景&quot;&gt;背景&lt;/h2&gt;
 &lt;p&gt;由于openstack cinder提供丰富的后端存储服务，当k8s部署在openstack的虚拟机中时，使用cinder 的csi提供存储服务可以非常方便对接不同的后端存储&lt;/p&gt;
 
@@ -1525,7 +1672,7 @@ statefulset中其中一个pod所在节点down机后，不新建pod&lt;/p&gt;
       </item>
     
       <item>
-        <title>Golang gdb</title>
+        <title>Golang Debug -- gdb</title>
         <description>&lt;h2 id=&quot;获取源码并编译&quot;&gt;获取源码并编译&lt;/h2&gt;
 
 &lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
@@ -1637,7 +1784,7 @@ run
       </item>
     
       <item>
-        <title>Kuberntes CoreDNS</title>
+        <title>CoreDNS</title>
         <description>&lt;h2 id=&quot;架构&quot;&gt;架构&lt;/h2&gt;
 &lt;p&gt;&lt;img src=&quot;https://img.draveness.me/2018-11-07-coredns-architecture.png&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
 
@@ -2264,7 +2411,7 @@ PING nginx.me.test (10.244.0.4): 56 data bytes
       </item>
     
       <item>
-        <title>Kuberntes Webhook Keystone</title>
+        <title>Kuberntes Webhook -- Keystone</title>
         <description>&lt;h2 id=&quot;背景&quot;&gt;背景&lt;/h2&gt;
 &lt;p&gt;k8s本身不提供用户和项目管理功能，需要依赖第三方组件来实现。
 由于k8s和openstack的融合需求，需要提供一种统一的用户鉴权机制，本次重点介绍k8s如何使用keystone进行鉴权。通过调用keystone获取token，并使用这个token调用k8s的接口获取资源信息。&lt;/p&gt;
@@ -2879,412 +3026,6 @@ list_ingress(token)
         <category>webhook</category>
         
         <category>keystone</category>
-        
-        
-      </item>
-    
-      <item>
-        <title>Kuberntes OIDC Keycloak</title>
-        <description>&lt;h1 id=&quot;架构图&quot;&gt;架构图&lt;/h1&gt;
-&lt;p&gt;&lt;img src=&quot;http://langyxxl.dynv6.net:50008/data/User/admin/home/%E6%8A%80%E6%9C%AF/K8S/keyloak.png&quot; alt=&quot;keyloak.png&quot; /&gt;&lt;/p&gt;
-
-&lt;p&gt;OIDC是一种 OAuth2 认证方式， 被某些 OAuth2 提供者支持，例如 Azure 活动目录、Salesforce 和 Google。 协议对 OAuth2 的主要扩充体现在有一个附加字段会和访问令牌一起返回， 这一字段称作 ID Token（ID 令牌）。 ID 令牌是一种由服务器签名的 JSON Web 令牌（JWT）&lt;/p&gt;
-
-&lt;ul&gt;
-  &lt;li&gt;登录到你的身份服务（Identity Provider）&lt;/li&gt;
-  &lt;li&gt;你的身份服务将为你提供 access_token、id_token 和 refresh_token&lt;/li&gt;
-  &lt;li&gt;在使用 kubectl 时，将 id_token 设置为 –token 标志值，或者将其直接添加到 kubeconfig 中&lt;/li&gt;
-  &lt;li&gt;kubectl 将你的 id_token 放到一个称作 Authorization 的头部，发送给 API 服务器&lt;/li&gt;
-  &lt;li&gt;API 服务器将负责通过检查配置中引用的证书来确认 JWT 的签名是合法的&lt;/li&gt;
-  &lt;li&gt;检查确认 id_token 尚未过期 x&lt;/li&gt;
-  &lt;li&gt;确认用户有权限执行操作&lt;/li&gt;
-  &lt;li&gt;鉴权成功之后，API 服务器向 kubectl 返回响应&lt;/li&gt;
-  &lt;li&gt;kubectl 向用户提供反馈信息&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;h1 id=&quot;部署keycloak&quot;&gt;部署keycloak&lt;/h1&gt;
-
-&lt;h2 id=&quot;准备&quot;&gt;准备&lt;/h2&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;# 安装java
-yum install java-11-openjdk
-# 获取源码包
-wget https://github.com/keycloak/keycloak/releases/download/12.0.1/keycloak-12.0.1.tar.gz
-tar xzvf keycloak-12.0.1.tar.gz
-cd keycloak-12.0.1
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;h2 id=&quot;启用admin用户&quot;&gt;启用admin用户&lt;/h2&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;sh bin/add-user-keycloak.sh --user admin
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;h2 id=&quot;创建证书注意修改ip地址证书创建到rootssl目录&quot;&gt;创建证书，注意修改ip地址，证书创建到/root/ssl目录&lt;/h2&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-20
-21
-22
-23
-24
-25
-26
-27
-28
-29
-30
-31
-32
-33
-34
-35
-36
-37
-38
-39
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;vim /root/makessl.sh
-
-#!/bin/bash
-
-mkdir -p ssl
-
-cat &amp;lt;&amp;lt; EOF &amp;gt; ssl/ca.cnf
-[req]
-req_extensions = v3_req
-distinguished_name = req_distinguished_name
-
-[req_distinguished_name]
-
-[ v3_req ]
-basicConstraints = CA:TRUE
-EOF
-
-cat &amp;lt;&amp;lt; EOF &amp;gt; ssl/req.cnf
-[req]
-req_extensions = v3_req
-distinguished_name = req_distinguished_name
-
-[req_distinguished_name]
-
-[ v3_req ]
-basicConstraints = CA:FALSE
-keyUsage = nonRepudiation, digitalSignature, keyEncipherment
-subjectAltName = @alt_names
-
-[alt_names]
-IP.1 = 172.16.41.106   # 修改成当前机器的外网IP,否则会报错误：x509: cannot validate certificate for 172.16.41.106 because it doesn&apos;t contain any IP SANs
-EOF
-
-openssl genrsa -out ssl/ca-key.pem 2048
-openssl req -x509 -new -nodes -key ssl/ca-key.pem -days 365 -out ssl/ca.pem -subj &quot;/CN=keycloak-ca&quot; -extensions v3_req -config ssl/ca.cnf
-
-openssl genrsa -out ssl/keycloak.pem 2048
-openssl req -new -key ssl/keycloak.pem -out ssl/keycloak-csr.pem -subj &quot;/CN=keycloak&quot; -config ssl/req.cnf
-openssl x509 -req -in ssl/keycloak-csr.pem -CA ssl/ca.pem -CAkey ssl/ca-key.pem -CAcreateserial -out ssl/keycloak.crt -days 365 -extensions v3_req -extfile ssl/req.cnf
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;h2 id=&quot;导入证书密码尽量保持一致&quot;&gt;导入证书（密码尽量保持一致）：&lt;/h2&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;cd ssl
-openssl pkcs12 -export -out keycloak.p12 -inkey keycloak.pem -in keycloak.crt -certfile ca.pem
-keytool -importkeystore -deststorepass &apos;passw0rd&apos; -destkeystore keycloak.jks -srckeystore keycloak.p12 -srcstoretype PKCS12
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;h2 id=&quot;将证书拷贝至configuration目录&quot;&gt;将证书拷贝至configuration目录&lt;/h2&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;cp keycloak.jks ../keycloak-12.0.1/standalone/configuration
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;h2 id=&quot;检查证书&quot;&gt;检查证书&lt;/h2&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;# 确认证书的Alias Name，会在下面的standalone.xml中引用
-cd ../keycloak-12.0.1/standalone/configuration
-keytool -list -keystore keycloak.jks -v
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;h2 id=&quot;修改keycloak配置&quot;&gt;修改keycloak配置&lt;/h2&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-20
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;vim /root/keycloak-12.0.1/standalone/configuration/standalone.xml
-
-&amp;lt;management&amp;gt;
-&amp;lt;management&amp;gt;
-&amp;lt;security-realms&amp;gt;
-    &amp;lt;security-realm name=&quot;ApplicationRealm&quot;&amp;gt;
-        &amp;lt;server-identities&amp;gt;
-         &amp;lt;ssl&amp;gt;
-            &amp;lt;keystore path=&quot;keycloak.jks&quot; relative-to=&quot;jboss.server.config.dir&quot; keystore-password=&quot;passw0rd&quot; alias=&quot;server&quot; key-password=&quot;passw0rd&quot; generate-self-signed-certificate-host=&quot;localhost&quot;/&amp;gt;
-          &amp;lt;/ssl&amp;gt;
-        &amp;lt;/server-identities&amp;gt;
-        ...
-    &amp;lt;/security-realm&amp;gt;
-    &amp;lt;security-realm name=&quot;UndertowRealm&quot;&amp;gt;
-        &amp;lt;server-identities&amp;gt;
-            &amp;lt;ssl&amp;gt;
-                &amp;lt;keystore path=&quot;keycloak.jks&quot; relative-to=&quot;jboss.server.config.dir&quot; keystore-password=&quot;passw0rd&quot; /&amp;gt;
-            &amp;lt;/ssl&amp;gt;
-        &amp;lt;/server-identities&amp;gt;
-    &amp;lt;/security-realm&amp;gt;
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;h2 id=&quot;运行程序-指定外网ip地址&quot;&gt;运行程序, 指定外网IP地址&lt;/h2&gt;
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;sh bin/standalone.sh -Djboss.bind.address=172.16.41.106 -Djboss.bind.address.management=172.16.41.106
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;h2 id=&quot;访问页面&quot;&gt;访问页面&lt;/h2&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;登录：https://172.16.41.106:8443/auth/admin
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;h1 id=&quot;初始化keycloak&quot;&gt;初始化keycloak&lt;/h1&gt;
-
-&lt;h2 id=&quot;创建realm-kubernetes&quot;&gt;创建realm kubernetes&lt;/h2&gt;
-&lt;p&gt;页面菜单栏顶部有个“v”图标，点击并创建realm“Add realm”&lt;/p&gt;
-
-&lt;h2 id=&quot;创建client-kubernetes&quot;&gt;创建client kubernetes&lt;/h2&gt;
-&lt;p&gt;&lt;img src=&quot;https://developer.ibm.com/developer/default/articles/cl-lo-openid-connect-kubernetes-authentication2/images/image001.png&quot; alt=&quot;create realm kubernetes&quot; /&gt;&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&quot;https://developer.ibm.com/developer/default/articles/cl-lo-openid-connect-kubernetes-authentication2/images/image002.png&quot; alt=&quot;secret key&quot; /&gt;&lt;/p&gt;
-
-&lt;p&gt;注意：&lt;/p&gt;
-&lt;ul&gt;
-  &lt;li&gt;access type要设置成confidential，否则后面无法获取secret key&lt;/li&gt;
-  &lt;li&gt;valid redirect url随意填写，这里填的：http://localhost:32768&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;h2 id=&quot;创建用户&quot;&gt;创建用户&lt;/h2&gt;
-
-&lt;p&gt;创建用户&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;菜单栏选择“Users”后点击“Add user”，创建用户：theone（名字随意，保持一致即可）
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;设置密码&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&quot;https://developer.ibm.com/developer/default/articles/cl-lo-openid-connect-kubernetes-authentication2/images/image003.png&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
-
-&lt;p&gt;激活用户&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;访问https://172.16.41.106:8443/auth/admin/kubernetes/console
-使用theone用户登录，登录后404 没有权限，可以忽略；登录后要求重新设置密码，还可以设置成之前的密码，没有关系
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;h1 id=&quot;配置kubernetes&quot;&gt;配置kubernetes&lt;/h1&gt;
-
-&lt;p&gt;拷贝证书&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;将/root/ssl/ca.pem或者keycloak.crt证书文件，从keycloak节点拷贝到k8s master节点的/etc/kubernetes/ssl/目录下
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;修改kube apiserver配置&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;vim /etc/kubernetes/manifests/kube-apiserver.yaml
-spec:
-containers:
-- command:
-...
-- --oidc-issuer-url=https://172.16.41.106:8443/auth/realms/kubernetes
-- --oidc-client-id=kubernetes
-- --oidc-username-claim=preferred_username
-- --oidc-username-prefix=-
-- --oidc-ca-file=/etc/kubernetes/pki/ca.pem
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;此时kube api server会自动重启，注意查看容器日志&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;kubectl logs kube-apiserver-xxx -f -n kube-system
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;权限设置&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;#cat rolebing.yaml
-
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  annotations:
-    rbac.authorization.kubernetes.io/autoupdate: &quot;true&quot;
-  labels:
-    kubernetes.io/bootstrapping: rbac-defaults
-  name: cluster-readonly
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: cluster-admin
-subjects:
-- apiGroup: rbac.authorization.k8s.io
-  kind: User
-  name: theone   # 替换成之前在keycloak中创建的用户名
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;h1 id=&quot;测试脚本&quot;&gt;测试脚本&lt;/h1&gt;
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-20
-21
-22
-23
-24
-25
-26
-27
-28
-29
-30
-31
-32
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;import requests
-from pprint import pprint
-import json
-
-
-auth_url = &apos;https://179.18.3.180:6443&apos;
-headers = {&apos;Connection&apos;: &apos;Keep-Alive&apos;}
-
-def get_token():
-    url = &apos;https://172.16.41.106:8443/auth/realms/kubernetes/protocol/openid-connect/token&apos;
-    req = requests.post(url, data={&apos;client_id&apos;: &apos;kubernetes&apos;,
-                                   &apos;client_secret&apos;: &apos;aa3e7e64-d947-493e-93ca-d43faae6585e&apos;,
-                                   &apos;response_type&apos;: &apos;code token&apos;,
-                                   &apos;grant_type&apos;: &apos;password&apos;,
-                                   &apos;username&apos;: &apos;theone&apos;,
-                                   &apos;password&apos;: &apos;test&apos;,
-                                   &apos;scope&apos;: &apos;openid&apos;},
-                       verify=False)
-    r = json.loads(req.content)
-    pprint(r)
-    return r
-
-
-def list_ingress(tk):
-    req_url = &apos;%s/api/v1/pods&apos; % auth_url
-    headers[&apos;Authorization&apos;] = &apos;Bearer %s&apos; % tk
-    print(req_url, headers)
-    req = requests.get(req_url, headers=headers, verify=False)
-    pprint(json.loads(req.content))
-
-tokes = get_token()
-list_ingress(tokes[&apos;id_token&apos;])
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;参考&lt;/p&gt;
-&lt;ul&gt;
-  &lt;li&gt;https://developer.ibm.com/zh/depmodels/cloud/articles/cl-lo-openid-connect-kubernetes-authentication/&lt;/li&gt;
-  &lt;li&gt;https://developer.ibm.com/zh/articles/cl-lo-openid-connect-kubernetes-authentication2/&lt;/li&gt;
-&lt;/ul&gt;
-</description>
-        <pubDate>Fri, 15 Jan 2021 00:00:00 +0000</pubDate>
-        <link>http://0.0.0.0:4000/blog/2021/01/15/k8s-oidc-keycloak/</link>
-        <guid isPermaLink="true">http://0.0.0.0:4000/blog/2021/01/15/k8s-oidc-keycloak/</guid>
-        
-        <category>kubernetes</category>
-        
-        <category>oidc</category>
-        
-        <category>keycloak</category>
         
         
       </item>

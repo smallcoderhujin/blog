@@ -106,6 +106,8 @@
                         
                         
                         
+                        
+                        
                         <li class="search-icon">
                             <a href="javascript:void(0)">
                                 <i class="fa fa-search"></i>
@@ -230,13 +232,43 @@
             ">
     			
 <div class="post-preview">
-    <a href="/blog/2021/06/28/k8s-multus/">
+    <a href="/blog/2021/08/06/cri-oci/">
         <h2 class="post-title">
-            Multus
+            Docker Containerd CRI-O Runc等概念的区别[译]
         </h2>
         
         <h3 class="post-subtitle">
-            cni
+            cri oci
+        </h3>
+        
+        <div class="post-content-preview">
+            
+                背景
+从Docker引发这场热潮以来，越来越多的工具和标准涌现，来帮助用户使用“容器”这个技术
+大型的技术公司由于相互之间的竞争，引入越来越多的技术概念和实现，使得普通用户很容易困惑和不理解。
+本文将详细介绍所有相关的概念名称，并尝试解释具体术语，解释容器生态系统如何在2021年协同工作。
+
+你不是唯一一个不理解这些概念的人，也不是最后一个…
+
+理解Docker
+区别Docker这个公司，D...
+            
+        </div>
+    </a>
+    <p class="post-meta">
+        Posted by hujin on August 6, 2021
+    </p>
+</div>
+<hr>
+
+<div class="post-preview">
+    <a href="/blog/2021/06/28/k8s-multus/">
+        <h2 class="post-title">
+            Multus CNI
+        </h2>
+        
+        <h3 class="post-subtitle">
+            
         </h3>
         
         <div class="post-content-preview">
@@ -306,7 +338,7 @@ net0和net...
 <div class="post-preview">
     <a href="/blog/2021/05/14/k8s-kuryr-neutron/">
         <h2 class="post-title">
-            Kuryr - Kubernetes
+            Kuryr CNI
         </h2>
         
         <h3 class="post-subtitle">
@@ -367,11 +399,11 @@ Kuryr 是 OpenStack Neutron 的子项目，其主要目标是透过该项目来�
 <div class="post-preview">
     <a href="/blog/2021/03/24/k8s-csi-cinder/">
         <h2 class="post-title">
-            Cinder
+            Cinder CSI
         </h2>
         
         <h3 class="post-subtitle">
-            csi
+            
         </h3>
         
         <div class="post-content-preview">
@@ -396,11 +428,11 @@ Kuryr 是 OpenStack Neutron 的子项目，其主要目标是透过该项目来�
 <div class="post-preview">
     <a href="/blog/2021/03/04/k8s-gdb/">
         <h2 class="post-title">
-            Golang gdb
+            Golang Debug -- gdb
         </h2>
         
         <h3 class="post-subtitle">
-            coredns
+            
         </h3>
         
         <div class="post-content-preview">
@@ -480,11 +512,11 @@ run
 <div class="post-preview">
     <a href="/blog/2021/01/18/k8s-coredns/">
         <h2 class="post-title">
-            Kuberntes CoreDNS
+            CoreDNS
         </h2>
         
         <h3 class="post-subtitle">
-            coredns
+            
         </h3>
         
         <div class="post-content-preview">
@@ -512,11 +544,11 @@ run
 <div class="post-preview">
     <a href="/blog/2021/01/15/k8s-webhook-keystone/">
         <h2 class="post-title">
-            Kuberntes Webhook Keystone
+            Kuberntes Webhook -- Keystone
         </h2>
         
         <h3 class="post-subtitle">
-            keystone
+            
         </h3>
         
         <div class="post-content-preview">
@@ -541,36 +573,17 @@ k8s本身不提供用户和项目管理功能，需要依赖第三方组件来�
 </div>
 <hr>
 
-<div class="post-preview">
-    <a href="/blog/2021/01/15/k8s-oidc-keycloak/">
-        <h2 class="post-title">
-            Kuberntes OIDC Keycloak
-        </h2>
-        
-        <h3 class="post-subtitle">
-            Keycloak
-        </h3>
-        
-        <div class="post-content-preview">
-            
-                架构图
-
-
-OIDC是一种 OAuth2 认证方式， 被某些 OAuth2 提供者支持，例如 Azure 活动目录、Salesforce 和 Google。 协议对 OAuth2 的主要扩充体现在有一个附加字段会和访问令牌一起返回， 这一字段称作 ID Token（ID 令牌）。 ID 令牌是一种由服务器签名的 JSON Web 令牌（JWT）
-
-
-  登录到你的身份服务（Identity ...
-            
-        </div>
-    </a>
-    <p class="post-meta">
-        Posted by hujin on January 15, 2021
-    </p>
-</div>
-<hr>
-
 
 <!-- Pager -->
+
+<ul class="pager">
+    
+    
+    <li class="next">
+        <a href="/blog/page2">Older Posts &rarr;</a>
+    </li>
+    
+</ul>
 
 
     		</div>
@@ -596,7 +609,7 @@ OIDC是一种 OAuth2 认证方式， 被某些 OAuth2 提供者支持，例如 A
         
         
         
-                <a data-sort="0006" 
+                <a data-sort="0007" 
                     href="/blog/archive/?tag=kubernetes"
                     title="kubernetes"
                     rel="4">kubernetes</a>
@@ -604,12 +617,12 @@ OIDC是一种 OAuth2 认证方式， 被某些 OAuth2 提供者支持，例如 A
                 <a data-sort="0006" 
                     href="/blog/archive/?tag=k8s"
                     title="k8s"
-                    rel="4">k8s</a>
+                    rel="5">k8s</a>
         
                 <a data-sort="0007" 
                     href="/blog/archive/?tag=cni"
                     title="cni"
-                    rel="3">cni</a>
+                    rel="4">cni</a>
     </div>
 </section>
 

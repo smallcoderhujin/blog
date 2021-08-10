@@ -1,8 +1,16 @@
 [
   
     {
-      "title"    : "Multus",
-      "subtitle" : "cni",
+      "title"    : "Docker Containerd CRI-O Runc等概念的区别[译]",
+      "subtitle" : "cri oci",
+      "tags"     : "k8s, cni, oci, runc, containerd",
+      "url"      : "/blog/2021/08/06/cri-oci/",
+      "date"     : "2021-08-06 00:00:00 +0000"
+    } ,
+  
+    {
+      "title"    : "Multus CNI",
+      "subtitle" : "",
       "tags"     : "k8s, cni, multus",
       "url"      : "/blog/2021/06/28/k8s-multus/",
       "date"     : "2021-06-28 00:00:00 +0000"
@@ -17,7 +25,7 @@
     } ,
   
     {
-      "title"    : "Kuryr - Kubernetes",
+      "title"    : "Kuryr CNI",
       "subtitle" : "cni",
       "tags"     : "k8s, cni, neutron, kuryr",
       "url"      : "/blog/2021/05/14/k8s-kuryr-neutron/",
@@ -33,16 +41,16 @@
     } ,
   
     {
-      "title"    : "Cinder",
-      "subtitle" : "csi",
+      "title"    : "Cinder CSI",
+      "subtitle" : "",
       "tags"     : "k8s, csi, cinder",
       "url"      : "/blog/2021/03/24/k8s-csi-cinder/",
       "date"     : "2021-03-24 00:00:00 +0000"
     } ,
   
     {
-      "title"    : "Golang gdb",
-      "subtitle" : "coredns",
+      "title"    : "Golang Debug -- gdb",
+      "subtitle" : "",
       "tags"     : "golang, gdb",
       "url"      : "/blog/2021/03/04/k8s-gdb/",
       "date"     : "2021-03-04 00:00:00 +0000"
@@ -57,24 +65,24 @@
     } ,
   
     {
-      "title"    : "Kuberntes CoreDNS",
-      "subtitle" : "coredns",
+      "title"    : "CoreDNS",
+      "subtitle" : "",
       "tags"     : "kubernetes, coredns",
       "url"      : "/blog/2021/01/18/k8s-coredns/",
       "date"     : "2021-01-18 00:00:00 +0000"
     } ,
   
     {
-      "title"    : "Kuberntes Webhook Keystone",
-      "subtitle" : "keystone",
+      "title"    : "Kuberntes Webhook -- Keystone",
+      "subtitle" : "",
       "tags"     : "kubernetes, webhook, keystone",
       "url"      : "/blog/2021/01/15/k8s-webhook-keystone/",
       "date"     : "2021-01-15 00:00:00 +0000"
     } ,
   
     {
-      "title"    : "Kuberntes OIDC Keycloak",
-      "subtitle" : "Keycloak",
+      "title"    : "Kuberntes OIDC -- Keycloak",
+      "subtitle" : "",
       "tags"     : "kubernetes, oidc, keycloak",
       "url"      : "/blog/2021/01/15/k8s-oidc-keycloak/",
       "date"     : "2021-01-15 00:00:00 +0000"

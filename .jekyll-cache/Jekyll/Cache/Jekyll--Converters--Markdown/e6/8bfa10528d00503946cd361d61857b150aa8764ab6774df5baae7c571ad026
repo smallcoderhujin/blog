@@ -1,0 +1,128 @@
+I"N<h2 id="背景">背景</h2>
+<p>从Docker引发这场热潮以来，越来越多的工具和标准涌现，来帮助用户使用“容器”这个技术
+大型的技术公司由于相互之间的竞争，引入越来越多的技术概念和实现，使得普通用户很容易困惑和不理解。
+本文将详细介绍所有相关的概念名称，并尝试解释具体术语，解释容器生态系统如何在2021年协同工作。</p>
+
+<p>你不是唯一一个不理解这些概念的人，也不是最后一个…</p>
+
+<h2 id="理解docker">理解Docker</h2>
+<p>区别Docker这个公司，Docker容器，Docker镜像以及我们使用的Docker开发工具。
+我们需要认识一点：容器并不是和Docker紧密耦合，Docker只是容器整套工具的一种</p>
+
+<h2 id="架构">架构</h2>
+
+<p><img src="/blog/img/container-ecosystem.png" alt="container_ecosystem_arch" /></p>
+
+<p>容器生态系统由很多专业的技术、大量技术术语还包括大公司的竞争组成
+不过幸运的是，这些大公司偶尔会休战并站到一起，去制定一些标准，这些标准将有助于容器生态系统的操作便捷、跨平台、减少对某个公司或者项目的依赖</p>
+
+<p>相关的主要标准有：</p>
+<ul>
+  <li>Container Runtime Interface(CRI): 定义了容器runtime和K8S的交互API</li>
+  <li>Open Container Initiative(OCI)：定义发布镜像和容器的规则</li>
+</ul>
+
+<h2 id="docker">Docker</h2>
+<p>由于Docker是使用容器最流行的开发工具，必须先从Docker开始。对很多人来说，“Docker”和“Container”两个词是等价的
+Docker公司触发了整个容器革命，并且提供了一套非常易使用的容器开发工具，称为“Docker”</p>
+
+<p><img src="/blog/img/container-ecosystem-docker.png" alt="container_ecosystem_arch" /></p>
+
+<p>Docker被设计安装在工作站或者服务器上，并附带一系列方便开发者build和run容器的工具</p>
+
+<p>Docker命令行工具可以从registry pull镜像，可以build容器镜像，也可以create/start容器</p>
+
+<p>Docker项目包含：</p>
+
+<ul>
+  <li>docker-cli： 这是和容器交互的docker命令行工具</li>
+  <li>containerd： 这是一个daemon进程，用来管理并运行容器。可以push、pull镜像，管理存储和网络，监控运行中的容器</li>
+  <li>runc: 这是底层容器runtime，主要包含使用GO语言实现的libcontainer组件</li>
+</ul>
+
+<p>当使用docker运行一个容器时，执行流程是： docker daemon – containerd – runc</p>
+
+<h3 id="dockershim-docker-in-kubernetes">Dockershim: Docker in Kubernetes</h3>
+
+<p>Kubernetes包括一个叫dockershim的组件，用来支持docker</p>
+
+<p>Kubernetes希望使用任意的容器runtime来运行容器，只需要支持CRI规范即可。</p>
+
+<p>但是由于Docker比K8S出现还早，Docker出现时CRI规范还没有形成，所以在K8S发布后，K8S官方通过dockershim组件来支持Docker</p>
+
+<p>K8S将会在后面直接移除对Docker的支持，也就是移除dockershim，只会使用支持CRI的runtime，类似containerd或者CRI-O</p>
+
+<p>这个并不意味着K8S不能运行Docker格式的容器，Containerd和CRI-O都可以运行Docker格式的容器，因为他们属于OCI格式的镜像</p>
+
+<p>所以如果你想在K8S中使用容器，并不一定要安装Docker，containerd或者CRI-O等实现了CRI接口的组件都可以成为你的选择</p>
+
+<h3 id="docker-images">Docker images</h3>
+<p>大家常说的Docker镜像，实际是OCI格式的镜像，属于同一个是一个标准规范</p>
+
+<p>所以当你从docker hub或其他registry上pull一个镜像，你可以直接通过docker工具来使用它，也可以在K8S集群使用，也可以通过podman或者任意支持OCI标准的工具来使用这个镜像</p>
+
+<h2 id="cri">CRI</h2>
+
+<p><img src="/blog/img/container-ecosystem-cri.png" alt="container_ecosystem_arch" /></p>
+
+<p>CRI是K8S用来管理不同runtime 创建和管理容器的API规范</p>
+
+<p>CRI使得K8S更容易使用不同的容器runtime，定义了K8S如何和每个runtime交互</p>
+
+<p>因此实际上只取决于runtime本身如何管理容器，只要这个runtime支持CRI API的规范，类似的你可以根据喜好任意选择使用containerd或者CRI-O作为你的runtime，因为他们都支持CRI规范</p>
+
+<p>CRI设计上是可插拔的，如果你是终端用户，那么CRI具体的实现细节其实你是不关心的，你只需要使用一个支持这个规范的组件，能实现某些功能即可。</p>
+
+<p>当前Red Hat负责维护CRI-O，Docker负责维护自家的产品Containerd</p>
+
+<h3 id="containerd">Containerd</h3>
+<p>Containerd是Docker公司负责开发的高级容器runtime，支持CRI规范。从registry中pull镜像、管理镜像，负责和底层具体的runtime交互</p>
+
+<p>Containerd已经从Docker项目分离出来，是一个独立的项目，使得Docker更加模块化</p>
+
+<p>也就是说Docker内部会使用containerd，当前安装Docker时，也会安装Containerd</p>
+
+<p>Conatinerd通过cri插件支持k8s CRI规范</p>
+
+<h3 id="cri-o">CRI-O</h3>
+
+<p>CRI-O是支持容器CRI规范的另一种高级容器runtime，它是containerd的一个替代选择，从registry获取镜像，在磁盘上管理镜像，然后调用底层runtime来运行容器进程</p>
+
+<p>CRI-O是由Red Hat/IBM/Intel/SUSE等厂商提出并维护</p>
+
+<p>在K8S中提供启动、停止、重启容器的能力，类似containerd</p>
+
+<h2 id="oci">OCI</h2>
+
+<p>OCI是一群技术公司组织定义的容器镜像格式、容器如何运行的规范</p>
+
+<p>OCI的设计思想是允许用户选择任意符合规范的runtime，这些不同的runtime都有各自的实现，比如可以针对linux 有一个runtime，同时针对windows还有一个</p>
+
+<p>OCI得益于：one standard, many implementations, 一种标准，多种实现</p>
+
+<h3 id="runc">runc</h3>
+
+<p>runc是一种支持OCI规范的容器runtime</p>
+
+<p>runc为容器提供所有的底层功能，和底层Linux模块交互，类似namespace、cgroup等模块，通过这些模块来创建和运行容器进程</p>
+
+<p>runc的可替代方案：</p>
+<ul>
+  <li>crun： 使用C语言编写的runtime（runc使用Go语言编写）</li>
+  <li>kata-runtime： 由katacontainers项目提供，在支持OCI规范下，提供一个轻量级虚拟机功能</li>
+  <li>gVisor：Google提供，在支持OCI规范下，支持容器有独立的内核模块</li>
+</ul>
+
+<h2 id="总结">总结</h2>
+
+<p>从上文可以发现，Docker只是很多容器组件的一小部分</p>
+
+<p>K8S通过制定CRI来实现对不同runtime的交互，这里CRI包括：containerd和CRI-O，dockershim即将不支持</p>
+
+<p>对应的runtime标准是OCI，这里包括runc、kata-runtime以及其他runtime，用来具体和底层的Linux交互，并最终创建和运行一个真正的容器</p>
+
+<h2 id="参考">参考</h2>
+<ul>
+  <li>https://www.tutorialworks.com/difference-docker-containerd-runc-crio-oci/</li>
+</ul>
+:ET
