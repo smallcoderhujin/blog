@@ -5,9 +5,1167 @@
     <description>Hujin，Openstack &amp; SDN &amp; Kubernetes Lover，Software Engineer，| 与你一起发现更大的世界</description>
     <link>http://0.0.0.0:4000/blog/</link>
     <atom:link href="http://0.0.0.0:4000/blog/feed.xml" rel="self" type="application/rss+xml" />
-    <pubDate>Tue, 10 Aug 2021 05:38:18 +0000</pubDate>
-    <lastBuildDate>Tue, 10 Aug 2021 05:38:18 +0000</lastBuildDate>
+    <pubDate>Tue, 28 Sep 2021 08:27:52 +0000</pubDate>
+    <lastBuildDate>Tue, 28 Sep 2021 08:27:52 +0000</lastBuildDate>
     <generator>Jekyll v4.2.0</generator>
+    
+      <item>
+        <title>Tungstenfabric CNI源码 -- NetworkPolicy</title>
+        <description>&lt;h2 id=&quot;背景&quot;&gt;背景&lt;/h2&gt;
+&lt;p&gt;tungstenfabric cni通过watch kubernetes apiserver中指定的资源，并在sdn中创建对应的网络设备来实现对应功能。本文重点介绍cni针对networkpolicy的处理，根据源码逐步分析。&lt;/p&gt;
+
+&lt;h2 id=&quot;架构流程图&quot;&gt;架构&amp;amp;流程图&lt;/h2&gt;
+&lt;p&gt;&lt;img src=&quot;http://hujin.dynv6.net:50008/index.php?user/publicLink&amp;amp;fid=826f91FDc9_ivLXP-2TgqvVlTnWAWUUm5hE6qr_ef-KVP_3RWxuNClqp0L86chmPdHcV9GGK4fY5BLr3ualYY8IkFXQI_OHUoI2btmUla-PRxN494bUH8DsY7FAajC-fCOHFQHOBwYVnU8BSRZOxaVGZsp2WPTQ&amp;amp;file_name=/arch_network_policy.png&quot; alt=&quot;arch_network_policy&quot; /&gt;&lt;/p&gt;
+
+&lt;h2 id=&quot;源码解析&quot;&gt;源码解析&lt;/h2&gt;
+
+&lt;p&gt;在process方法中会处理networkpolicy的创建、更新和删除。这里我们先看下创建和更新&lt;/p&gt;
+
+&lt;p&gt;创建和更新方法中有两个步骤：&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;_add_labels： 获取networkpolicy中selector相关的lable，并在sdn中创建或更新对应的tag资源&lt;/li&gt;
+  &lt;li&gt;vnc_network_policy_add：在sdn中创建对应的aps（application policy set）policy资源&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;在_add_labels中：&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;def _get_np_pod_selector(self, spec):
+    pod_selector = spec.get(&apos;podSelector&apos;)
+    if not pod_selector or &apos;matchLabels&apos; not in pod_selector:
+        labels = {}
+    else:
+        labels = pod_selector.get(&apos;matchLabels&apos;)
+    return labels
+
+def _add_labels(self, event, namespace, np_uuid):
+    all_labels = []
+    spec = event[&apos;object&apos;][&apos;spec&apos;]
+    if spec:
+        # Get pod selector labels.
+        all_labels.append(self._get_np_pod_selector(spec))
+
+        # Get ingress podSelector labels
+        ingress_spec_list = spec.get(&quot;ingress&quot;, [])
+        for ingress_spec in ingress_spec_list:
+            from_rules = ingress_spec.get(&apos;from&apos;, [])
+            for from_rule in from_rules:
+                if &apos;namespaceSelector&apos; in from_rule:
+                    all_labels.append(
+                        from_rule.get(&apos;namespaceSelector&apos;).get(
+                            &apos;matchLabels&apos;, {}))
+                if &apos;podSelector&apos; in from_rule:
+                    all_labels.append(
+                        from_rule.get(&apos;podSelector&apos;).get(&apos;matchLabels&apos;, {}))
+
+        # Call label mgmt API.
+        self._labels.process(np_uuid, list_curr_labels_dict=all_labels)
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;这里可以看到程序从networkpolicy的spec中获取了podSelector，从ingress中获取了namespaceSelector和podSelector对应的labels，最终在labels资源的process方法中进行处理&lt;/p&gt;
+
+&lt;p&gt;我们在label_cache.py的process中可以看到：&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;def process(self, obj_uuid, curr_labels={}, list_curr_labels_dict=[]):
+    ...
+    all_labels = set()
+
+    if list_curr_labels_dict:
+        for labels_dict in list_curr_labels_dict:
+            for key, value in labels_dict.items():
+                key, value = self._validate_key_value(key, value)
+                # Construct the label key.
+                label_key = self._update_label_to_guid_cache(key, value, obj_uuid)
+                # Construct a set of all input label keys.
+                all_labels.add(label_key)
+    ... 针对从networkpolicy中传入的labels，在这里做了validate，然后做了_update_label_to_guid_cache：
+
+def _update_label_to_guid_cache(self, key, value, obj_uuid):
+
+    # Construct the label key.
+    label_key = self.get_key(key, value)
+
+    # If an entry exists for this label, add guid to the existing entry.
+    # If not, create one.
+    ltg_cache = XLabelCache.k8s_label_to_guid_cache[self.resource_type]
+    if label_key in ltg_cache:
+        ltg_cache[label_key].add(obj_uuid)
+    else:
+        ltg_cache[label_key] = {obj_uuid}
+        XLabelCache.label_add_cb(key, value)
+
+    return label_key
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;这里将key和value先转换成sdn的tag格式，再调用XLabelCache.label_add_cb方法处理，这里的label_add_cb方法处理实际是一个callback方法，是在初始化时传入的，具体看下：&lt;/p&gt;
+
+&lt;p&gt;vnc_kubernetes.py中初始化VncKubernetes时：&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;def __init_():
+    ...
+    # Register label add and delete callbacks with label management entity.
+    label_cache.XLabelCache.register_label_add_callback(VncKubernetes.create_tags)
+    label_cache.XLabelCache.register_label_delete_callback(VncKubernetes.delete_tags)
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;label_cache.py中&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;@classmethod
+def register_label_add_callback(cls, cb_func):
+    cls.label_add_cb = cb_func
+    
+@classmethod
+def register_label_delete_callback(cls, cb_func):
+    cls.label_delete_cb = cb_func
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;这里在初始化VncKubernetes是，调用label_cache.py中的register_label_add_callback，注册了两个方法，分别是创建和删除tag&lt;/p&gt;
+
+&lt;p&gt;我们在vnc_tag.py最终找到实际调用vnc创建和删除tag的方法：&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;def create(self, type, value):
+    tag_name = &quot;=&quot;.join([type, value])
+    tag = Tag(name=tag_name,
+              parent_obj=self.proj_obj,
+              tag_type_name=type,
+              tag_value=value)
+    try:
+        TagKM.add_annotations(self, tag, &quot;default&quot;, tag_name)
+        self._vnc_lib.tag_create(tag)
+    except RefsExistError:
+        # Tags cannot be updated.
+        pass
+
+    try:
+        tag_obj = self._vnc_lib.tag_read(fq_name=tag.get_fq_name())
+    except NoIdError as e:
+        self._logger.error(
+            &quot;Unable to create tag [%s]. Error [%s]&quot; %
+            (tag.get_fq_name(), str(e)))
+        return
+    # Cache the object in local db.
+    TagKM.locate(tag_obj.uuid)
+
+def delete(self, type, value):
+    tag_uuid = TagKM.get_fq_name_to_uuid(
+        self._construct_tag_fq_name(type, value))
+    try:
+        self._vnc_lib.tag_delete(id=tag_uuid)
+
+        TagKM.delete(tag_uuid)
+        self._logger.debug(&quot;Tag (%s) deleted successfully.&quot;
+                           % (self._construct_tag_fq_name(type, value)))
+    except RefsExistError:
+        self._logger.debug(&quot;Tag (%s) deletion failed. Tag is in use.&quot;
+                           % (self._construct_tag_fq_name(type, value)))
+    except NoIdError:
+        self._logger.debug(&quot;Tag delete failed. Tag [%s] not found.&quot;
+                           % (self._construct_tag_fq_name(type, value)))
+
+    return
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;这里我们可以得到一个结论，当存在多个k8s集群的时候，实际tag是共享的。也就是说当多个k8s集群有同名的labels时，实际在sdn中是复用的&lt;/p&gt;
+
+&lt;p&gt;看完labels的操作后，我们看下networkpolicy在sdn中的处理吧，在看之前我们需要知道一个前提条件：&lt;/p&gt;
+
+&lt;p&gt;vnc_kubernetes.py中：&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;def _provision_cluster(self):
+    ...
+    # Create application policy set for the cluster project.
+    VncSecurityPolicy.create_application_policy_set(
+        vnc_kube_config.application_policy_set_name(), namespace=proj_obj.name)
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;我们发现kube-manager实际会为每个接入tungstenfabric的k8s集群创建一个aps，也就是一个防火墙。然后初始化三个policy，分别是：denyall/allowall/ingress，然后创建一些初始化规则，这里不展开讲了。&lt;/p&gt;
+
+&lt;p&gt;了解这个前提后，我们看下面的代码就容易理解了：&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;def vnc_network_policy_add(self, event, namespace, name, uid):
+    spec = event[&apos;object&apos;][&apos;spec&apos;]
+    if not spec:
+        self._logger.error(
+            &quot;%s - %s:%s Spec Not Found&quot;
+            % (self._name, name, uid))
+        return
+
+    fw_policy_uuid = VncSecurityPolicy.create_firewall_policy(name, namespace,
+                                                              spec, k8s_uuid=uid)
+    VncSecurityPolicy.add_firewall_policy(fw_policy_uuid)
+
+    # Update kube config db entry for the network policy.
+    np = NetworkPolicyKM.find_by_name_or_uuid(uid)
+    if np:
+        fw_policy_obj = self._vnc_lib.firewall_policy_read(id=fw_policy_uuid)
+        np.set_vnc_fq_name(&quot;:&quot;.join(fw_policy_obj.get_fq_name()))
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;实际k8s中的networkpolicy对应sdn的资源就是aps policy资源。上面可以看到会在create_firewall_policy中创建一个policy，然后将policy绑定到aps中，也就是add_firewall_policy的动作。这里我们重点看下create_firewall_policy：&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+55
+56
+57
+58
+59
+60
+61
+62
+63
+64
+65
+66
+67
+68
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;@classmethod
+def create_firewall_policy(cls, name, namespace, spec, tag_last=False,
+                           tag_after_tail=False, is_global=False,
+                           k8s_uuid=None):
+    ...
+    policy_name = cls.get_firewall_policy_name(name, namespace, is_global)
+    fw_policy_obj = FirewallPolicy(policy_name, pm_obj)
+
+    custom_ann_kwargs = {}
+    custom_ann_kwargs[&apos;k8s_uuid&apos;] = k8s_uuid
+    curr_fw_policy = None
+    fw_rules_del_candidates = set()
+
+    # If this firewall policy already exists, get its uuid.
+    fw_policy_uuid = VncSecurityPolicy.get_firewall_policy_uuid(
+        name, namespace, is_global)
+    ...
+
+    # Parse input spec and construct the list of rules for this FW policy.
+    fw_rules = []
+    deny_all_rule_uuid = None
+    egress_deny_all_rule_uuid = None
+
+    if spec is not None:
+        fw_rules, deny_all_rule_uuid, egress_deny_all_rule_uuid =\
+            FWRule.parser(name, namespace, pm_obj, spec)
+
+    for rule in fw_rules:
+        try:
+            FirewallRuleKM.add_annotations(cls, rule, namespace, rule.name)
+            rule_uuid = cls.vnc_lib.firewall_rule_create(rule)
+        except RefsExistError:
+            cls.vnc_lib.firewall_rule_update(rule)
+            rule_uuid = rule.get_uuid()
+
+            # The rule is in use and needs to stay.
+            # Remove it from delete candidate collection.
+            if fw_rules_del_candidates and\
+               rule_uuid in fw_rules_del_candidates:
+                fw_rules_del_candidates.remove(rule_uuid)
+
+        rule_obj = cls.vnc_lib.firewall_rule_read(id=rule_uuid)
+        FirewallRuleKM.locate(rule_uuid)
+
+        fw_policy_obj.add_firewall_rule(
+            rule_obj,
+            cls.construct_sequence_number(fw_rules.index(rule)))
+
+    if deny_all_rule_uuid:
+        VncSecurityPolicy.add_firewall_rule(
+            VncSecurityPolicy.deny_all_fw_policy_uuid, deny_all_rule_uuid)
+        custom_ann_kwargs[&apos;deny_all_rule_uuid&apos;] = deny_all_rule_uuid
+
+    if egress_deny_all_rule_uuid:
+        VncSecurityPolicy.add_firewall_rule(
+            VncSecurityPolicy.deny_all_fw_policy_uuid,
+            egress_deny_all_rule_uuid)
+        custom_ann_kwargs[&apos;egress_deny_all_rule_uuid&apos;] =\
+            egress_deny_all_rule_uuid
+
+    FirewallPolicyKM.add_annotations(
+        VncSecurityPolicy.vnc_security_policy_instance,
+        fw_policy_obj, namespace, name, None, **custom_ann_kwargs)
+
+    try:
+        fw_policy_uuid = cls.vnc_lib.firewall_policy_create(fw_policy_obj)
+    except RefsExistError:
+    ...
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;这里是创建aps policy，并提取spec中的数据生成policy rule并创建，然后将rule绑定到policy中，这里需要重点看下FWRule.parser，看看如何转化policy rule的：&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;@classmethod
+def parser(cls, name, namespace, pobj, spec):
+
+    fw_rules = []
+
+    # Get pod selectors.
+    podSelector_dict = cls._get_np_pod_selector(spec, namespace)
+    tags = VncSecurityPolicy.get_tags_fn(podSelector_dict, True)
+
+    deny_all_rule_uuid = None
+    egress_deny_all_rule_uuid = None
+    policy_types = spec.get(&apos;policyTypes&apos;, [&apos;Ingress&apos;])
+    for policy_type in policy_types:
+        if policy_type == &apos;Ingress&apos;:
+            # Get ingress spec.
+            ingress_spec_list = spec.get(&quot;ingress&quot;, [])
+            for ingress_spec in ingress_spec_list:
+                fw_rules +=\
+                    cls.ingress_parser(
+                        name, namespace, pobj, tags,
+                        ingress_spec, ingress_spec_list.index(ingress_spec))
+
+            # Add ingress deny-all for all other non-explicit traffic.
+            deny_all_rule_name = namespace + &quot;-ingress-&quot; + name + &quot;-denyall&quot;
+            deny_all_rule_uuid =\
+                VncSecurityPolicy.create_firewall_rule_deny_all(
+                    deny_all_rule_name, tags, namespace)
+
+        if policy_type == &apos;Egress&apos;:
+            # Get egress spec.
+            egress_spec_list = spec.get(&quot;egress&quot;, [])
+            for egress_spec in egress_spec_list:
+                fw_rules +=\
+                    cls.egress_parser(name, namespace, pobj, tags,
+                                      egress_spec)
+            # Add egress deny-all for all other non-explicit traffic.
+            egress_deny_all_rule_uuid =\
+                VncSecurityPolicy.create_firewall_rule_egress_deny_all(
+                    name, namespace, tags)
+
+    return fw_rules, deny_all_rule_uuid, egress_deny_all_rule_uuid
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;_get_np_pod_selector会获取spec中podSelector和namespace两个label的数据，然后通过get_tags_fn查询sdn中已经创建的tag数据，这里的tag数据有：&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;podselector: matchLabels: xxx:xxx&lt;/li&gt;
+  &lt;li&gt;namespace:xxx&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;然后会获取spec中ingress和egress对应的规则，通过ingress_parser和egress_parser做转换，转换成具体的sdn policy rule格式，这里需要注意：&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;会优先根据spec中ingress和egress添加的规则创建policy rule&lt;/li&gt;
+  &lt;li&gt;ingress末尾会添加一条默认规则，一条ingress deny规则到此集群对应的deny-all的policy中&lt;/li&gt;
+  &lt;li&gt;如果指定了egress规则，会在末尾添加一条deny规则到此集群的deny-all的policy中，即绑定此tag的资源无法访问任意其他资源&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;至此，我们基本分析完了networkpolicy的工作流程，但是我们似乎漏了点什么，policy和rule都创建了，但是如何生效的？ 资源和tag的绑定关系发生在什么时候？这里我们通过pod的创建流程来分析下&lt;/p&gt;
+
+&lt;p&gt;在pod创建过程中，我们看到有涉及labels的处理流程(vnc_pod.py process):&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;def process(self, event):
+    ...
+    # Add implicit namespace labels on this pod.
+    labels.update(self._get_namespace_labels(pod_namespace))
+    self._labels.process(pod_id, labels) 和之前的流程类似，这里会获取pod中metadata的label，并创建出对应的tag资源
+
+def vnc_pod_add(self, pod_id, pod_name, pod_namespace, pod_node, node_ip,
+                labels, vm_vmi, fixed_ip=None, annotations_bandwidth_str=None):
+    vm = VirtualMachineKM.get(pod_id)
+    if vm:
+        vm.pod_namespace = pod_namespace
+        if not vm.virtual_router:
+            self._link_vm_to_node(vm, pod_node, node_ip)
+        self._set_label_to_pod_cache(labels, vm)
+
+        # Update tags.
+        self._set_tags_on_pod_vmi(pod_id)
+
+        return vm 我们在创建pod的流程中发现，_set_tags_on_pod_vmi会将tag绑定到具体的资源中
+
+def _set_tags_on_pod_vmi(self, pod_id, old_lables=None):
+    vmi_obj_list = []
+    vm = VirtualMachineKM.get(pod_id)
+    if vm:
+        for vmi_id in list(vm.virtual_machine_interfaces):
+            vmi_obj_list.append(
+                self._vnc_lib.virtual_machine_interface_read(id=vmi_id))
+
+    for vmi_obj in vmi_obj_list:
+        labels = self._labels.get_labels_dict(pod_id)
+        self._vnc_lib.set_tags(vmi_obj, labels)
+        if old_lables:
+            diff_labels = {k:old_lables[k] for k in old_lables if k not in labels.keys()}
+            for k, v in diff_labels.items():
+                self._vnc_lib.unset_tag(vmi_obj, k)
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;代码中先从VirtualMachineKM中查询出vm对象，此时vm对象已经在上面的_set_label_to_pod_cache方法中将laables设置进去了；
+先从数据库中查询出对应的vmi列表，然后依次调用vnc的set_tags方法，将tag和vmi进行绑定&lt;/p&gt;
+
+&lt;p&gt;这样整个流程就完成了。创建sdn资源的时候，创建tag并绑定到资源中；创建networkpolicy时，管理绑定不同tag的资源的行为&lt;/p&gt;
+</description>
+        <pubDate>Tue, 28 Sep 2021 00:00:00 +0000</pubDate>
+        <link>http://0.0.0.0:4000/blog/2021/09/28/tf-cni-networkpolicy/</link>
+        <guid isPermaLink="true">http://0.0.0.0:4000/blog/2021/09/28/tf-cni-networkpolicy/</guid>
+        
+        <category>k8s</category>
+        
+        <category>tungstenfabric</category>
+        
+        <category>cni</category>
+        
+        <category>networkpolicy</category>
+        
+        
+      </item>
+    
+      <item>
+        <title>Istio初探</title>
+        <description>&lt;h2 id=&quot;背景&quot;&gt;背景&lt;/h2&gt;
+&lt;p&gt;网络上很多理论性的说明，包括&lt;a href=&quot;https://skyao.io/learning-servicemesh/docs/introduction.html&quot;&gt;istio的前世今生&lt;/a&gt;，这里就不赘述了，本文将通过安装和实际操作的方式来简单了解下istio的特性.&lt;/p&gt;
+
+&lt;h2 id=&quot;准备&quot;&gt;准备&lt;/h2&gt;
+&lt;p&gt;下载最新版本istio&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;yum install -y socat
+curl -L https://istio.io/downloadIstio | sh -
+cd istio-1.11.2
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;安装istioctl&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;cp bin/istioctl /usr/bin
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;自动补全&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;yum install -y bash-completion
+echo &quot;source /usr/share/bash-completion/bash_completion&quot;&amp;gt;&amp;gt;/root/.bashrc
+source /root/.bashrc
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h2 id=&quot;安装&quot;&gt;安装&lt;/h2&gt;
+
+&lt;p&gt;安装istio，这里使用的profile是demo&lt;/p&gt;
+&lt;blockquote&gt;
+  &lt;p&gt;profile实际对应一些参数的开关，可以通过istioctl profile list和istioctl profile dump demo查看具体的参数设置，通过也可以自己修改和创建profile；默认情况下dashboard工具（kiali）是没有安装的，需要手动安装&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;istioctl manifest apply --set profile=demo
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;卸载istio&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;istioctl manifest generate --set profile=demo | kubectl delete -f -
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;安装kiali&lt;/p&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;安装kiali时发现必须安装prometheus，否则界面会报错，应该是有依赖的&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;kubectl apply -f samples/addons/kiali.yaml
+kubectl apply -f samples/addons/prometheus.yaml
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;登录kiali&lt;/p&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;当有实际访问流量时，在kiali的Graph界面中会实时展示访问的设备，以及报文流向、流速，百分比等等，可以在界面选择&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;[root@controller01 istio-1.11.2]# kubectl get svc  -n istio-system  kiali
+NAME    TYPE       CLUSTER-IP     EXTERNAL-IP   PORT(S)                          AGE
+kiali   NodePort   10.96.140.29   &amp;lt;none&amp;gt;        20001:31919/TCP,9090:32281/TCP   13h
+
+浏览器访问：http://178.104.163.66:31919/
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h2 id=&quot;更新istio&quot;&gt;更新istio&lt;/h2&gt;
+
+&lt;p&gt;升级istioctl&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;istioctl profile dump demo &amp;gt; demo.yaml
+sed &apos;s/jwtPolicy: third-party-jwt/jwtPolicy: first-party-jwt/g&apos; demo.yaml
+istioctl upgrade -f demo.yaml
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;已经inject过的资源升级（再inject一次）&lt;/p&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;这里分两种情况，如果是通过设置namespace的方式自动inject，则可以rollupdate；如果之前是手动inject的，则再执行一次inject后apply下，触发更新&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;istioctl kube-inject -f xx.yaml | kubectl apply -f -
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h2 id=&quot;功能验证demo&quot;&gt;功能验证DEMO&lt;/h2&gt;
+
+&lt;p&gt;我们会通过创建两个pod，三个svc，一个virtualservice是完成demo，其中：&lt;/p&gt;
+&lt;ul&gt;
+  &lt;li&gt;svc1：绑定pod1，暴露80端口&lt;/li&gt;
+  &lt;li&gt;svc2：绑定pod2，暴露80端口&lt;/li&gt;
+  &lt;li&gt;svc-vs: 绑定pod1和pod2，会发现访问每个后端的概率都是50%，无法调整&lt;/li&gt;
+  &lt;li&gt;virtual-service: 通过注入svc-vs，设置访问svc1和svc2的概率分别是10%和90%&lt;/li&gt;
+  &lt;li&gt;client pod： 用来作为客户端访问virtual-service的&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;架构如下：&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;                                        svc1 --&amp;gt; pod1
+client  --&amp;gt; virtual-service(svc-vs)
+                                        svc2 -- pod2
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h3 id=&quot;创建资源&quot;&gt;创建资源&lt;/h3&gt;
+
+&lt;p&gt;创建三个deployment&lt;/p&gt;
+
+&lt;p&gt;deployment1.yaml&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-nginx
+spec:
+  selector:
+    matchLabels:
+      app: my-nginx
+      run: vs
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: my-nginx
+        run: vs
+    spec:
+      containers:
+      - name: my-nginx
+        image: httpd:alpine
+        ports:
+        - containerPort: 80
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;deployment2.yaml&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-nginx-2
+spec:
+  selector:
+    matchLabels:
+      app: my-nginx-2
+      run: vs
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: my-nginx-2
+        run: vs
+    spec:
+      containers:
+      - name: my-nginx-2
+        image: httpd:alpine
+        ports:
+        - containerPort: 80
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;deployment-client.yaml&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-nginx-client
+spec:
+  selector:
+    matchLabels:
+      client: my-nginx
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        client: my-nginx
+    spec:
+      containers:
+      - name: my-nginx
+        image: httpd:alpine
+        ports:
+        - containerPort: 80
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;创建两个svc，后端对应deployment中的pod&lt;/p&gt;
+
+&lt;p&gt;svc1.yaml&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;apiVersion: v1
+kind: Service
+metadata:
+  name: my-apache
+  labels:
+    run: my-apache
+spec:
+  ports:
+  - port: 80
+    protocol: TCP
+  selector:
+    app: my-nginx
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;svc2.yaml&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;apiVersion: v1
+kind: Service
+metadata:
+  name: my-apache-2
+  labels:
+    run: my-apache-2
+spec:
+  ports:
+  - port: 80
+    protocol: TCP
+  selector:
+    app: my-nginx-2
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;创建一个svc，后端对应所有deployment中的pod&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;apiVersion: v1
+kind: Service
+metadata:
+  name: my-apache-vs
+  labels:
+    run: my-apache-vs
+spec:
+  ports:
+  - port: 80
+    protocol: TCP
+  selector:
+    run: vs
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;创建virtualservice&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: hujin-virtual-svc
+spec:
+  hosts:
+  - my-apache-vs
+  http:
+  - route:
+    - destination:
+        host: my-apache
+        port:
+          number: 80
+      weight: 10
+    - destination:
+        host: my-apache-2
+        port:
+          number: 80
+      weight: 90
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;部署&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;istioctl kube-inject -f deployment1.yaml  | kubectl apply -f -
+istioctl kube-inject -f deployment2.yaml  | kubectl apply -f -
+istioctl kube-inject -f svc1.yaml  | kubectl apply -f -
+istioctl kube-inject -f svc2.yaml  | kubectl apply -f -
+istioctl kube-inject -f svc-vs.yaml  | kubectl apply -f -
+
+kubectl apply -f virtualservice.yaml
+kubectl apply -f deployment-client.yaml
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;通过k8s原生方式访问资源&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;获取所有service资源
+[root@controller01 istio]# kubectl get svc
+NAME           TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)   AGE
+kubernetes     ClusterIP   10.96.0.1       &amp;lt;none&amp;gt;        443/TCP   107d
+my-apache      ClusterIP   10.96.40.245    &amp;lt;none&amp;gt;        80/TCP    41m
+my-apache-2    ClusterIP   10.96.155.136   &amp;lt;none&amp;gt;        80/TCP    35m
+my-apache-vs   ClusterIP   10.96.57.227    &amp;lt;none&amp;gt;        80/TCP    27m
+
+访问每个svc，可以发现此时svc-vs中访问每个后端的概率是50%，且无法调整
+[root@controller01 istio]# curl 10.96.40.245
+&amp;lt;html&amp;gt;&amp;lt;body&amp;gt;&amp;lt;h1&amp;gt;test1&amp;lt;/h1&amp;gt;&amp;lt;/body&amp;gt;&amp;lt;/html&amp;gt;
+[root@controller01 istio]# curl 10.96.155.136
+&amp;lt;html&amp;gt;&amp;lt;body&amp;gt;&amp;lt;h1&amp;gt;test2&amp;lt;/h1&amp;gt;&amp;lt;/body&amp;gt;&amp;lt;/html&amp;gt;
+[root@controller01 istio]# curl 10.96.57.227
+&amp;lt;html&amp;gt;&amp;lt;body&amp;gt;&amp;lt;h1&amp;gt;test1&amp;lt;/h1&amp;gt;&amp;lt;/body&amp;gt;&amp;lt;/html&amp;gt;
+[root@controller01 istio]# curl 10.96.57.227
+&amp;lt;html&amp;gt;&amp;lt;body&amp;gt;&amp;lt;h1&amp;gt;test2&amp;lt;/h1&amp;gt;&amp;lt;/body&amp;gt;&amp;lt;/html&amp;gt;
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;通过istio注入方式访问资源，可以发现访问比例是按照设置的百分比来的&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;[root@controller01 istio]# kubectl exec -it my-nginx-client-7f844864c7-cq7tq -- sh
+/usr/local/apache2 # wget -q -O - http://my-apache-vs
+&amp;lt;html&amp;gt;&amp;lt;body&amp;gt;&amp;lt;h1&amp;gt;test2&amp;lt;/h1&amp;gt;&amp;lt;/body&amp;gt;&amp;lt;/html&amp;gt;
+/usr/local/apache2 # wget -q -O - http://my-apache-vs
+&amp;lt;html&amp;gt;&amp;lt;body&amp;gt;&amp;lt;h1&amp;gt;test1&amp;lt;/h1&amp;gt;&amp;lt;/body&amp;gt;&amp;lt;/html&amp;gt;
+/usr/local/apache2 # wget -q -O - http://my-apache-vs
+&amp;lt;html&amp;gt;&amp;lt;body&amp;gt;&amp;lt;h1&amp;gt;test2&amp;lt;/h1&amp;gt;&amp;lt;/body&amp;gt;&amp;lt;/html&amp;gt;
+/usr/local/apache2 # wget -q -O - http://my-apache-vs
+&amp;lt;html&amp;gt;&amp;lt;body&amp;gt;&amp;lt;h1&amp;gt;test2&amp;lt;/h1&amp;gt;&amp;lt;/body&amp;gt;&amp;lt;/html&amp;gt;
+/usr/local/apache2 # wget -q -O - http://my-apache-vs
+&amp;lt;html&amp;gt;&amp;lt;body&amp;gt;&amp;lt;h1&amp;gt;test2&amp;lt;/h1&amp;gt;&amp;lt;/body&amp;gt;&amp;lt;/html&amp;gt;
+/usr/local/apache2 # wget -q -O - http://my-apache-vs
+&amp;lt;html&amp;gt;&amp;lt;body&amp;gt;&amp;lt;h1&amp;gt;test2&amp;lt;/h1&amp;gt;&amp;lt;/body&amp;gt;&amp;lt;/html&amp;gt;
+/usr/local/apache2 # wget -q -O - http://my-apache-vs
+&amp;lt;html&amp;gt;&amp;lt;body&amp;gt;&amp;lt;h1&amp;gt;test2&amp;lt;/h1&amp;gt;&amp;lt;/body&amp;gt;&amp;lt;/html&amp;gt;
+/usr/local/apache2 # wget -q -O - http://my-apache-vs
+&amp;lt;html&amp;gt;&amp;lt;body&amp;gt;&amp;lt;h1&amp;gt;test2&amp;lt;/h1&amp;gt;&amp;lt;/body&amp;gt;&amp;lt;/html&amp;gt;
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+</description>
+        <pubDate>Sun, 26 Sep 2021 00:00:00 +0000</pubDate>
+        <link>http://0.0.0.0:4000/blog/2021/09/26/istio-1/</link>
+        <guid isPermaLink="true">http://0.0.0.0:4000/blog/2021/09/26/istio-1/</guid>
+        
+        <category>k8s</category>
+        
+        <category>istio</category>
+        
+        
+      </item>
     
       <item>
         <title>Docker Containerd CRI-O Runc等概念的区别[译]</title>
@@ -1784,1253 +2942,6 @@ run
         <category>tungstenfabric</category>
         
         <category>annotation</category>
-        
-        
-      </item>
-    
-      <item>
-        <title>CoreDNS</title>
-        <description>&lt;h2 id=&quot;架构&quot;&gt;架构&lt;/h2&gt;
-&lt;p&gt;&lt;img src=&quot;https://img.draveness.me/2018-11-07-coredns-architecture.png&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
-
-&lt;h2 id=&quot;搭建&quot;&gt;搭建&lt;/h2&gt;
-
-&lt;p&gt;正常使用kubeadm等工具部署的集群中默认都已经部署有coredns，以下为手动部署的流程：&lt;/p&gt;
-&lt;ul&gt;
-  &lt;li&gt;创建一个serviceaccount用来做鉴权用&lt;/li&gt;
-  &lt;li&gt;创建clusterrole对象system:coredns&lt;/li&gt;
-  &lt;li&gt;绑定serviceaccount和clusterrole&lt;/li&gt;
-  &lt;li&gt;创建coredns的配置configmap，在后面创建deployment时引用。这里需要注意根据需要修改forward和pods属性&lt;/li&gt;
-  &lt;li&gt;创建coredns的deployment，容器引用对应的configmap，限制资源、暴露端口、配置调度策略等到&lt;/li&gt;
-  &lt;li&gt;创建service，设置podselector和端口&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;coredns.yaml&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-20
-21
-22
-23
-24
-25
-26
-27
-28
-29
-30
-31
-32
-33
-34
-35
-36
-37
-38
-39
-40
-41
-42
-43
-44
-45
-46
-47
-48
-49
-50
-51
-52
-53
-54
-55
-56
-57
-58
-59
-60
-61
-62
-63
-64
-65
-66
-67
-68
-69
-70
-71
-72
-73
-74
-75
-76
-77
-78
-79
-80
-81
-82
-83
-84
-85
-86
-87
-88
-89
-90
-91
-92
-93
-94
-95
-96
-97
-98
-99
-100
-101
-102
-103
-104
-105
-106
-107
-108
-109
-110
-111
-112
-113
-114
-115
-116
-117
-118
-119
-120
-121
-122
-123
-124
-125
-126
-127
-128
-129
-130
-131
-132
-133
-134
-135
-136
-137
-138
-139
-140
-141
-142
-143
-144
-145
-146
-147
-148
-149
-150
-151
-152
-153
-154
-155
-156
-157
-158
-159
-160
-161
-162
-163
-164
-165
-166
-167
-168
-169
-170
-171
-172
-173
-174
-175
-176
-177
-178
-179
-180
-181
-182
-183
-184
-185
-186
-187
-188
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;cat coredns.yaml
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: coredns
-  namespace: kube-system
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  labels:
-    kubernetes.io/bootstrapping: rbac-defaults
-  name: system:coredns
-rules:
-- apiGroups:
-  - &quot;&quot;
-  resources:
-  - endpoints
-  - services
-  - pods
-  - namespaces
-  verbs:
-  - list
-  - watch
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  annotations:
-    rbac.authorization.kubernetes.io/autoupdate: &quot;true&quot;
-  labels:
-    kubernetes.io/bootstrapping: rbac-defaults
-  name: system:coredns
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: system:coredns
-subjects:
-- kind: ServiceAccount
-  name: coredns
-  namespace: kube-system
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: coredns
-  namespace: kube-system
-data:
-  Corefile: |
-    .:53 {
-        errors
-        health
-        kubernetes cluster.local in-addr.arpa ip6.arpa {
-            pods insecure
-            fallthrough in-addr.arpa ip6.arpa
-        }
-        prometheus :9153
-        forward . /etc/resolv.conf
-        cache 30
-        loop
-        reload
-        loadbalance
-}
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: coredns
-  namespace: kube-system
-  labels:
-    k8s-app: kube-dns
-    kubernetes.io/name: &quot;CoreDNS&quot;
-spec:
-  # replicas: not specified here:
-  # 1. Default is 1.
-  # 2. Will be tuned in real time if DNS horizontal auto-scaling is turned on.
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxUnavailable: 1
-  selector:
-    matchLabels:
-      k8s-app: kube-dns
-  template:
-    metadata:
-      labels:
-        k8s-app: kube-dns
-    spec:
-      priorityClassName: system-cluster-critical
-      serviceAccountName: coredns
-      tolerations:
-        - key: &quot;CriticalAddonsOnly&quot;
-          operator: &quot;Exists&quot;
-      nodeSelector:
-        kubernetes.io/os: linux
-      affinity:
-         podAntiAffinity:
-           preferredDuringSchedulingIgnoredDuringExecution:
-           - weight: 100
-             podAffinityTerm:
-               labelSelector:
-                 matchExpressions:
-                   - key: k8s-app
-                     operator: In
-                     values: [&quot;kube-dns&quot;]
-               topologyKey: kubernetes.io/hostname
-      containers:
-      - name: coredns
-        image: coredns/coredns:1.8.0
-        imagePullPolicy: IfNotPresent
-        resources:
-          limits:
-            memory: 170Mi
-          requests:
-            cpu: 100m
-            memory: 70Mi
-        args: [ &quot;-conf&quot;, &quot;/etc/coredns/Corefile&quot; ]
-        volumeMounts:
-        - name: config-volume
-          mountPath: /etc/coredns
-          readOnly: true
-        ports:
-        - containerPort: 53
-          name: dns
-          protocol: UDP
-        - containerPort: 53
-          name: dns-tcp
-          protocol: TCP
-        - containerPort: 9153
-          name: metrics
-          protocol: TCP
-        securityContext:
-          allowPrivilegeEscalation: false
-          capabilities:
-            add:
-            - NET_BIND_SERVICE
-            drop:
-            - all
-          readOnlyRootFilesystem: true
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: 8080
-            scheme: HTTP
-          initialDelaySeconds: 60
-          timeoutSeconds: 5
-          successThreshold: 1
-          failureThreshold: 5
-        readinessProbe:
-          httpGet:
-            path: /ready
-            port: 8181
-            scheme: HTTP
-      dnsPolicy: Default
-      volumes:
-        - name: config-volume
-          configMap:
-            name: coredns
-            items:
-            - key: Corefile
-              path: Corefile
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: kube-dns
-  namespace: kube-system
-  annotations:
-    prometheus.io/port: &quot;9153&quot;
-    prometheus.io/scrape: &quot;true&quot;
-  labels:
-    k8s-app: kube-dns
-    kubernetes.io/cluster-service: &quot;true&quot;
-    kubernetes.io/name: &quot;CoreDNS&quot;
-spec:
-  selector:
-    k8s-app: kube-dns
-  clusterIP: CLUSTER_DNS_IP
-  ports:
-  - name: dns
-    port: 53
-    protocol: UDP
-  - name: dns-tcp
-    port: 53
-    protocol: TCP
-  - name: metrics
-    port: 9153
-    protocol: TCP
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;创建后：&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;[root@none-nested-master hujin]# kubectl get service -n kube-system
-NAME                        TYPE        CLUSTER-IP     EXTERNAL-IP   PORT(S)         AGE
-k8s-keystone-auth-service   ClusterIP   10.233.40.69   &amp;lt;none&amp;gt;        8443/TCP        4d20h
-kube-dns                    ClusterIP   10.233.0.110   &amp;lt;none&amp;gt;        53/UDP,53/TCP   7d2h
-[root@none-nested-master hujin]# kubectl get deploy -n kube-system
-NAME                READY   UP-TO-DATE   AVAILABLE   AGE
-coredns             1/1     1            1           7d2h
-k8s-keystone-auth   1/1     1            1           4d18h
-[root@none-nested-master hujin]# kubectl get deploy -n kube-system
-NAME                READY   UP-TO-DATE   AVAILABLE   AGE
-coredns             1/1     1            1           7d2h
-k8s-keystone-auth   1/1     1            1           4d18h
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;修改集群cluster dns配置，这里如果集群默认部署coredns，会设置成pod的ip，修改后，新建的pod中/etc/resolv.conf文件会获取配置后的ip&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;vim /etc/kubernetes/kubelet-config.yaml
-clusterDNS:
-- 10.233.0.110
-
-service kubelet restart
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;h2 id=&quot;使用&quot;&gt;使用&lt;/h2&gt;
-
-&lt;h3 id=&quot;通过使用busybox中的nslookup命令访问域名&quot;&gt;通过使用busybox中的nslookup命令访问域名&lt;/h3&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;cat busybox.yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: busybox2
-  namespace: default
-spec:
-  containers:
-  - image: aarch64/busybox
-    command:
-      - sleep
-      - &quot;3600&quot;
-    imagePullPolicy: IfNotPresent
-    name: busybox2
-  restartPolicy: Always
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;h3 id=&quot;访问service&quot;&gt;访问service&lt;/h3&gt;
-
-&lt;p&gt;格式：[svc-name].[namespace].svc.[self-defined cluster domain]&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;# 查询域名：
-/ # nslookup my-apache.default.svc.cluster.local
-Server:    10.233.0.110
-Address 1: 10.233.0.110 kube-dns.kube-system.svc.cluster.local
-
-Name:      my-apache.default.svc.cluster.local
-Address 1: 10.233.4.36 my-apache.default.svc.cluster.local
-
-# 通过域名访问服务
-sh-4.2# curl my-apache.default.svc.cluster.local
-&amp;lt;html&amp;gt;&amp;lt;body&amp;gt;&amp;lt;h1&amp;gt;It works!&amp;lt;/h1&amp;gt;&amp;lt;/body&amp;gt;&amp;lt;/html&amp;gt;
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;h3 id=&quot;访问pod&quot;&gt;访问pod&lt;/h3&gt;
-
-&lt;p&gt;格式：[pod-ip].[namespace].pod.[self-defined cluster domain]&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;# 查询域名
-/ # nslookup 10-233-127-250.default.pod.cluster.local
-Server:    10.233.0.110
-Address 1: 10.233.0.110 kube-dns.kube-system.svc.cluster.local
-
-Name:      10-233-127-250.default.pod.cluster.local
-Address 1: 10.233.127.250 10-233-127-250.my-apache.default.svc.cluster.local
-
-# 通过域名访问服务
-sh-4.2# curl 10-233-127-250.default.pod.cluster.local
-&amp;lt;html&amp;gt;&amp;lt;body&amp;gt;&amp;lt;h1&amp;gt;It works!&amp;lt;/h1&amp;gt;&amp;lt;/body&amp;gt;&amp;lt;/html&amp;gt;
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;h2 id=&quot;自定义域名&quot;&gt;自定义域名&lt;/h2&gt;
-
-&lt;p&gt;一般情况下我们使用coredns是在k8s中的，但是实际coredns提供了很多插件，这里我们可以通过hosts插件实现自定义域名的功能,&lt;/p&gt;
-
-&lt;p&gt;hosts插件的配置参数参考：
-    hosts [FILE [ZONES…]] {
-        [INLINE]
-        ttl SECONDS
-        no_reverse
-        reload DURATION
-        fallthrough [ZONES…]
-    }&lt;/p&gt;
-
-&lt;blockquote&gt;
-  &lt;p&gt;FILE：需要读取与解析的hosts文件；如果省略，默认取值”/etc/hosts”；每5s扫描一次hosts文件的变更。&lt;/p&gt;
-&lt;/blockquote&gt;
-
-&lt;blockquote&gt;
-  &lt;p&gt;ZONES：如果为空，取配置块中的zone。&lt;/p&gt;
-&lt;/blockquote&gt;
-
-&lt;blockquote&gt;
-  &lt;p&gt;INLINE：宿主机hosts文件在corefile中的内联；在”fallthrough”之前的所有”INLINE”都可视为hosts文件的附加内容，hosts文件中相同条目将被覆盖，以”INLINE”为准。&lt;/p&gt;
-&lt;/blockquote&gt;
-
-&lt;blockquote&gt;
-  &lt;p&gt;fallthrough：如果zone匹配且无法生成记录，将请求传递给下一个插件；如果省略，对所有zones有效，如果列出特定zone，则只有列出的zone受到影响。&lt;/p&gt;
-&lt;/blockquote&gt;
-
-&lt;p&gt;修改coredns的configmap，这里修改完成后需要等待短暂时间重新加载配置&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-20
-21
-22
-23
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;kubectl edit configmaps -n kube-system coredns
-apiVersion: v1
-data:
-  Corefile: |
-    .:53 {
-        kubernetes cluster.local in-addr.arpa ip6.arpa {
-           pods insecure
-           fallthrough in-addr.arpa ip6.arpa
-           ttl 30
-        }
-        hosts /etc/hosts {
-           10.244.0.4 nginx.me.test
-           fallthrough
-        }
-    }
-
-[root@hujin-test ~]# kubectl exec -it my-busybox-6dffd8765-pkcl7 -- sh
-/ # ping nginx.me.test
-PING nginx.me.test (10.244.0.4): 56 data bytes
-64 bytes from 10.244.0.4: seq=0 ttl=63 time=0.281 ms
-64 bytes from 10.244.0.4: seq=1 ttl=63 time=0.254 ms
-64 bytes from 10.244.0.4: seq=2 ttl=63 time=0.195 ms
-64 bytes from 10.244.0.4: seq=3 ttl=63 time=0.166 ms
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;h2 id=&quot;参考&quot;&gt;参考&lt;/h2&gt;
-&lt;ul&gt;
-  &lt;li&gt;https://github.com/coredns/deployment/tree/master/kubernetes&lt;/li&gt;
-  &lt;li&gt;https://coredns.io/plugins/hosts/&lt;/li&gt;
-&lt;/ul&gt;
-</description>
-        <pubDate>Mon, 18 Jan 2021 00:00:00 +0000</pubDate>
-        <link>http://0.0.0.0:4000/blog/2021/01/18/k8s-coredns/</link>
-        <guid isPermaLink="true">http://0.0.0.0:4000/blog/2021/01/18/k8s-coredns/</guid>
-        
-        <category>kubernetes</category>
-        
-        <category>coredns</category>
-        
-        
-      </item>
-    
-      <item>
-        <title>Kuberntes Webhook -- Keystone</title>
-        <description>&lt;h2 id=&quot;背景&quot;&gt;背景&lt;/h2&gt;
-&lt;p&gt;k8s本身不提供用户和项目管理功能，需要依赖第三方组件来实现。
-由于k8s和openstack的融合需求，需要提供一种统一的用户鉴权机制，本次重点介绍k8s如何使用keystone进行鉴权。通过调用keystone获取token，并使用这个token调用k8s的接口获取资源信息。&lt;/p&gt;
-
-&lt;h2 id=&quot;架构图&quot;&gt;架构图&lt;/h2&gt;
-&lt;p&gt;&lt;img src=&quot;https://superuser.openstack.org/wp-content/uploads/2019/03/fig2.png&quot; alt=&quot;k8s-keystone-auth&quot; /&gt;&lt;/p&gt;
-
-&lt;p&gt;主要流程：&lt;/p&gt;
-
-&lt;ul&gt;
-  &lt;li&gt;客户端通过rest api调用openstack keystone获取token&lt;/li&gt;
-  &lt;li&gt;通过获取到的token调用k8s api&lt;/li&gt;
-  &lt;li&gt;kube-apiserver 根据配置调用webhook程序，校验token并获取token对应用户的权限&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;h2 id=&quot;部署&quot;&gt;部署&lt;/h2&gt;
-&lt;p&gt;webhook和odic一样也是集成外部认证系统的一种方式，当client发起api-server请求时会触发webhook服务TokenReview调用，webhook会检查用户的凭证信息，如果是合法则返回authenticated”: true等信息。api-server会等待webhook服务返回，如果返回的authenticated结果为true，则表明认证成功，否则拒绝访问。&lt;/p&gt;
-
-&lt;h3 id=&quot;配置openstack&quot;&gt;配置openstack&lt;/h3&gt;
-
-&lt;p&gt;在openstack中创建资源&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;openstack role create k8s-admin
-openstack user create demo_admin --project demo --password secret
-openstack role add --user demo_admin --project demo k8s-admin
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;创建demo-rc,用来后面获取token&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;export OS_AUTH_URL=&quot;http://172.16.41.80:35357/v3&quot;
-export OS_USERNAME=&quot;demo_admin&quot;
-export OS_PASSWORD=&quot;secret&quot;
-export OS_PROJECT_NAME=&quot;demo&quot;
-export OS_USER_DOMAIN_NAME=Default
-export OS_PROJECT_DOMAIN_NAME=Default
-export OS_REGION_NAME=RegionTwo
-export OS_IDENTITY_API_VERSION=3
-export OS_IMAGE_API_VERSION=2
-export PYTHONIOENCODING=&apos;utf-8&apos;
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;h3 id=&quot;kubernetes中创建k8s-keystone-auth-webhook&quot;&gt;kubernetes中创建k8s-keystone-auth webhook&lt;/h3&gt;
-
-&lt;p&gt;创建keystone权限configmap&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-20
-21
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;cat keystone_configmap.yaml
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: k8s-auth-policy
-  namespace: kube-system
-data:
-  policies: |
-    [
-      {
-        &quot;users&quot;: {
-          &quot;projects&quot;: [&quot;demo&quot;],
-          &quot;roles&quot;: [&quot;member&quot;]
-        },
-        &quot;resource_permissions&quot;: {
-          &quot;*/pods&quot;: [&quot;get&quot;, &quot;list&quot;, &quot;watch&quot;]
-        }
-      }
-    ]
-
-kubectl apply -f keystone_configmap.yaml
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;创建证书，给keystone-webhook容器使用&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes -subj /CN=k8s-keystone-auth.kube-system/
-kubectl --namespace kube-system create secret tls keystone-auth-certs --cert=cert.pem --key=key.pem
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;创建keystone rbac&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-20
-21
-22
-23
-24
-25
-26
-27
-28
-29
-30
-31
-32
-33
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;cat keystone-rbac.yaml
-kind: ClusterRole
-apiVersion: rbac.authorization.k8s.io/v1
-metadata:
-  labels:
-    k8s-app: k8s-keystone-auth
-  name: k8s-keystone-auth
-rules:
-  # Allow k8s-keystone-auth to get k8s-auth-policy configmap
-- apiGroups: [&quot;&quot;]
-  resources: [&quot;configmaps&quot;]
-  verbs: [&quot;get&quot;, &quot;watch&quot;, &quot;list&quot;]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: k8s-keystone-auth
-  labels:
-    k8s-app: k8s-keystone-auth
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: k8s-keystone-auth
-subjects:
-- kind: ServiceAccount
-  name: k8s-keystone
-  namespace: kube-system
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: k8s-keystone
-  namespace: kube-system
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;部署 k8s-keystone-auth，注意替换&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;keystone-url&lt;/code&gt;&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-20
-21
-22
-23
-24
-25
-26
-27
-28
-29
-30
-31
-32
-33
-34
-35
-36
-37
-38
-39
-40
-41
-42
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;cat keystone-deployment.yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: k8s-keystone-auth
-  namespace: kube-system
-  labels:
-    app: k8s-keystone-auth
-spec:
-  replicas: 2
-  selector:
-    matchLabels:
-      app: k8s-keystone-auth
-  template:
-    metadata:
-      labels:
-        app: k8s-keystone-auth
-    spec:
-      serviceAccountName: k8s-keystone
-      containers:
-        - name: k8s-keystone-auth
-          image: k8scloudprovider/k8s-keystone-auth:latest
-          args:
-            - ./bin/k8s-keystone-auth
-            - --tls-cert-file
-            - /etc/pki/tls.crt
-            - --tls-private-key-file
-            - /etc/pki/tls.key
-            - --policy-configmap-name
-            - k8s-auth-policy
-            - --keystone-url
-            - http://172.16.41.80:35357/v3
-          volumeMounts:
-            - mountPath: /etc/pki
-              name: certs
-              readOnly: true
-          ports:
-            - containerPort: 8443
-      volumes:
-      - name: certs
-        secret:
-          secretName: keystone-auth-certs
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;创建keystone_service，这里建议创建后给service绑定浮动IP，方便用来给外部调用用&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;cat keystone-service.yaml
-kind: Service
-apiVersion: v1
-metadata:
-  name: k8s-keystone-auth-service
-  namespace: kube-system
-spec:
-  selector:
-    app: k8s-keystone-auth
-  ports:
-    - protocol: TCP
-      port: 8443
-      targetPort: 8443
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;验证k8s-keystone-auth服务&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-20
-21
-22
-23
-24
-25
-26
-27
-28
-29
-30
-31
-32
-33
-34
-35
-36
-37
-38
-39
-40
-41
-42
-43
-44
-45
-46
-47
-48
-49
-50
-51
-52
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;# input:
-token = `source demo-rc;openstack token issue -f yaml -c id |awk &apos;{print $2}&apos;`
-kubectl run curl --rm -it --restart=Never --image curlimages/curl -- \
-  -k -XPOST https://k8s-keystone-auth-service.kube-system:8443/webhook -d &apos;
-{
-  &quot;apiVersion&quot;: &quot;authentication.k8s.io/v1beta1&quot;,
-  &quot;kind&quot;: &quot;TokenReview&quot;,
-  &quot;metadata&quot;: {
-    &quot;creationTimestamp&quot;: null
-  },
-  &quot;spec&quot;: {
-    &quot;token&quot;: &quot;&apos;$token&apos;&quot;
-  }
-}&apos;
-
-# output:
-{
-  &quot;apiVersion&quot;: &quot;authentication.k8s.io/v1beta1&quot;,
-  &quot;kind&quot;: &quot;TokenReview&quot;,
-  &quot;metadata&quot;: {
-    &quot;creationTimestamp&quot;: null
-  },
-  &quot;spec&quot;: {
-    &quot;token&quot;: &quot;gAAAAABf_7dmngBBu9cThzYmRs8Hkqv9Gm1FBRL0duTFAv7xl5dwwHA3yhKnCo_cqvsnKt90ukdmV5crq1s6EgBjh_e5cvhGBejFdRADViH9Vmmr6KI2L9I8gG4Dkj52whKNVqxZ-2R81rOj_Amqj83Iwa5TEWURXVfKNaL9ktLPR3-qY4TkjWU&quot;
-  },
-  &quot;status&quot;: {
-    &quot;authenticated&quot;: true,
-    &quot;user&quot;: {
-      &quot;username&quot;: &quot;demo_admin&quot;,
-      &quot;uid&quot;: &quot;b9b167f5e86b48839a879e111e20a0b1&quot;,
-      &quot;groups&quot;: [
-        &quot;bf37908a629b4d2ca02dfc840da027cd&quot;
-      ],
-      &quot;extra&quot;: {
-        &quot;alpha.kubernetes.io/identity/project/id&quot;: [
-          &quot;bf37908a629b4d2ca02dfc840da027cd&quot;
-        ],
-        &quot;alpha.kubernetes.io/identity/project/name&quot;: [
-          &quot;demo&quot;
-        ],
-        &quot;alpha.kubernetes.io/identity/roles&quot;: [
-          &quot;k8s-admin&quot;
-        ],
-        &quot;alpha.kubernetes.io/identity/user/domain/id&quot;: [
-          &quot;default&quot;
-        ],
-        &quot;alpha.kubernetes.io/identity/user/domain/name&quot;: [
-          &quot;Default&quot;
-        ]
-      }
-    }
-  }
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;h3 id=&quot;配置kube-apisever&quot;&gt;配置kube-apisever&lt;/h3&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-20
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;mkdir /etc/kubernetes/webhooks
-cat &amp;lt;&amp;lt;EOF &amp;gt; /etc/kubernetes/webhooks/webhookconfig.yaml
----
-apiVersion: v1
-kind: Config
-preferences: {}
-clusters:
-  - cluster:
-      insecure-skip-tls-verify: true
-      server: https://178.119.220.88:8443/webhook
-    name: webhook
-users:
-  - name: webhook
-contexts:
-  - context:
-      cluster: webhook
-      user: webhook
-    name: webhook
-current-context: webhook
-EOF
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;blockquote&gt;
-  &lt;p&gt;178.119.220.88是k8s-keystone-auth的浮动IP&lt;/p&gt;
-&lt;/blockquote&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-20
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;vim /etc/kubernetes/manifests/kube-apiserver.yaml
-spec:
-  containers:
-  - command:
-  ...
-  - --authentication-token-webhook-config-file=/etc/kubernetes/webhooks/webhookconfig.yaml
-  - --authorization-webhook-config-file=/etc/kubernetes/webhooks/webhookconfig.yaml
-  - --authorization-mode=Node,RBAC,Webhook
-
-  volumeMounts:
-  ...
-  - mountPath: /etc/kubernetes/webhooks
-    name: webhooks
-    readOnly: true
-volumes:
-...
-- hostPath:
-    path: /etc/kubernetes/webhooks
-    type: DirectoryOrCreate
-  name: webhooks
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;blockquote&gt;
-  &lt;p&gt;修改完成后kube-apiserver会自动重启，注意查看日志是否有报错&lt;/p&gt;
-&lt;/blockquote&gt;
-
-&lt;h2 id=&quot;测试&quot;&gt;测试&lt;/h2&gt;
-
-&lt;p&gt;脚本：&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-20
-21
-22
-23
-24
-25
-26
-27
-28
-29
-30
-31
-32
-33
-34
-35
-36
-37
-38
-39
-40
-41
-42
-43
-44
-45
-46
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;import eventlet
-eventlet.monkey_patch()
-
-from keystoneclient.v3 import client as keystone_client
-import requests
-from pprint import pprint
-import json
-
-
-def get_openstack_token():
-    keystone = keystone_client.Client(username=&apos;demo_admin&apos;, password=&apos;secret&apos;,
-                                      auth_url=&apos;http://172.16.41.80:35357/v3&apos;,
-                                      tenant_name=&apos;demo&apos;,
-                                      project_domain_name=&apos;Default&apos;,
-                                      user_domain_name=&apos;Default&apos;,
-                                      project_name=&apos;demo&apos;)
-    print(keystone.auth_token)
-    return keystone.auth_token
-
-
-def check_token(token):
-    data = {&quot;apiVersion&quot;: &quot;authentication.k8s.io/v1beta1&quot;,
-            &quot;kind&quot;: &quot;TokenReview&quot;,
-            &quot;metadata&quot;: {
-                &quot;creationTimestamp&quot;: None
-            },
-            &quot;spec&quot;: {
-                &quot;token&quot;:  token
-            }}
-    headers = {&apos;Content-Type&apos;: &apos;application/json&apos;, &apos;Connection&apos;: &apos;Keep-Alive&apos;}
-    req = requests.post(&apos;https://178.119.220.88:8443/webhook&apos;,
-                        data=json.dumps(data), headers=headers, verify=False, timeout=5)
-    print(req.content)
-
-
-def list_ingress(tk):
-    auth_url = &apos;https://179.18.3.180:6443&apos;
-    headers = {&apos;Connection&apos;: &apos;Keep-Alive&apos;,
-               &apos;Authorization&apos;: &apos;Bearer %s&apos; % tk}
-    req_url = &apos;%s/api/v1/namespaces&apos; % auth_url
-    print(&apos;=&apos;*20, req_url, headers)
-    req = requests.get(req_url, headers=headers, verify=False)
-    pprint(json.loads(req.content))
-
-token = get_openstack_token()
-list_ingress(token)
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;h2 id=&quot;参考文档&quot;&gt;参考文档：&lt;/h2&gt;
-&lt;ul&gt;
-  &lt;li&gt;https://github.com/kubernetes/cloud-provider-openstack/blob/master/docs/keystone-auth/using-keystone-webhook-authenticator-and-authorizer.md&lt;/li&gt;
-  &lt;li&gt;https://k2r2bai.com/2018/05/30/kubernetes/keystone-auth/&lt;/li&gt;
-  &lt;li&gt;https://zhuanlan.zhihu.com/p/97797321&lt;/li&gt;
-&lt;/ul&gt;
-</description>
-        <pubDate>Fri, 15 Jan 2021 00:00:00 +0000</pubDate>
-        <link>http://0.0.0.0:4000/blog/2021/01/15/k8s-webhook-keystone/</link>
-        <guid isPermaLink="true">http://0.0.0.0:4000/blog/2021/01/15/k8s-webhook-keystone/</guid>
-        
-        <category>kubernetes</category>
-        
-        <category>webhook</category>
-        
-        <category>keystone</category>
         
         
       </item>

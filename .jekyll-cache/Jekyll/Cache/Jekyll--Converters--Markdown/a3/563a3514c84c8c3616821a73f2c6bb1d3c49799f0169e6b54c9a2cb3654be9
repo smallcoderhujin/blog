@@ -1,0 +1,483 @@
+I"b7<h2 id="背景">背景</h2>
+<p>网络上很多理论性的说明，包括<a href="https://skyao.io/learning-servicemesh/docs/introduction.html">istio的前世今生</a>，这里就不赘述了，本文将通过安装和实际操作的方式来简单了解下istio的特性.</p>
+
+<h2 id="准备">准备</h2>
+<p>下载最新版本istio</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+</pre></td><td class="rouge-code"><pre>yum install -y socat
+curl -L https://istio.io/downloadIstio | sh -
+cd istio-1.11.2
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>安装istioctl</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+</pre></td><td class="rouge-code"><pre>cp bin/istioctl /usr/bin
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>自动补全</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+</pre></td><td class="rouge-code"><pre>yum install -y bash-completion
+echo "source /usr/share/bash-completion/bash_completion"&gt;&gt;/root/.bashrc
+source /root/.bashrc
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<h2 id="安装">安装</h2>
+
+<p>安装istio，这里使用的profile是demo</p>
+<blockquote>
+  <p>profile实际对应一些参数的开关，可以通过istioctl profile list和istioctl profile dump demo查看具体的参数设置，通过也可以自己修改和创建profile；默认情况下dashboard工具（kiali）是没有安装的，需要手动安装</p>
+</blockquote>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+</pre></td><td class="rouge-code"><pre>istioctl manifest apply --set profile=demo
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>卸载istio</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+</pre></td><td class="rouge-code"><pre>istioctl manifest generate --set profile=demo | kubectl delete -f -
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>安装kiali</p>
+
+<blockquote>
+  <p>安装kiali时发现必须安装prometheus，否则界面会报错，应该是有依赖的</p>
+</blockquote>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+</pre></td><td class="rouge-code"><pre>kubectl apply -f samples/addons/kiali.yaml
+kubectl apply -f samples/addons/prometheus.yaml
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>登录kiali</p>
+
+<blockquote>
+  <p>当有实际访问流量时，在kiali的Graph界面中会实时展示访问的设备，以及报文流向、流速，百分比等等，可以在界面选择</p>
+</blockquote>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+</pre></td><td class="rouge-code"><pre>[root@controller01 istio-1.11.2]# kubectl get svc  -n istio-system  kiali
+NAME    TYPE       CLUSTER-IP     EXTERNAL-IP   PORT(S)                          AGE
+kiali   NodePort   10.96.140.29   &lt;none&gt;        20001:31919/TCP,9090:32281/TCP   13h
+
+浏览器访问：http://178.104.163.66:31919/
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<h2 id="更新istio">更新istio</h2>
+
+<p>升级istioctl</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+</pre></td><td class="rouge-code"><pre>istioctl profile dump demo &gt; demo.yaml
+sed 's/jwtPolicy: third-party-jwt/jwtPolicy: first-party-jwt/g' demo.yaml
+istioctl upgrade -f demo.yaml
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>已经inject过的资源升级（再inject一次）</p>
+
+<blockquote>
+  <p>这里分两种情况，如果是通过设置namespace的方式自动inject，则可以rollupdate；如果之前是手动inject的，则再执行一次inject后apply下，触发更新</p>
+</blockquote>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+</pre></td><td class="rouge-code"><pre>istioctl kube-inject -f xx.yaml | kubectl apply -f -
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<h2 id="功能验证demo">功能验证DEMO</h2>
+
+<p>我们会通过创建两个pod，三个svc，一个virtualservice是完成demo，其中：</p>
+<ul>
+  <li>svc1：绑定pod1，暴露80端口</li>
+  <li>svc2：绑定pod2，暴露80端口</li>
+  <li>svc-vs: 绑定pod1和pod2，会发现访问每个后端的概率都是50%，无法调整</li>
+  <li>virtual-service: 通过注入svc-vs，设置访问svc1和svc2的概率分别是10%和90%</li>
+  <li>client pod： 用来作为客户端访问virtual-service的</li>
+</ul>
+
+<p>架构如下：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+</pre></td><td class="rouge-code"><pre>                                        svc1 --&gt; pod1
+client  --&gt; virtual-service(svc-vs)
+                                        svc2 -- pod2
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<h3 id="创建资源">创建资源</h3>
+
+<p>创建三个deployment</p>
+
+<p>deployment1.yaml</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+</pre></td><td class="rouge-code"><pre>apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-nginx
+spec:
+  selector:
+    matchLabels:
+      app: my-nginx
+      run: vs
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: my-nginx
+        run: vs
+    spec:
+      containers:
+      - name: my-nginx
+        image: httpd:alpine
+        ports:
+        - containerPort: 80
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>deployment2.yaml</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+</pre></td><td class="rouge-code"><pre>apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-nginx-2
+spec:
+  selector:
+    matchLabels:
+      app: my-nginx-2
+      run: vs
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: my-nginx-2
+        run: vs
+    spec:
+      containers:
+      - name: my-nginx-2
+        image: httpd:alpine
+        ports:
+        - containerPort: 80
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>deployment-client.yaml</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+</pre></td><td class="rouge-code"><pre>apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-nginx-client
+spec:
+  selector:
+    matchLabels:
+      client: my-nginx
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        client: my-nginx
+    spec:
+      containers:
+      - name: my-nginx
+        image: httpd:alpine
+        ports:
+        - containerPort: 80
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>创建两个svc，后端对应deployment中的pod</p>
+
+<p>svc1.yaml</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+</pre></td><td class="rouge-code"><pre>apiVersion: v1
+kind: Service
+metadata:
+  name: my-apache
+  labels:
+    run: my-apache
+spec:
+  ports:
+  - port: 80
+    protocol: TCP
+  selector:
+    app: my-nginx
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>svc2.yaml</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+</pre></td><td class="rouge-code"><pre>apiVersion: v1
+kind: Service
+metadata:
+  name: my-apache-2
+  labels:
+    run: my-apache-2
+spec:
+  ports:
+  - port: 80
+    protocol: TCP
+  selector:
+    app: my-nginx-2
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>创建一个svc，后端对应所有deployment中的pod</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+</pre></td><td class="rouge-code"><pre>apiVersion: v1
+kind: Service
+metadata:
+  name: my-apache-vs
+  labels:
+    run: my-apache-vs
+spec:
+  ports:
+  - port: 80
+    protocol: TCP
+  selector:
+    run: vs
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>创建virtualservice</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+</pre></td><td class="rouge-code"><pre>apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: hujin-virtual-svc
+spec:
+  hosts:
+  - my-apache-vs
+  http:
+  - route:
+    - destination:
+        host: my-apache
+        port:
+          number: 80
+      weight: 10
+    - destination:
+        host: my-apache-2
+        port:
+          number: 80
+      weight: 90
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>部署</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+</pre></td><td class="rouge-code"><pre>istioctl kube-inject -f deployment1.yaml  | kubectl apply -f -
+istioctl kube-inject -f deployment2.yaml  | kubectl apply -f -
+istioctl kube-inject -f svc1.yaml  | kubectl apply -f -
+istioctl kube-inject -f svc2.yaml  | kubectl apply -f -
+istioctl kube-inject -f svc-vs.yaml  | kubectl apply -f -
+
+kubectl apply -f virtualservice.yaml
+kubectl apply -f deployment-client.yaml
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>通过k8s原生方式访问资源</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+</pre></td><td class="rouge-code"><pre>获取所有service资源
+[root@controller01 istio]# kubectl get svc
+NAME           TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)   AGE
+kubernetes     ClusterIP   10.96.0.1       &lt;none&gt;        443/TCP   107d
+my-apache      ClusterIP   10.96.40.245    &lt;none&gt;        80/TCP    41m
+my-apache-2    ClusterIP   10.96.155.136   &lt;none&gt;        80/TCP    35m
+my-apache-vs   ClusterIP   10.96.57.227    &lt;none&gt;        80/TCP    27m
+
+访问每个svc，可以发现此时svc-vs中访问每个后端的概率是50%，且无法调整
+[root@controller01 istio]# curl 10.96.40.245
+&lt;html&gt;&lt;body&gt;&lt;h1&gt;test1&lt;/h1&gt;&lt;/body&gt;&lt;/html&gt;
+[root@controller01 istio]# curl 10.96.155.136
+&lt;html&gt;&lt;body&gt;&lt;h1&gt;test2&lt;/h1&gt;&lt;/body&gt;&lt;/html&gt;
+[root@controller01 istio]# curl 10.96.57.227
+&lt;html&gt;&lt;body&gt;&lt;h1&gt;test1&lt;/h1&gt;&lt;/body&gt;&lt;/html&gt;
+[root@controller01 istio]# curl 10.96.57.227
+&lt;html&gt;&lt;body&gt;&lt;h1&gt;test2&lt;/h1&gt;&lt;/body&gt;&lt;/html&gt;
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>通过istio注入方式访问资源，可以发现访问比例是按照设置的百分比来的</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+</pre></td><td class="rouge-code"><pre>[root@controller01 istio]# kubectl exec -it my-nginx-client-7f844864c7-cq7tq -- sh
+/usr/local/apache2 # wget -q -O - http://my-apache-vs
+&lt;html&gt;&lt;body&gt;&lt;h1&gt;test2&lt;/h1&gt;&lt;/body&gt;&lt;/html&gt;
+/usr/local/apache2 # wget -q -O - http://my-apache-vs
+&lt;html&gt;&lt;body&gt;&lt;h1&gt;test1&lt;/h1&gt;&lt;/body&gt;&lt;/html&gt;
+/usr/local/apache2 # wget -q -O - http://my-apache-vs
+&lt;html&gt;&lt;body&gt;&lt;h1&gt;test2&lt;/h1&gt;&lt;/body&gt;&lt;/html&gt;
+/usr/local/apache2 # wget -q -O - http://my-apache-vs
+&lt;html&gt;&lt;body&gt;&lt;h1&gt;test2&lt;/h1&gt;&lt;/body&gt;&lt;/html&gt;
+/usr/local/apache2 # wget -q -O - http://my-apache-vs
+&lt;html&gt;&lt;body&gt;&lt;h1&gt;test2&lt;/h1&gt;&lt;/body&gt;&lt;/html&gt;
+/usr/local/apache2 # wget -q -O - http://my-apache-vs
+&lt;html&gt;&lt;body&gt;&lt;h1&gt;test2&lt;/h1&gt;&lt;/body&gt;&lt;/html&gt;
+/usr/local/apache2 # wget -q -O - http://my-apache-vs
+&lt;html&gt;&lt;body&gt;&lt;h1&gt;test2&lt;/h1&gt;&lt;/body&gt;&lt;/html&gt;
+/usr/local/apache2 # wget -q -O - http://my-apache-vs
+&lt;html&gt;&lt;body&gt;&lt;h1&gt;test2&lt;/h1&gt;&lt;/body&gt;&lt;/html&gt;
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+:ET

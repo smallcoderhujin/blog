@@ -234,6 +234,70 @@
             ">
     			
 <div class="post-preview">
+    <a href="/blog/2021/01/18/k8s-coredns/">
+        <h2 class="post-title">
+            CoreDNS
+        </h2>
+        
+        <h3 class="post-subtitle">
+            
+        </h3>
+        
+        <div class="post-content-preview">
+            
+                架构
+
+
+搭建
+
+正常使用kubeadm等工具部署的集群中默认都已经部署有coredns，以下为手动部署的流程：
+
+  创建一个serviceaccount用来做鉴权用
+  创建clusterrole对象system:coredns
+  绑定serviceaccount和clusterrole
+  创建coredns的配置configmap，在后面创建deployment时引用。这里需要注意...
+            
+        </div>
+    </a>
+    <p class="post-meta">
+        Posted by hujin on January 18, 2021
+    </p>
+</div>
+<hr>
+
+<div class="post-preview">
+    <a href="/blog/2021/01/15/k8s-webhook-keystone/">
+        <h2 class="post-title">
+            Kuberntes Webhook -- Keystone
+        </h2>
+        
+        <h3 class="post-subtitle">
+            
+        </h3>
+        
+        <div class="post-content-preview">
+            
+                背景
+k8s本身不提供用户和项目管理功能，需要依赖第三方组件来实现。
+由于k8s和openstack的融合需求，需要提供一种统一的用户鉴权机制，本次重点介绍k8s如何使用keystone进行鉴权。通过调用keystone获取token，并使用这个token调用k8s的接口获取资源信息。
+
+架构图
+
+
+主要流程：
+
+
+  客户端通过rest api调用openstack keystone获取t...
+            
+        </div>
+    </a>
+    <p class="post-meta">
+        Posted by hujin on January 15, 2021
+    </p>
+</div>
+<hr>
+
+<div class="post-preview">
     <a href="/blog/2021/01/15/k8s-oidc-keycloak/">
         <h2 class="post-title">
             Kuberntes OIDC -- Keycloak
@@ -297,7 +361,7 @@ OIDC是一种 OAuth2 认证方式， 被某些 OAuth2 提供者支持，例如 A
         
         
         
-                <a data-sort="0007" 
+                <a data-sort="0009" 
                     href="/blog/archive/?tag=kubernetes"
                     title="kubernetes"
                     rel="4">kubernetes</a>
@@ -305,12 +369,17 @@ OIDC是一种 OAuth2 认证方式， 被某些 OAuth2 提供者支持，例如 A
                 <a data-sort="0006" 
                     href="/blog/archive/?tag=k8s"
                     title="k8s"
-                    rel="5">k8s</a>
+                    rel="7">k8s</a>
         
-                <a data-sort="0007" 
+                <a data-sort="0008" 
                     href="/blog/archive/?tag=cni"
                     title="cni"
-                    rel="4">cni</a>
+                    rel="5">cni</a>
+        
+                <a data-sort="0011" 
+                    href="/blog/archive/?tag=tungstenfabric"
+                    title="tungstenfabric"
+                    rel="2">tungstenfabric</a>
     </div>
 </section>
 
