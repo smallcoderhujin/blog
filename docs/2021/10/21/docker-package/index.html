@@ -11,30 +11,29 @@
     <meta name="theme-color" content="#000000">
     
     <!-- Open Graph -->
-    <meta property="og:title" content="TungstenFabric Kubernetes Annotation - 胡进的博客 | Hujin's Blog">
+    <meta property="og:title" content="DockerCE20.10版本打包流程 - 胡进的博客 | Hujin's Blog">
     
     <meta property="og:type" content="article">
-    <meta property="og:description" content="Annotation整理
+    <meta property="og:description" content="背景
+Docker-CE分支在v20.10版本之后将会停止更新，原先的docker-ce将拆分成docker/cli和moby/moby两个项目，其中docker/cli就是docker的客户端，也就是我们常用的docker命令行工具所属的项目；moby/moby项目就是原先docker engine的部分
 ">
     
-    <meta property="article:published_time" content="2021-01-27T00:00:00Z">
+    <meta property="article:published_time" content="2021-10-21T00:00:00Z">
     
     
     <meta property="article:author" content="hujin">
     
     
-    <meta property="article:tag" content="kubernetes">
+    <meta property="article:tag" content="docker">
     
-    <meta property="article:tag" content="tungstenfabric">
-    
-    <meta property="article:tag" content="annotation">
+    <meta property="article:tag" content="docker-ce">
     
     
     <meta property="og:image" content="http://0.0.0.0:4000/blog/img/avatar-hux-ny.jpg">
-    <meta property="og:url" content="http://0.0.0.0:4000/2021/01/27/tf-k8s-annotation/">
+    <meta property="og:url" content="http://0.0.0.0:4000/2021/10/21/docker-package/">
     <meta property="og:site_name" content="胡进的博客 | Hujin's Blog">
     
-    <title>TungstenFabric Kubernetes Annotation - 胡进的博客 | Hujin's Blog</title>
+    <title>DockerCE20.10版本打包流程 - 胡进的博客 | Hujin's Blog</title>
 
     <!-- Web App Manifest -->
     <link rel="manifest" href="/blog/pwa/manifest.json">
@@ -43,7 +42,7 @@
     <link rel="shortcut icon" href="/blog/img/favicon.ico">
     
     <!-- Canonical URL -->
-    <link rel="canonical" href="http://0.0.0.0:4000/blog/2021/01/27/tf-k8s-annotation/">
+    <link rel="canonical" href="http://0.0.0.0:4000/blog/2021/10/21/docker-package/">
 
     <!-- Bootstrap Core CSS -->
     <link rel="stylesheet" href="/blog/css/bootstrap.min.css">
@@ -234,17 +233,15 @@
                 <div class="post-heading">
                     <div class="tags">
                         
-                        <a class="tag" href="/blog/archive/?tag=kubernetes" title="kubernetes">kubernetes</a>
+                        <a class="tag" href="/blog/archive/?tag=docker" title="docker">docker</a>
                         
-                        <a class="tag" href="/blog/archive/?tag=tungstenfabric" title="tungstenfabric">tungstenfabric</a>
-                        
-                        <a class="tag" href="/blog/archive/?tag=annotation" title="annotation">annotation</a>
+                        <a class="tag" href="/blog/archive/?tag=docker-ce" title="docker-ce">docker-ce</a>
                         
                     </div>
-                    <h1>TungstenFabric Kubernetes Annotation</h1>
+                    <h1>DockerCE20.10版本打包流程</h1>
                     
-                    <h2 class="subheading">annotation</h2>
-                    <span class="meta">Posted by hujin on January 27, 2021</span>
+                    <h2 class="subheading"></h2>
+                    <span class="meta">Posted by hujin on October 21, 2021</span>
                 </div>
             </div>
         </div>
@@ -270,56 +267,262 @@
                 <!-- Multi-Lingual -->
                 
 
-				<h2 id="annotation整理">Annotation整理</h2>
+				<h2 id="背景">背景</h2>
+<p>Docker-CE分支在v20.10版本之后将会停止更新，原先的docker-ce将拆分成docker/cli和moby/moby两个项目，其中docker/cli就是docker的客户端，也就是我们常用的docker命令行工具所属的项目；moby/moby项目就是原先docker engine的部分</p>
 
-<table>
-  <thead>
-    <tr>
-      <th>名称</th>
-      <th>值</th>
-      <th>说明</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td>opencontrail.org/fip-pool</td>
-      <td>”{‘domain’: ‘default-domain’, ‘project’: ‘ArcherAdmin’, ‘network’: ‘public1420’, ‘name’: ‘floating-ip-pool’}”</td>
-      <td>指定fip-pool</td>
-    </tr>
-    <tr>
-      <td>opencontrail.org/network</td>
-      <td>‘opencontrail.org/network’: ‘{“domain”:”default-domain”, “project”: “ArcherAdmin”, “name”:”test-net”}’</td>
-      <td>指定network,如果设置在pod中，pod使用指定网络建网卡，如果指定在namespace中，则namespace中所有pod使用指定网络建网卡</td>
-    </tr>
-    <tr>
-      <td>opencontrail.org/isolation</td>
-      <td>‘opencontrail.org/isolation’: ‘true’</td>
-      <td>设置namespace是否隔离</td>
-    </tr>
-    <tr>
-      <td>opencontrail.org/ip_fabric_forwarding</td>
-      <td>“opencontrail.org/ip_fabric_forwarding” : “true”</td>
-      <td>使用fabric网络创建pod网卡</td>
-    </tr>
-    <tr>
-      <td>opencontrail.org/ip_fabric_snat</td>
-      <td>“opencontrail.org/ip_fabric_snat” : “true”</td>
-      <td>启用pod网络的fabric_snat</td>
-    </tr>
-    <tr>
-      <td>opencontrail.org/cidr</td>
-      <td>“opencontrail.org/cidr” : “1.0.0.0/24”</td>
-      <td>使用自定义网络（非contrail网络）时指定</td>
-    </tr>
-  </tbody>
-</table>
+<h2 id="环境准备">环境准备</h2>
+
+<p>在编译docker源码之前，需要安装docker-ce</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+</pre></td><td class="rouge-code"><pre>yum install docker-ce -y
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<h2 id="获取项目代码">获取项目代码</h2>
+
+<p>根据需求获取最新的docker/cli和moby/moby项目代码和切换版本</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+</pre></td><td class="rouge-code"><pre>cd /root
+git clone https://github.com/docker/cli.git
+cd cli &amp;&amp; git checkout v20.10.7
+git clone https://github.com/moby/moby.git
+cd moby &amp;&amp; git checkout v20.10.7
+git clone https://github.com/docker/scan-cli-plugin.git
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<blockquote>
+  <p>根据实际情况适当翻墙或者使用国内加速优化方式</p>
+</blockquote>
+
+<h3 id="可选编译二进制文件">【可选】编译二进制文件</h3>
+
+<p>切换分支</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+</pre></td><td class="rouge-code"><pre>cd cli
+git chekout 20.10
+
+cd moby
+git checkout 20.10
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>编译cli</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+</pre></td><td class="rouge-code"><pre>make -f docker.Makefile binary
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<blockquote>
+  <p>在build目录下是编译好的文件</p>
+</blockquote>
+
+<p>编译moby</p>
+
+<p>在git clone之前添加代理</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+</pre></td><td class="rouge-code"><pre>hack/dockerfile/install/containerd.installer
+hack/dockerfile/install/dockercli.installer
+hack/dockerfile/install/proxy.installer
+hack/dockerfile/install/rootlesskit.installer
+hack/dockerfile/install/runc.installer
+hack/dockerfile/install/shfmt.installer
+hack/dockerfile/install/tini.installer
+hack/dockerfile/install/tomlv.installer
+hack/dockerfile/install/vndr.installe
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>编译</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+</pre></td><td class="rouge-code"><pre>make binary
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<blockquote>
+  <p>在bundles/binary-daemon/目录下是编译好的文件</p>
+</blockquote>
+
+<p>验证，停止节点上的docker</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+</pre></td><td class="rouge-code"><pre>systemctl stop docker.service
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>将之前编译的docker和dockerd替换</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+</pre></td><td class="rouge-code"><pre>mv /usr/bin/docker /home/backup
+cp cli/build/docker /usr/bin/docker
+chmod +x /usr/bin/docker
+
+mv /usr/bin/dockerd /home/backup
+cp moby/bundles/binary-daemon/dockerd /usr/bin/dockerd
+chmod +x /usr/bin/dockerd
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>启动docker</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+</pre></td><td class="rouge-code"><pre>systemctl start docker.service
+
+docker version
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>启动测试容器</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+</pre></td><td class="rouge-code"><pre>docker pull alpine
+docker run alpine echo "hello from alpine"
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<h3 id="编译rpm包">编译RPM包</h3>
+
+<p>获取打包项目代码</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+</pre></td><td class="rouge-code"><pre>git clone https://github.com/docker/docker-ce-packaging.git
+cd docker-ce-packaging
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>【可选】根据需求切换分支</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+</pre></td><td class="rouge-code"><pre>git checkout v20.10.0-beta1
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<blockquote>
+  <p>注意：这里的版本建议和docker/cli等项目逇版本保持一致</p>
+</blockquote>
+
+<p>创建代码目录</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+</pre></td><td class="rouge-code"><pre>mkdir -p src/github.com/docker/
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>将上面git clone下来的代码放到对应目录</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+</pre></td><td class="rouge-code"><pre>cp -r /root/cli src/github.com/docker/
+cp -r /root/moby src/github.com/docker/docker # 这里一定要改成docker名称，否则会出现一系列错误
+cp -r /root/scan-cli-plugin src/github.com/docker/
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>在对应项目里根据需求切换分支或者修改代码</p>
+
+<p>【可选】设置docker项目https代理</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+</pre></td><td class="rouge-code"><pre>vi ./src/github.com/docker/docker/hack/dockerfile/install/runc.installer
+vi ./src/github.com/docker/docker/hack/dockerfile/install/containerd.installer
+vi ./src/github.com/docker/docker/hack/dockerfile/install/dockercli.installer
+vi ./src/github.com/docker/docker/hack/dockerfile/install/proxy.installer
+vi ./src/github.com/docker/docker/hack/dockerfile/install/rootlesskit.installer
+vi ./src/github.com/docker/docker/hack/dockerfile/install/runc.installer
+vi ./src/github.com/docker/docker/hack/dockerfile/install/shfmt.installer
+vi ./src/github.com/docker/docker/hack/dockerfile/install/tini.installer
+vi ./src/github.com/docker/docker/hack/dockerfile/install/tomlv.installer
+vi ./src/github.com/docker/docker/hack/dockerfile/install/vndr.installer
+vi ./src/github.com/docker/docker/vendor/github.com/docker/libnetwork/network.go
+
+vi rpm/SPECS/docker-ce-cli.spec
+...
+%build
+export https_proxy=http://10.51.30.48:1080
+...
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>开始编译(根据需求选择对应的版本和系统)</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+</pre></td><td class="rouge-code"><pre>cd rpm
+VERSION=20.10.7 make centos-7
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>生成的文件在</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+</pre></td><td class="rouge-code"><pre>[root@localhost rpm]# pwd
+/root/docker-ce-packaging/rpm
+[root@localhost rpm]# ll rpmbuild/centos-7/RPMS/x86_64
+total 65428
+-rw-r--r-- 1 root root 23793492 Oct 20 18:47 docker-ce-20.10.7.chinac-3.el7.x86_64.rpm
+-rw-r--r-- 1 root root 31183248 Oct 20 18:51 docker-ce-cli-20.10.7.chinac-3.el7.x86_64.rpm
+-rw-r--r-- 1 root root  8424840 Oct 20 18:52 docker-ce-rootless-extras-20.10.7.chinac-3.el7.x86_64.rpm
+-rw-r--r-- 1 root root  3591600 Oct 20 18:53 docker-scan-plugin-0.8.0-3.el7.x86_64.rpm  
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<h2 id="troubleshooting">Troubleshooting</h2>
+
+<h3 id="clicomposeschemaschemago42-cannot-find-package-embed-in-any-of">cli/compose/schema/schema.go:4:2: cannot find package “embed” in any of:</h3>
+<p>低版本的golang会有这个问题，需要修改编译时指定的golang版本</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+</pre></td><td class="rouge-code"><pre>vi common.tk
+...
+GO_VERSION=1.16.9 &gt; 注意：不是升级本地的golang，是容器中的，所以只需要改下这个文件
+</pre></td></tr></tbody></table></code></pre></div></div>
 
 <h2 id="参考">参考</h2>
-
 <ul>
-  <li>https://github.com/kubevirt/user-guide/pull/196/files/700980d5099b969c4fe2defb3773ec84e628a207</li>
-  <li>https://www.juniper.net/documentation/en_US/day-one-books/topics/concept/contrail-as-a-cni.html</li>
-  <li>https://www.juniper.net/documentation/en_US/contrail19/topics/concept/kubernetes-cni-contrail.html</li>
+  <li>https://openpower.ic.unicamp.br/post/building-docker-for-power/</li>
+  <li>https://www.fatalerrors.org/a/pull-and-compile-docker-ce.html</li>
 </ul>
 
 
@@ -327,19 +530,12 @@
                 <ul class="pager">
                     
                     <li class="previous">
-                        <a href="/blog/2021/01/18/k8s-coredns/" data-toggle="tooltip" data-placement="top" title="CoreDNS">
+                        <a href="/blog/2021/09/28/tf-cni-networkpolicy/" data-toggle="tooltip" data-placement="top" title="Tungstenfabric CNI源码 -- NetworkPolicy">
                         Previous<br>
-                        <span>CoreDNS</span>
+                        <span>Tungstenfabric CNI源码 -- NetworkPolicy</span>
                         </a>
                     </li>
                     
-                    
-                    <li class="next">
-                        <a href="/blog/2021/03/04/k8s-gdb/" data-toggle="tooltip" data-placement="top" title="Golang Debug -- gdb">
-                        Next<br>
-                        <span>Golang Debug -- gdb</span>
-                        </a>
-                    </li>
                     
                 </ul>
                 <hr style="visibility: hidden;">

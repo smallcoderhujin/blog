@@ -1,0 +1,3 @@
+I";<h2 id="背景">背景</h2>
+<p>Docker-CE分支在v20.10版本之后将会停止更新，原先的docker-ce将拆分成docker/cli和moby/moby两个项目，其中docker/cli就是docker的客户端，也就是我们常用的docker命令行工具所属的项目；moby/moby项目就是原先docker engine的部分</p>
+:ET

@@ -5,9 +5,280 @@
     <description>Hujin，Openstack &amp; SDN &amp; Kubernetes Lover，Software Engineer，| 与你一起发现更大的世界</description>
     <link>http://0.0.0.0:4000/blog/</link>
     <atom:link href="http://0.0.0.0:4000/blog/feed.xml" rel="self" type="application/rss+xml" />
-    <pubDate>Tue, 28 Sep 2021 08:27:52 +0000</pubDate>
-    <lastBuildDate>Tue, 28 Sep 2021 08:27:52 +0000</lastBuildDate>
+    <pubDate>Thu, 21 Oct 2021 03:01:51 +0000</pubDate>
+    <lastBuildDate>Thu, 21 Oct 2021 03:01:51 +0000</lastBuildDate>
     <generator>Jekyll v4.2.0</generator>
+    
+      <item>
+        <title>DockerCE20.10版本打包流程</title>
+        <description>&lt;h2 id=&quot;背景&quot;&gt;背景&lt;/h2&gt;
+&lt;p&gt;Docker-CE分支在v20.10版本之后将会停止更新，原先的docker-ce将拆分成docker/cli和moby/moby两个项目，其中docker/cli就是docker的客户端，也就是我们常用的docker命令行工具所属的项目；moby/moby项目就是原先docker engine的部分&lt;/p&gt;
+
+&lt;h2 id=&quot;环境准备&quot;&gt;环境准备&lt;/h2&gt;
+
+&lt;p&gt;在编译docker源码之前，需要安装docker-ce&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;yum install docker-ce -y
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h2 id=&quot;获取项目代码&quot;&gt;获取项目代码&lt;/h2&gt;
+
+&lt;p&gt;根据需求获取最新的docker/cli和moby/moby项目代码和切换版本&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;cd /root
+git clone https://github.com/docker/cli.git
+cd cli &amp;amp;&amp;amp; git checkout v20.10.7
+git clone https://github.com/moby/moby.git
+cd moby &amp;amp;&amp;amp; git checkout v20.10.7
+git clone https://github.com/docker/scan-cli-plugin.git
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;根据实际情况适当翻墙或者使用国内加速优化方式&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;h3 id=&quot;可选编译二进制文件&quot;&gt;【可选】编译二进制文件&lt;/h3&gt;
+
+&lt;p&gt;切换分支&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;cd cli
+git chekout 20.10
+
+cd moby
+git checkout 20.10
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;编译cli&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;make -f docker.Makefile binary
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;在build目录下是编译好的文件&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;编译moby&lt;/p&gt;
+
+&lt;p&gt;在git clone之前添加代理&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;hack/dockerfile/install/containerd.installer
+hack/dockerfile/install/dockercli.installer
+hack/dockerfile/install/proxy.installer
+hack/dockerfile/install/rootlesskit.installer
+hack/dockerfile/install/runc.installer
+hack/dockerfile/install/shfmt.installer
+hack/dockerfile/install/tini.installer
+hack/dockerfile/install/tomlv.installer
+hack/dockerfile/install/vndr.installe
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;编译&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;make binary
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;在bundles/binary-daemon/目录下是编译好的文件&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;验证，停止节点上的docker&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;systemctl stop docker.service
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;将之前编译的docker和dockerd替换&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;mv /usr/bin/docker /home/backup
+cp cli/build/docker /usr/bin/docker
+chmod +x /usr/bin/docker
+
+mv /usr/bin/dockerd /home/backup
+cp moby/bundles/binary-daemon/dockerd /usr/bin/dockerd
+chmod +x /usr/bin/dockerd
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;启动docker&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;systemctl start docker.service
+
+docker version
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;启动测试容器&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;docker pull alpine
+docker run alpine echo &quot;hello from alpine&quot;
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h3 id=&quot;编译rpm包&quot;&gt;编译RPM包&lt;/h3&gt;
+
+&lt;p&gt;获取打包项目代码&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;git clone https://github.com/docker/docker-ce-packaging.git
+cd docker-ce-packaging
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;【可选】根据需求切换分支&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;git checkout v20.10.0-beta1
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;注意：这里的版本建议和docker/cli等项目逇版本保持一致&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;创建代码目录&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;mkdir -p src/github.com/docker/
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;将上面git clone下来的代码放到对应目录&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;cp -r /root/cli src/github.com/docker/
+cp -r /root/moby src/github.com/docker/docker # 这里一定要改成docker名称，否则会出现一系列错误
+cp -r /root/scan-cli-plugin src/github.com/docker/
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;在对应项目里根据需求切换分支或者修改代码&lt;/p&gt;
+
+&lt;p&gt;【可选】设置docker项目https代理&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;vi ./src/github.com/docker/docker/hack/dockerfile/install/runc.installer
+vi ./src/github.com/docker/docker/hack/dockerfile/install/containerd.installer
+vi ./src/github.com/docker/docker/hack/dockerfile/install/dockercli.installer
+vi ./src/github.com/docker/docker/hack/dockerfile/install/proxy.installer
+vi ./src/github.com/docker/docker/hack/dockerfile/install/rootlesskit.installer
+vi ./src/github.com/docker/docker/hack/dockerfile/install/runc.installer
+vi ./src/github.com/docker/docker/hack/dockerfile/install/shfmt.installer
+vi ./src/github.com/docker/docker/hack/dockerfile/install/tini.installer
+vi ./src/github.com/docker/docker/hack/dockerfile/install/tomlv.installer
+vi ./src/github.com/docker/docker/hack/dockerfile/install/vndr.installer
+vi ./src/github.com/docker/docker/vendor/github.com/docker/libnetwork/network.go
+
+vi rpm/SPECS/docker-ce-cli.spec
+...
+%build
+export https_proxy=http://10.51.30.48:1080
+...
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;开始编译(根据需求选择对应的版本和系统)&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;cd rpm
+VERSION=20.10.7 make centos-7
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;生成的文件在&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;[root@localhost rpm]# pwd
+/root/docker-ce-packaging/rpm
+[root@localhost rpm]# ll rpmbuild/centos-7/RPMS/x86_64
+total 65428
+-rw-r--r-- 1 root root 23793492 Oct 20 18:47 docker-ce-20.10.7.chinac-3.el7.x86_64.rpm
+-rw-r--r-- 1 root root 31183248 Oct 20 18:51 docker-ce-cli-20.10.7.chinac-3.el7.x86_64.rpm
+-rw-r--r-- 1 root root  8424840 Oct 20 18:52 docker-ce-rootless-extras-20.10.7.chinac-3.el7.x86_64.rpm
+-rw-r--r-- 1 root root  3591600 Oct 20 18:53 docker-scan-plugin-0.8.0-3.el7.x86_64.rpm  
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h2 id=&quot;troubleshooting&quot;&gt;Troubleshooting&lt;/h2&gt;
+
+&lt;h3 id=&quot;clicomposeschemaschemago42-cannot-find-package-embed-in-any-of&quot;&gt;cli/compose/schema/schema.go:4:2: cannot find package “embed” in any of:&lt;/h3&gt;
+&lt;p&gt;低版本的golang会有这个问题，需要修改编译时指定的golang版本&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;vi common.tk
+...
+GO_VERSION=1.16.9 &amp;gt; 注意：不是升级本地的golang，是容器中的，所以只需要改下这个文件
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h2 id=&quot;参考&quot;&gt;参考&lt;/h2&gt;
+&lt;ul&gt;
+  &lt;li&gt;https://openpower.ic.unicamp.br/post/building-docker-for-power/&lt;/li&gt;
+  &lt;li&gt;https://www.fatalerrors.org/a/pull-and-compile-docker-ce.html&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+        <pubDate>Thu, 21 Oct 2021 00:00:00 +0000</pubDate>
+        <link>http://0.0.0.0:4000/blog/2021/10/21/docker-package/</link>
+        <guid isPermaLink="true">http://0.0.0.0:4000/blog/2021/10/21/docker-package/</guid>
+        
+        <category>docker</category>
+        
+        <category>docker-ce</category>
+        
+        
+      </item>
     
       <item>
         <title>Tungstenfabric CNI源码 -- NetworkPolicy</title>
@@ -2875,73 +3146,6 @@ run
         <category>golang</category>
         
         <category>gdb</category>
-        
-        
-      </item>
-    
-      <item>
-        <title>TungstenFabric Kubernetes Annotation</title>
-        <description>&lt;h2 id=&quot;annotation整理&quot;&gt;Annotation整理&lt;/h2&gt;
-
-&lt;table&gt;
-  &lt;thead&gt;
-    &lt;tr&gt;
-      &lt;th&gt;名称&lt;/th&gt;
-      &lt;th&gt;值&lt;/th&gt;
-      &lt;th&gt;说明&lt;/th&gt;
-    &lt;/tr&gt;
-  &lt;/thead&gt;
-  &lt;tbody&gt;
-    &lt;tr&gt;
-      &lt;td&gt;opencontrail.org/fip-pool&lt;/td&gt;
-      &lt;td&gt;”{‘domain’: ‘default-domain’, ‘project’: ‘ArcherAdmin’, ‘network’: ‘public1420’, ‘name’: ‘floating-ip-pool’}”&lt;/td&gt;
-      &lt;td&gt;指定fip-pool&lt;/td&gt;
-    &lt;/tr&gt;
-    &lt;tr&gt;
-      &lt;td&gt;opencontrail.org/network&lt;/td&gt;
-      &lt;td&gt;‘opencontrail.org/network’: ‘{“domain”:”default-domain”, “project”: “ArcherAdmin”, “name”:”test-net”}’&lt;/td&gt;
-      &lt;td&gt;指定network,如果设置在pod中，pod使用指定网络建网卡，如果指定在namespace中，则namespace中所有pod使用指定网络建网卡&lt;/td&gt;
-    &lt;/tr&gt;
-    &lt;tr&gt;
-      &lt;td&gt;opencontrail.org/isolation&lt;/td&gt;
-      &lt;td&gt;‘opencontrail.org/isolation’: ‘true’&lt;/td&gt;
-      &lt;td&gt;设置namespace是否隔离&lt;/td&gt;
-    &lt;/tr&gt;
-    &lt;tr&gt;
-      &lt;td&gt;opencontrail.org/ip_fabric_forwarding&lt;/td&gt;
-      &lt;td&gt;“opencontrail.org/ip_fabric_forwarding” : “true”&lt;/td&gt;
-      &lt;td&gt;使用fabric网络创建pod网卡&lt;/td&gt;
-    &lt;/tr&gt;
-    &lt;tr&gt;
-      &lt;td&gt;opencontrail.org/ip_fabric_snat&lt;/td&gt;
-      &lt;td&gt;“opencontrail.org/ip_fabric_snat” : “true”&lt;/td&gt;
-      &lt;td&gt;启用pod网络的fabric_snat&lt;/td&gt;
-    &lt;/tr&gt;
-    &lt;tr&gt;
-      &lt;td&gt;opencontrail.org/cidr&lt;/td&gt;
-      &lt;td&gt;“opencontrail.org/cidr” : “1.0.0.0/24”&lt;/td&gt;
-      &lt;td&gt;使用自定义网络（非contrail网络）时指定&lt;/td&gt;
-    &lt;/tr&gt;
-  &lt;/tbody&gt;
-&lt;/table&gt;
-
-&lt;h2 id=&quot;参考&quot;&gt;参考&lt;/h2&gt;
-
-&lt;ul&gt;
-  &lt;li&gt;https://github.com/kubevirt/user-guide/pull/196/files/700980d5099b969c4fe2defb3773ec84e628a207&lt;/li&gt;
-  &lt;li&gt;https://www.juniper.net/documentation/en_US/day-one-books/topics/concept/contrail-as-a-cni.html&lt;/li&gt;
-  &lt;li&gt;https://www.juniper.net/documentation/en_US/contrail19/topics/concept/kubernetes-cni-contrail.html&lt;/li&gt;
-&lt;/ul&gt;
-</description>
-        <pubDate>Wed, 27 Jan 2021 00:00:00 +0000</pubDate>
-        <link>http://0.0.0.0:4000/blog/2021/01/27/tf-k8s-annotation/</link>
-        <guid isPermaLink="true">http://0.0.0.0:4000/blog/2021/01/27/tf-k8s-annotation/</guid>
-        
-        <category>kubernetes</category>
-        
-        <category>tungstenfabric</category>
-        
-        <category>annotation</category>
         
         
       </item>
