@@ -101,8 +101,7 @@ go test命令行参数介绍
 
     go test -p 1 -vet=off -v -count=1 -tags=integ ./tests/integration/telemetry/... -timeout 30m \
     --istio.test.istio.istiodlessRemotes --istio.test.ci --istio.test.work_dir=/logs/artifacts \
-    --istio.test.tag=1.12-dev --istio.test.pullpolicy=IfNotPresent \
-    --istio.test.hub=harbor.huayun.org/huayun-kubernetes/istio-testing
+    --istio.test.tag=1.12-dev --istio.test.pullpolicy=IfNotPresent
     
 telemetry失败case:
 - TestVMTelemetry: 依赖谷歌的GCP项目 <https://github.com/istio/istio/issues/35923>，需要临时删除这个case： git rm -r tests/integration/telemetry/stackdriver/vm/
@@ -114,8 +113,7 @@ telemetry失败case:
     --istio.test.pullpolicy=IfNotPresent --istio.test.skip TestAuthorization_JWT \
     --istio.test.skip TestAuthorization_EgressGateway \
     --istio.test.skip TestRequestAuthentication \
-    --istio.test.skip TestIngressRequestAuthentication \
-    --istio.test.hub=harbor.huayun.org/huayun-kubernetes/istio-testing
+    --istio.test.skip TestIngressRequestAuthentication
 
 security失败case:
 - TestAuthorization_JWT:
@@ -129,8 +127,7 @@ security失败case:
     --istio.test.work_dir=/logs/artifacts --istio.test.tag=1.12-dev \
     --istio.test.pullpolicy=IfNotPresent --istio.test.skip TestCustomGateway \
     --istio.test.skip TestTproxy \
-    --istio.test.skip TestTraffic \
-    --istio.test.hub=harbor.huayun.org/huayun-kubernetes/istio-testing
+    --istio.test.skip TestTraffic
     
 pilot失败case
 - TestCustomGateway
@@ -141,15 +138,13 @@ pilot失败case
 
     go test -p 1 -vet=off -v -count=1 -tags=integ ./tests/integration/helm/... -timeout 30m \
     --istio.test.work_dir=/logs/artifacts --istio.test.tag=1.12-dev \
-    --istio.test.pullpolicy=IfNotPresent \
-    --istio.test.hub=harbor.huayun.org/huayun-kubernetes/istio-testing
+    --istio.test.pullpolicy=IfNotPresent
 
 ### operator集成测试
 
     go test -p 1 -vet=off -v -count=1 -tags=integ ./tests/integration/operator/... -timeout 30m \
     --istio.test.work_dir=/logs/artifacts --istio.test.tag=1.12-dev \
-    --istio.test.pullpolicy=IfNotPresent \
-    --istio.test.hub=harbor.huayun.org/huayun-kubernetes/istio-testing
+    --istio.test.pullpolicy=IfNotPresent
 
 ### 总结
 
