@@ -5,9 +5,337 @@
     <description>Hujin，Openstack &amp; SDN &amp; Kubernetes Lover，Software Engineer，| 与你一起发现更大的世界</description>
     <link>http://0.0.0.0:4000/blog/</link>
     <atom:link href="http://0.0.0.0:4000/blog/feed.xml" rel="self" type="application/rss+xml" />
-    <pubDate>Thu, 21 Oct 2021 03:01:51 +0000</pubDate>
-    <lastBuildDate>Thu, 21 Oct 2021 03:01:51 +0000</lastBuildDate>
+    <pubDate>Fri, 24 Dec 2021 03:04:21 +0000</pubDate>
+    <lastBuildDate>Fri, 24 Dec 2021 03:04:21 +0000</lastBuildDate>
     <generator>Jekyll v4.2.0</generator>
+    
+      <item>
+        <title>Istio集成测试</title>
+        <description>&lt;h2 id=&quot;简介&quot;&gt;简介&lt;/h2&gt;
+&lt;p&gt;istio集成测试使用go test，会自动读取源码目录下面名为 *_test.go 的文件，生成并运行测试用的可执行文件。istio集成测试脚本中根据case定义一般会先部署istio集群，再部署对应的echo instance，最后执行具体的case。&lt;/p&gt;
+
+&lt;h2 id=&quot;准备&quot;&gt;准备&lt;/h2&gt;
+&lt;p&gt;修改master节点apiserver参数
+这里需要支持第三方token(third-party-token)，默认k8s使用first-party-jwt&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;cat /etc/kubernetes/manifests/kube-apiserver.yaml
+...
+- --service-account-signing-key-file=/etc/kubernetes/ssl/sa.key
+- --service-account-key-file=/etc/kubernetes/ssl/sa.pub
+- --service-account-issuer=api
+- --service-account-api-audiences=api,vault,factors
+...
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;安装metallb组件&lt;/p&gt;
+
+&lt;p&gt;由于istio集成测试时会部署loadbalancer类型的service，在独立的k8s环境中没有上有的LB提供服务，因此需要引入metallb组件&lt;/p&gt;
+
+&lt;p&gt;metallb分为l2模式和bgp模式，这里我们使用l2模式&lt;/p&gt;
+
+&lt;p&gt;开启strictARP&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;# see what changes would be made, returns nonzero returncode if different
+kubectl get configmap kube-proxy -n kube-system -o yaml | \
+sed -e &quot;s/strictARP: false/strictARP: true/&quot; | \
+kubectl diff -f - -n kube-system
+
+# actually apply the changes, returns nonzero returncode on errors only
+kubectl get configmap kube-proxy -n kube-system -o yaml | \
+sed -e &quot;s/strictARP: false/strictARP: true/&quot; | \
+kubectl apply -f - -n kube-system
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;创建metallb-system namespace&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.11.0/manifests/namespace.yaml
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;下载configmap，并修改address参数，预留一段k8s管理网络IP段给Loadbalancer类型的service使用&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;wget https://github.com/metallb/metallb/blob/v0.11.0/manifests/example-layer2-config.yaml
+vi example-layer2-config.yaml
+mv example-layer2-config.yaml l2-config.yaml
+kubectl apply -f l2-config.yaml
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;安装metallb speaker和controller等资源&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.11.0/manifests/metallb.yaml
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;提前下载的镜像&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;gcr.io/istio-testing/app:1.12-dev
+gcr.io/istio-testing/operator:1.12-dev
+gcr.io/istio-testing/proxyv2:1.12-dev
+gcr.io/istio-testing/pilot:1.12-dev
+gcr.io/istio-testing/app_sidecar_ubuntu_bionic:1.12-dev
+gcr.io/istio-testing/fake-gce-metadata:1.0
+gcr.io/istio-testing/ext-authz:0.7
+
+jimmidyson/configmap-reload:v0.5.0
+envoyproxy/ratelimit:6f5de117
+openzipkin/zipkin-slim:2.23.0
+gcr.io/istio-release/pilot:1.6.11
+gcr.io/istio-release/pilot:1.7.6
+gcr.io/istio-release/pilot:1.8.6
+gcr.io/istio-release/pilot:1.9.5
+gcr.io/istio-release/pilot:1.10.0
+gcr.io/istio-release/proxyv2:1.11.3
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;下载istio源码，当前测试的版本是release-1.12&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;git clone https://github.com/istio/istio.git -b release-1.12
+cd istio
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h2 id=&quot;集成测试&quot;&gt;集成测试&lt;/h2&gt;
+&lt;p&gt;go test命令行参数介绍&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;-p 允许并行执行通过调用 t.Parallel 的测试函数的最大次数&lt;/li&gt;
+  &lt;li&gt;-vet 在 “go test “期间对 “go vet ” 的调用，以使用逗号分隔的vet检查列表, off表示不执行go vet&lt;/li&gt;
+  &lt;li&gt;-v 显示测试的详细命令&lt;/li&gt;
+  &lt;li&gt;-count 运行每个测试和基准测试的次数（默认 1）&lt;/li&gt;
+  &lt;li&gt;-timeout 执行二进制文件超时时间，超过会报panic&lt;/li&gt;
+  &lt;li&gt;-tags&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 id=&quot;telemetry集成测试&quot;&gt;telemetry集成测试&lt;/h3&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;go test -p 1 -vet=off -v -count=1 -tags=integ ./tests/integration/telemetry/... -timeout 30m \
+--istio.test.istio.istiodlessRemotes --istio.test.ci --istio.test.work_dir=/logs/artifacts \
+--istio.test.tag=1.12-dev --istio.test.pullpolicy=IfNotPresent \
+--istio.test.hub=harbor.huayun.org/huayun-kubernetes/istio-testing
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;telemetry失败case:&lt;/p&gt;
+&lt;ul&gt;
+  &lt;li&gt;TestVMTelemetry: 依赖谷歌的GCP项目 &lt;a href=&quot;https://github.com/istio/istio/issues/35923&quot;&gt;https://github.com/istio/istio/issues/35923&lt;/a&gt;，需要临时删除这个case： git rm -r tests/integration/telemetry/stackdriver/vm/&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 id=&quot;security集成测试&quot;&gt;security集成测试&lt;/h3&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;go test -p 1 -vet=off -v -count=1 -tags=integ ./tests/integration/security/... -timeout 30m \
+--istio.test.work_dir=/logs/artifacts --istio.test.tag=1.12-dev \
+--istio.test.pullpolicy=IfNotPresent --istio.test.skip TestAuthorization_JWT \
+--istio.test.skip TestAuthorization_EgressGateway \
+--istio.test.skip TestRequestAuthentication \
+--istio.test.skip TestIngressRequestAuthentication \
+--istio.test.hub=harbor.huayun.org/huayun-kubernetes/istio-testing
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;security失败case:&lt;/p&gt;
+&lt;ul&gt;
+  &lt;li&gt;TestAuthorization_JWT:&lt;/li&gt;
+  &lt;li&gt;TestAuthorization_EgressGateway:&lt;/li&gt;
+  &lt;li&gt;TestRequestAuthentication:&lt;/li&gt;
+  &lt;li&gt;TestIngressRequestAuthentication:&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 id=&quot;pilot集成测试&quot;&gt;pilot集成测试&lt;/h3&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;go test -p 1 -vet=off -v -count=1 -tags=integ ./tests/integration/pilot/... -timeout 30m \
+--istio.test.work_dir=/logs/artifacts --istio.test.tag=1.12-dev \
+--istio.test.pullpolicy=IfNotPresent --istio.test.skip TestCustomGateway \
+--istio.test.skip TestTproxy \
+--istio.test.skip TestTraffic \
+--istio.test.hub=harbor.huayun.org/huayun-kubernetes/istio-testing
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;pilot失败case&lt;/p&gt;
+&lt;ul&gt;
+  &lt;li&gt;TestCustomGateway&lt;/li&gt;
+  &lt;li&gt;TestTproxy&lt;/li&gt;
+  &lt;li&gt;TestTraffic&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 id=&quot;helm集成测试&quot;&gt;helm集成测试&lt;/h3&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;go test -p 1 -vet=off -v -count=1 -tags=integ ./tests/integration/helm/... -timeout 30m \
+--istio.test.work_dir=/logs/artifacts --istio.test.tag=1.12-dev \
+--istio.test.pullpolicy=IfNotPresent \
+--istio.test.hub=harbor.huayun.org/huayun-kubernetes/istio-testing
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h3 id=&quot;operator集成测试&quot;&gt;operator集成测试&lt;/h3&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;go test -p 1 -vet=off -v -count=1 -tags=integ ./tests/integration/operator/... -timeout 30m \
+--istio.test.work_dir=/logs/artifacts --istio.test.tag=1.12-dev \
+--istio.test.pullpolicy=IfNotPresent \
+--istio.test.hub=harbor.huayun.org/huayun-kubernetes/istio-testing
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h3 id=&quot;总结&quot;&gt;总结&lt;/h3&gt;
+
+&lt;table&gt;
+  &lt;thead&gt;
+    &lt;tr&gt;
+      &lt;th&gt;组件&lt;/th&gt;
+      &lt;th&gt;case数量(total:nopass)&lt;/th&gt;
+      &lt;th&gt;执行时间（m）&lt;/th&gt;
+      &lt;th&gt;备注&lt;/th&gt;
+    &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+    &lt;tr&gt;
+      &lt;td&gt;helm&lt;/td&gt;
+      &lt;td&gt;7:7&lt;/td&gt;
+      &lt;td&gt;6&lt;/td&gt;
+      &lt;td&gt; &lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;operator&lt;/td&gt;
+      &lt;td&gt;3:0&lt;/td&gt;
+      &lt;td&gt;6&lt;/td&gt;
+      &lt;td&gt; &lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;pilot&lt;/td&gt;
+      &lt;td&gt;60:3&lt;/td&gt;
+      &lt;td&gt;18&lt;/td&gt;
+      &lt;td&gt; &lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;security&lt;/td&gt;
+      &lt;td&gt;48:4&lt;/td&gt;
+      &lt;td&gt;12&lt;/td&gt;
+      &lt;td&gt;都和jwt相关&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;telemetry&lt;/td&gt;
+      &lt;td&gt;32:1&lt;/td&gt;
+      &lt;td&gt;30&lt;/td&gt;
+      &lt;td&gt;依赖谷歌的GCP项目，无法执行通过&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;总计&lt;/td&gt;
+      &lt;td&gt;150：15&lt;/td&gt;
+      &lt;td&gt;72&lt;/td&gt;
+      &lt;td&gt; &lt;/td&gt;
+    &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+
+&lt;p&gt;注意：执行完成后需要执行清理操作，防止残留&lt;/p&gt;
+
+&lt;h2 id=&quot;清理脚本&quot;&gt;清理脚本&lt;/h2&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;for ns in default ingress-nginx metallb-system;
+do
+kubectl delete cm istio-ca-root-cert -n $ns;
+done
+
+for ns in 1- service- se- app- istio- gce-metadata default- stable- external- echo- test-ns canary;
+do
+for i in `kubectl get ns |grep $ns |awk &apos;{print $1}&apos;`;do kubectl delete all --all -n $i --force &amp;amp;&amp;amp; kubectl delete cm -n $i istio-ca-root-cert &amp;amp; done;
+done
+
+for ns in 1- service- se- app- istio- gce-metadata default- stable- external- echo- test-ns canary;
+do
+for i in `kubectl get ns |grep $ns |awk &apos;{print $1}&apos;`;do kubectl delete namespace $i --force;done;
+done
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h2 id=&quot;参考&quot;&gt;参考&lt;/h2&gt;
+&lt;ul&gt;
+  &lt;li&gt;集成测试官方文档：https://github.com/istio/istio/tree/master/tests/integration&lt;/li&gt;
+  &lt;li&gt;metallb部署：https://metallb.universe.tf/installation/&lt;/li&gt;
+  &lt;li&gt;jwt配置：https://imroc.cc/istio/troubleshooting/istio-token-setup-failed-for-volume-istio-token/&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+        <pubDate>Fri, 24 Dec 2021 00:00:00 +0000</pubDate>
+        <link>http://0.0.0.0:4000/blog/2021/12/24/istio-integration-test/</link>
+        <guid isPermaLink="true">http://0.0.0.0:4000/blog/2021/12/24/istio-integration-test/</guid>
+        
+        <category>istio</category>
+        
+        <category>integration-test</category>
+        
+        
+      </item>
     
       <item>
         <title>DockerCE20.10版本打包流程</title>
@@ -3101,51 +3429,6 @@ statefulset中其中一个pod所在节点down机后，不新建pod&lt;/p&gt;
         <category>csi</category>
         
         <category>cinder</category>
-        
-        
-      </item>
-    
-      <item>
-        <title>Golang Debug -- gdb</title>
-        <description>&lt;h2 id=&quot;获取源码并编译&quot;&gt;获取源码并编译&lt;/h2&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;git clone https://github.com/coredns/coredns.git
-cd coredns
-go build -gcflags &quot;-N -l&quot; coredns.go
-
-yum install -y gdb
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;h2 id=&quot;debug&quot;&gt;debug&lt;/h2&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;gdb coredns
-b coredns.go:11
-run
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;h2 id=&quot;参考&quot;&gt;参考&lt;/h2&gt;
-
-&lt;ul&gt;
-  &lt;li&gt;https://github.com/kubevirt/user-guide/pull/196/files/700980d5099b969c4fe2defb3773ec84e628a207&lt;/li&gt;
-  &lt;li&gt;https://www.juniper.net/documentation/en_US/day-one-books/topics/concept/contrail-as-a-cni.html&lt;/li&gt;
-  &lt;li&gt;https://www.juniper.net/documentation/en_US/contrail19/topics/concept/kubernetes-cni-contrail.html&lt;/li&gt;
-&lt;/ul&gt;
-</description>
-        <pubDate>Thu, 04 Mar 2021 00:00:00 +0000</pubDate>
-        <link>http://0.0.0.0:4000/blog/2021/03/04/k8s-gdb/</link>
-        <guid isPermaLink="true">http://0.0.0.0:4000/blog/2021/03/04/k8s-gdb/</guid>
-        
-        <category>golang</category>
-        
-        <category>gdb</category>
         
         
       </item>

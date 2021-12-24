@@ -234,6 +234,55 @@
             ">
     			
 <div class="post-preview">
+    <a href="/blog/2021/03/04/k8s-gdb/">
+        <h2 class="post-title">
+            Golang Debug -- gdb
+        </h2>
+        
+        <h3 class="post-subtitle">
+            
+        </h3>
+        
+        <div class="post-content-preview">
+            
+                获取源码并编译
+
+1
+2
+3
+4
+5
+git clone https://github.com/coredns/coredns.git
+cd coredns
+go build -gcflags "-N -l" coredns.go
+
+yum install -y gdb
+
+
+debug
+
+1
+2
+3
+gdb coredns
+b coredns.go:11
+run
+
+
+参考
+
+
+  https...
+            
+        </div>
+    </a>
+    <p class="post-meta">
+        Posted by hujin on March 4, 2021
+    </p>
+</div>
+<hr>
+
+<div class="post-preview">
     <a href="/blog/2021/01/27/tf-k8s-annotation/">
         <h2 class="post-title">
             TungstenFabric Kubernetes Annotation
@@ -396,22 +445,27 @@ OIDC是一种 OAuth2 认证方式， 被某些 OAuth2 提供者支持，例如 A
         
         
         
-                <a data-sort="0010" 
+                <a data-sort="0011" 
                     href="/blog/archive/?tag=kubernetes"
                     title="kubernetes"
                     rel="4">kubernetes</a>
         
-                <a data-sort="0007" 
+                <a data-sort="0008" 
                     href="/blog/archive/?tag=k8s"
                     title="k8s"
                     rel="7">k8s</a>
         
-                <a data-sort="0009" 
+                <a data-sort="0010" 
                     href="/blog/archive/?tag=cni"
                     title="cni"
                     rel="5">cni</a>
         
-                <a data-sort="0012" 
+                <a data-sort="0013" 
+                    href="/blog/archive/?tag=istio"
+                    title="istio"
+                    rel="2">istio</a>
+        
+                <a data-sort="0013" 
                     href="/blog/archive/?tag=tungstenfabric"
                     title="tungstenfabric"
                     rel="2">tungstenfabric</a>

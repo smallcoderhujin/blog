@@ -1,0 +1,315 @@
+I"e-<h2 id="简介">简介</h2>
+<p>istio集成测试使用go test，会自动读取源码目录下面名为 *_test.go 的文件，生成并运行测试用的可执行文件。istio集成测试脚本中根据case定义一般会先部署istio集群，再部署对应的echo instance，最后执行具体的case。</p>
+
+<h2 id="准备">准备</h2>
+<p>修改master节点apiserver参数
+这里需要支持第三方token(third-party-token)，默认k8s使用first-party-jwt</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+</pre></td><td class="rouge-code"><pre>cat /etc/kubernetes/manifests/kube-apiserver.yaml
+...
+- --service-account-signing-key-file=/etc/kubernetes/ssl/sa.key
+- --service-account-key-file=/etc/kubernetes/ssl/sa.pub
+- --service-account-issuer=api
+- --service-account-api-audiences=api,vault,factors
+...
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>安装metallb组件</p>
+
+<p>由于istio集成测试时会部署loadbalancer类型的service，在独立的k8s环境中没有上有的LB提供服务，因此需要引入metallb组件</p>
+
+<p>metallb分为l2模式和bgp模式，这里我们使用l2模式</p>
+
+<p>开启strictARP</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+</pre></td><td class="rouge-code"><pre># see what changes would be made, returns nonzero returncode if different
+kubectl get configmap kube-proxy -n kube-system -o yaml | \
+sed -e "s/strictARP: false/strictARP: true/" | \
+kubectl diff -f - -n kube-system
+
+# actually apply the changes, returns nonzero returncode on errors only
+kubectl get configmap kube-proxy -n kube-system -o yaml | \
+sed -e "s/strictARP: false/strictARP: true/" | \
+kubectl apply -f - -n kube-system
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>创建metallb-system namespace</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+</pre></td><td class="rouge-code"><pre>kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.11.0/manifests/namespace.yaml
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>下载configmap，并修改address参数，预留一段k8s管理网络IP段给Loadbalancer类型的service使用</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+</pre></td><td class="rouge-code"><pre>wget https://github.com/metallb/metallb/blob/v0.11.0/manifests/example-layer2-config.yaml
+vi example-layer2-config.yaml
+mv example-layer2-config.yaml l2-config.yaml
+kubectl apply -f l2-config.yaml
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>安装metallb speaker和controller等资源</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+</pre></td><td class="rouge-code"><pre>kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.11.0/manifests/metallb.yaml
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>提前下载的镜像</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+</pre></td><td class="rouge-code"><pre>gcr.io/istio-testing/app:1.12-dev
+gcr.io/istio-testing/operator:1.12-dev
+gcr.io/istio-testing/proxyv2:1.12-dev
+gcr.io/istio-testing/pilot:1.12-dev
+gcr.io/istio-testing/app_sidecar_ubuntu_bionic:1.12-dev
+gcr.io/istio-testing/fake-gce-metadata:1.0
+gcr.io/istio-testing/ext-authz:0.7
+
+jimmidyson/configmap-reload:v0.5.0
+envoyproxy/ratelimit:6f5de117
+openzipkin/zipkin-slim:2.23.0
+gcr.io/istio-release/pilot:1.6.11
+gcr.io/istio-release/pilot:1.7.6
+gcr.io/istio-release/pilot:1.8.6
+gcr.io/istio-release/pilot:1.9.5
+gcr.io/istio-release/pilot:1.10.0
+gcr.io/istio-release/proxyv2:1.11.3
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>下载istio源码，当前测试的版本是release-1.12</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+</pre></td><td class="rouge-code"><pre>git clone https://github.com/istio/istio.git -b release-1.12
+cd istio
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<h2 id="集成测试">集成测试</h2>
+<p>go test命令行参数介绍</p>
+
+<ul>
+  <li>-p 允许并行执行通过调用 t.Parallel 的测试函数的最大次数</li>
+  <li>-vet 在 “go test “期间对 “go vet ” 的调用，以使用逗号分隔的vet检查列表, off表示不执行go vet</li>
+  <li>-v 显示测试的详细命令</li>
+  <li>-count 运行每个测试和基准测试的次数（默认 1）</li>
+  <li>-timeout 执行二进制文件超时时间，超过会报panic</li>
+  <li>-tags</li>
+</ul>
+
+<h3 id="telemetry集成测试">telemetry集成测试</h3>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+</pre></td><td class="rouge-code"><pre>go test -p 1 -vet=off -v -count=1 -tags=integ ./tests/integration/telemetry/... -timeout 30m \
+--istio.test.istio.istiodlessRemotes --istio.test.ci --istio.test.work_dir=/logs/artifacts \
+--istio.test.tag=1.12-dev --istio.test.pullpolicy=IfNotPresent \
+--istio.test.hub=harbor.huayun.org/huayun-kubernetes/istio-testing
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>telemetry失败case:</p>
+<ul>
+  <li>TestVMTelemetry: 依赖谷歌的GCP项目 <a href="https://github.com/istio/istio/issues/35923">https://github.com/istio/istio/issues/35923</a>，需要临时删除这个case： git rm -r tests/integration/telemetry/stackdriver/vm/</li>
+</ul>
+
+<h3 id="security集成测试">security集成测试</h3>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+</pre></td><td class="rouge-code"><pre>go test -p 1 -vet=off -v -count=1 -tags=integ ./tests/integration/security/... -timeout 30m \
+--istio.test.work_dir=/logs/artifacts --istio.test.tag=1.12-dev \
+--istio.test.pullpolicy=IfNotPresent --istio.test.skip TestAuthorization_JWT \
+--istio.test.skip TestAuthorization_EgressGateway \
+--istio.test.skip TestRequestAuthentication \
+--istio.test.skip TestIngressRequestAuthentication \
+--istio.test.hub=harbor.huayun.org/huayun-kubernetes/istio-testing
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>security失败case:</p>
+<ul>
+  <li>TestAuthorization_JWT:</li>
+  <li>TestAuthorization_EgressGateway:</li>
+  <li>TestRequestAuthentication:</li>
+  <li>TestIngressRequestAuthentication:</li>
+</ul>
+
+<h3 id="pilot集成测试">pilot集成测试</h3>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+</pre></td><td class="rouge-code"><pre>go test -p 1 -vet=off -v -count=1 -tags=integ ./tests/integration/pilot/... -timeout 30m \
+--istio.test.work_dir=/logs/artifacts --istio.test.tag=1.12-dev \
+--istio.test.pullpolicy=IfNotPresent --istio.test.skip TestCustomGateway \
+--istio.test.skip TestTproxy \
+--istio.test.skip TestTraffic \
+--istio.test.hub=harbor.huayun.org/huayun-kubernetes/istio-testing
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>pilot失败case</p>
+<ul>
+  <li>TestCustomGateway</li>
+  <li>TestTproxy</li>
+  <li>TestTraffic</li>
+</ul>
+
+<h3 id="helm集成测试">helm集成测试</h3>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+</pre></td><td class="rouge-code"><pre>go test -p 1 -vet=off -v -count=1 -tags=integ ./tests/integration/helm/... -timeout 30m \
+--istio.test.work_dir=/logs/artifacts --istio.test.tag=1.12-dev \
+--istio.test.pullpolicy=IfNotPresent \
+--istio.test.hub=harbor.huayun.org/huayun-kubernetes/istio-testing
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<h3 id="operator集成测试">operator集成测试</h3>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+</pre></td><td class="rouge-code"><pre>go test -p 1 -vet=off -v -count=1 -tags=integ ./tests/integration/operator/... -timeout 30m \
+--istio.test.work_dir=/logs/artifacts --istio.test.tag=1.12-dev \
+--istio.test.pullpolicy=IfNotPresent \
+--istio.test.hub=harbor.huayun.org/huayun-kubernetes/istio-testing
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<h3 id="总结">总结</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>组件</th>
+      <th>case数量(total:nopass)</th>
+      <th>执行时间（m）</th>
+      <th>备注</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>helm</td>
+      <td>7:7</td>
+      <td>6</td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td>operator</td>
+      <td>3:0</td>
+      <td>6</td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td>pilot</td>
+      <td>60:3</td>
+      <td>18</td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td>security</td>
+      <td>48:4</td>
+      <td>12</td>
+      <td>都和jwt相关</td>
+    </tr>
+    <tr>
+      <td>telemetry</td>
+      <td>32:1</td>
+      <td>30</td>
+      <td>依赖谷歌的GCP项目，无法执行通过</td>
+    </tr>
+    <tr>
+      <td>总计</td>
+      <td>150：15</td>
+      <td>72</td>
+      <td> </td>
+    </tr>
+  </tbody>
+</table>
+
+<p>注意：执行完成后需要执行清理操作，防止残留</p>
+
+<h2 id="清理脚本">清理脚本</h2>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+</pre></td><td class="rouge-code"><pre>for ns in default ingress-nginx metallb-system;
+do
+kubectl delete cm istio-ca-root-cert -n $ns;
+done
+
+for ns in 1- service- se- app- istio- gce-metadata default- stable- external- echo- test-ns canary;
+do
+for i in `kubectl get ns |grep $ns |awk '{print $1}'`;do kubectl delete all --all -n $i --force &amp;&amp; kubectl delete cm -n $i istio-ca-root-cert &amp; done;
+done
+
+for ns in 1- service- se- app- istio- gce-metadata default- stable- external- echo- test-ns canary;
+do
+for i in `kubectl get ns |grep $ns |awk '{print $1}'`;do kubectl delete namespace $i --force;done;
+done
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<h2 id="参考">参考</h2>
+<ul>
+  <li>集成测试官方文档：https://github.com/istio/istio/tree/master/tests/integration</li>
+  <li>metallb部署：https://metallb.universe.tf/installation/</li>
+  <li>jwt配置：https://imroc.cc/istio/troubleshooting/istio-token-setup-failed-for-volume-istio-token/</li>
+</ul>
+:ET
