@@ -5,8 +5,8 @@
     <description>Hujin，Openstack &amp; SDN &amp; Kubernetes Lover，Software Engineer，| 与你一起发现更大的世界</description>
     <link>http://0.0.0.0:4000/blog/</link>
     <atom:link href="http://0.0.0.0:4000/blog/feed.xml" rel="self" type="application/rss+xml" />
-    <pubDate>Fri, 24 Dec 2021 03:04:21 +0000</pubDate>
-    <lastBuildDate>Fri, 24 Dec 2021 03:04:21 +0000</lastBuildDate>
+    <pubDate>Fri, 24 Dec 2021 05:32:38 +0000</pubDate>
+    <lastBuildDate>Fri, 24 Dec 2021 05:32:38 +0000</lastBuildDate>
     <generator>Jekyll v4.2.0</generator>
     
       <item>
@@ -149,11 +149,9 @@ cd istio
 &lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
 2
 3
-4
 &lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;go test -p 1 -vet=off -v -count=1 -tags=integ ./tests/integration/telemetry/... -timeout 30m \
 --istio.test.istio.istiodlessRemotes --istio.test.ci --istio.test.work_dir=/logs/artifacts \
---istio.test.tag=1.12-dev --istio.test.pullpolicy=IfNotPresent \
---istio.test.hub=harbor.huayun.org/huayun-kubernetes/istio-testing
+--istio.test.tag=1.12-dev --istio.test.pullpolicy=IfNotPresent
 &lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
 
 &lt;p&gt;telemetry失败case:&lt;/p&gt;
@@ -169,14 +167,12 @@ cd istio
 4
 5
 6
-7
 &lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;go test -p 1 -vet=off -v -count=1 -tags=integ ./tests/integration/security/... -timeout 30m \
 --istio.test.work_dir=/logs/artifacts --istio.test.tag=1.12-dev \
 --istio.test.pullpolicy=IfNotPresent --istio.test.skip TestAuthorization_JWT \
 --istio.test.skip TestAuthorization_EgressGateway \
 --istio.test.skip TestRequestAuthentication \
---istio.test.skip TestIngressRequestAuthentication \
---istio.test.hub=harbor.huayun.org/huayun-kubernetes/istio-testing
+--istio.test.skip TestIngressRequestAuthentication
 &lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
 
 &lt;p&gt;security失败case:&lt;/p&gt;
@@ -194,13 +190,11 @@ cd istio
 3
 4
 5
-6
 &lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;go test -p 1 -vet=off -v -count=1 -tags=integ ./tests/integration/pilot/... -timeout 30m \
 --istio.test.work_dir=/logs/artifacts --istio.test.tag=1.12-dev \
 --istio.test.pullpolicy=IfNotPresent --istio.test.skip TestCustomGateway \
 --istio.test.skip TestTproxy \
---istio.test.skip TestTraffic \
---istio.test.hub=harbor.huayun.org/huayun-kubernetes/istio-testing
+--istio.test.skip TestTraffic
 &lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
 
 &lt;p&gt;pilot失败case&lt;/p&gt;
@@ -215,11 +209,9 @@ cd istio
 &lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
 2
 3
-4
 &lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;go test -p 1 -vet=off -v -count=1 -tags=integ ./tests/integration/helm/... -timeout 30m \
 --istio.test.work_dir=/logs/artifacts --istio.test.tag=1.12-dev \
---istio.test.pullpolicy=IfNotPresent \
---istio.test.hub=harbor.huayun.org/huayun-kubernetes/istio-testing
+--istio.test.pullpolicy=IfNotPresent
 &lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
 
 &lt;h3 id=&quot;operator集成测试&quot;&gt;operator集成测试&lt;/h3&gt;
@@ -227,11 +219,9 @@ cd istio
 &lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
 2
 3
-4
 &lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;go test -p 1 -vet=off -v -count=1 -tags=integ ./tests/integration/operator/... -timeout 30m \
 --istio.test.work_dir=/logs/artifacts --istio.test.tag=1.12-dev \
---istio.test.pullpolicy=IfNotPresent \
---istio.test.hub=harbor.huayun.org/huayun-kubernetes/istio-testing
+--istio.test.pullpolicy=IfNotPresent
 &lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
 
 &lt;h3 id=&quot;总结&quot;&gt;总结&lt;/h3&gt;

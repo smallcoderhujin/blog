@@ -405,11 +405,9 @@ cd istio
 <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
 2
 3
-4
 </pre></td><td class="rouge-code"><pre>go test -p 1 -vet=off -v -count=1 -tags=integ ./tests/integration/telemetry/... -timeout 30m \
 --istio.test.istio.istiodlessRemotes --istio.test.ci --istio.test.work_dir=/logs/artifacts \
---istio.test.tag=1.12-dev --istio.test.pullpolicy=IfNotPresent \
---istio.test.hub=harbor.huayun.org/huayun-kubernetes/istio-testing
+--istio.test.tag=1.12-dev --istio.test.pullpolicy=IfNotPresent
 </pre></td></tr></tbody></table></code></pre></div></div>
 
 <p>telemetry失败case:</p>
@@ -425,14 +423,12 @@ cd istio
 4
 5
 6
-7
 </pre></td><td class="rouge-code"><pre>go test -p 1 -vet=off -v -count=1 -tags=integ ./tests/integration/security/... -timeout 30m \
 --istio.test.work_dir=/logs/artifacts --istio.test.tag=1.12-dev \
 --istio.test.pullpolicy=IfNotPresent --istio.test.skip TestAuthorization_JWT \
 --istio.test.skip TestAuthorization_EgressGateway \
 --istio.test.skip TestRequestAuthentication \
---istio.test.skip TestIngressRequestAuthentication \
---istio.test.hub=harbor.huayun.org/huayun-kubernetes/istio-testing
+--istio.test.skip TestIngressRequestAuthentication
 </pre></td></tr></tbody></table></code></pre></div></div>
 
 <p>security失败case:</p>
@@ -450,13 +446,11 @@ cd istio
 3
 4
 5
-6
 </pre></td><td class="rouge-code"><pre>go test -p 1 -vet=off -v -count=1 -tags=integ ./tests/integration/pilot/... -timeout 30m \
 --istio.test.work_dir=/logs/artifacts --istio.test.tag=1.12-dev \
 --istio.test.pullpolicy=IfNotPresent --istio.test.skip TestCustomGateway \
 --istio.test.skip TestTproxy \
---istio.test.skip TestTraffic \
---istio.test.hub=harbor.huayun.org/huayun-kubernetes/istio-testing
+--istio.test.skip TestTraffic
 </pre></td></tr></tbody></table></code></pre></div></div>
 
 <p>pilot失败case</p>
@@ -471,11 +465,9 @@ cd istio
 <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
 2
 3
-4
 </pre></td><td class="rouge-code"><pre>go test -p 1 -vet=off -v -count=1 -tags=integ ./tests/integration/helm/... -timeout 30m \
 --istio.test.work_dir=/logs/artifacts --istio.test.tag=1.12-dev \
---istio.test.pullpolicy=IfNotPresent \
---istio.test.hub=harbor.huayun.org/huayun-kubernetes/istio-testing
+--istio.test.pullpolicy=IfNotPresent
 </pre></td></tr></tbody></table></code></pre></div></div>
 
 <h3 id="operator集成测试">operator集成测试</h3>
@@ -483,11 +475,9 @@ cd istio
 <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
 2
 3
-4
 </pre></td><td class="rouge-code"><pre>go test -p 1 -vet=off -v -count=1 -tags=integ ./tests/integration/operator/... -timeout 30m \
 --istio.test.work_dir=/logs/artifacts --istio.test.tag=1.12-dev \
---istio.test.pullpolicy=IfNotPresent \
---istio.test.hub=harbor.huayun.org/huayun-kubernetes/istio-testing
+--istio.test.pullpolicy=IfNotPresent
 </pre></td></tr></tbody></table></code></pre></div></div>
 
 <h3 id="总结">总结</h3>
