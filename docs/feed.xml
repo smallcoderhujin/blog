@@ -5,9 +5,486 @@
     <description>Hujin，Openstack &amp; SDN &amp; Kubernetes Lover，Software Engineer，| 与你一起发现更大的世界</description>
     <link>http://0.0.0.0:4000/blog/</link>
     <atom:link href="http://0.0.0.0:4000/blog/feed.xml" rel="self" type="application/rss+xml" />
-    <pubDate>Fri, 24 Dec 2021 05:32:38 +0000</pubDate>
-    <lastBuildDate>Fri, 24 Dec 2021 05:32:38 +0000</lastBuildDate>
+    <pubDate>Fri, 15 Apr 2022 01:44:16 +0000</pubDate>
+    <lastBuildDate>Fri, 15 Apr 2022 01:44:16 +0000</lastBuildDate>
     <generator>Jekyll v4.2.0</generator>
+    
+      <item>
+        <title>Istio Bookinfo</title>
+        <description>&lt;h2 id=&quot;架构图&quot;&gt;架构图&lt;/h2&gt;
+&lt;p&gt;&lt;img src=&quot;https://istio.io/latest/zh/docs/examples/bookinfo/noistio.svg&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;在k8s中通过deployment安装一些微服务并通过service暴露出来，包括&lt;/p&gt;
+&lt;ul&gt;
+  &lt;li&gt;productpage: python编写，服务主界面，或者叫index页面，页面中会访问其他微服务&lt;/li&gt;
+  &lt;li&gt;reviews： java编写，书籍评价微服务&lt;/li&gt;
+  &lt;li&gt;details： ruby编写，书籍详情信息微服务&lt;/li&gt;
+  &lt;li&gt;ratings： nodejs编写，数据推荐指数微服务，rating service的后端pod有三个，分别对应三个version&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&quot;部署&quot;&gt;部署&lt;/h2&gt;
+
+&lt;h3 id=&quot;部署原始应用deploymentservice等&quot;&gt;部署原始应用（deployment/service等）&lt;/h3&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;kubectl apply -f samples/bookinfo/platform/kube/bookinfo.yaml
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;查看安装结果&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;[root@controller01 ~]# kubectl get svc
+NAME          TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)    AGE
+details       ClusterIP   10.96.192.251   &amp;lt;none&amp;gt;        9080/TCP   87s
+kubernetes    ClusterIP   10.96.0.1       &amp;lt;none&amp;gt;        443/TCP    119d
+productpage   ClusterIP   10.96.93.53     &amp;lt;none&amp;gt;        9080/TCP   86s
+ratings       ClusterIP   10.96.137.195   &amp;lt;none&amp;gt;        9080/TCP   87s
+reviews       ClusterIP   10.96.146.191   &amp;lt;none&amp;gt;        9080/TCP   86s
+
+[root@controller01 ~]# kubectl get pods -owide
+NAME                              READY   STATUS    RESTARTS   AGE   IP               NODE           NOMINATED NODE   READINESS GATES
+details-v1-66b6955995-n4rwz       2/2     Running   0          92s   10.244.114.172   controller01   &amp;lt;none&amp;gt;           &amp;lt;none&amp;gt;
+productpage-v1-5d9b4c9849-mjrcf   2/2     Running   0          91s   10.244.114.141   controller01   &amp;lt;none&amp;gt;           &amp;lt;none&amp;gt;
+ratings-v1-fd78f799f-ckf66        2/2     Running   0          92s   10.244.114.187   controller01   &amp;lt;none&amp;gt;           &amp;lt;none&amp;gt;
+reviews-v1-6549ddccc5-gtstf       2/2     Running   0          92s   10.244.114.175   controller01   &amp;lt;none&amp;gt;           &amp;lt;none&amp;gt;
+reviews-v2-76c4865449-sz5dr       2/2     Running   0          92s   10.244.114.188   controller01   &amp;lt;none&amp;gt;           &amp;lt;none&amp;gt;
+reviews-v3-6b554c875-jdpn6        2/2     Running   0          92s   10.244.114.143   controller01   &amp;lt;none&amp;gt;           &amp;lt;none&amp;gt;
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h3 id=&quot;此时服务可以通过k8s原生的service访问成功且rating-service有三个后端pod所以平均切换&quot;&gt;此时服务可以通过k8s原生的service访问成功，且rating service有三个后端pod，所以平均切换&lt;/h3&gt;
+&lt;p&gt;修改productpage service类型，改成nodeport（之前是clusterip）&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;kubectl edit svc productpage
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: productpage
+    service: productpage
+  name: productpage
+spec:
+  clusterIP: 112.96.53.21
+  clusterIPs:
+  - 112.96.53.21
+  ports:
+  - name: http
+    nodePort: 30607
+    port: 9080
+    protocol: TCP
+    targetPort: 9080
+  selector:
+    app: productpage
+  type: NodePort
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;通过http://[管理IP]:[svc-nodeport]/productpage来访问productpage服务&lt;/p&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;上面演示的是原生k8s的service功能，通过管理IP和nodeport的方式访问productpage服务，下面我们将通过istio的方式来访问微服务&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;h3 id=&quot;启用istio-注入功能&quot;&gt;启用istio 注入功能&lt;/h3&gt;
+
+&lt;p&gt;允许default namespace自动注入istio sidecar&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;kubectl label namespace default istio-injection=enabled
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;重新部署所有微服务，注入istio sidecar&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;kubectl delete -f samples/bookinfo/platform/kube/bookinfo.yaml
+kubectl apply -f samples/bookinfo/platform/kube/bookinfo.yaml
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;创建gateway&lt;/p&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;这里创建gateway，保证流量可以进入ingressgateway，并进行转发&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;[root@controller01 ~]# kubectl apply -f istio-1.11.2/samples/bookinfo/networking/bookinfo-gateway.yaml 
+gateway.networking.istio.io/bookinfo-gateway created
+virtualservice.networking.istio.io/bookinfo created
+
+
+[root@controller01 ~]# kubectl get gateway
+NAME               AGE
+bookinfo-gateway   109s
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;获取Istio Ingress Gateway的外部端口：&lt;/p&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;注意这里的31460 nodeport，需要通过这个访问bookinfo入口服务&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;[root@controller01 ~]# kubectl get svc -n istio-system |grep gateway
+istio-egressgateway    ClusterIP      10.96.188.75    &amp;lt;none&amp;gt;        80/TCP,443/TCP                                                               4m8s
+istio-ingressgateway   LoadBalancer   10.96.156.24    &amp;lt;pending&amp;gt;     15021:31717/TCP,80:31460/TCP,443:30052/TCP,31400:32767/TCP,15443:30069/TCP   4m8s
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;创建destination rules, 配置路由访问规则：&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;kubectl apply -f samples/bookinfo/networking/destination-rule-all.yaml
+
+[root@nested-istio-node1 networking]# kubectl get destinationrule 
+NAME          HOST          AGE
+details       details       15h
+productpage   productpage   15h
+ratings       ratings       15h
+reviews       reviews       15h
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;此时bookinfo的virtualservice只是将流量转发到productpage这个destination v1上，其他destination只是创建，未被引用&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;此时访问页面，页面中review微服务还是会三个版本平均切换的&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;h2 id=&quot;智能路由&quot;&gt;智能路由&lt;/h2&gt;
+
+&lt;h3 id=&quot;根据版本路由&quot;&gt;根据版本路由&lt;/h3&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+55
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;kubectl apply -f samples/bookinfo/networking/virtual-service-all-v1.yaml
+
+cat samples/bookinfo/networking/virtual-service-all-v1.yaml
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: productpage
+spec:
+  hosts:
+  - productpage
+  http:
+  - route:
+    - destination:
+        host: productpage
+        subset: v1
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: reviews
+spec:
+  hosts:
+  - reviews
+  http:
+  - route:
+    - destination:
+        host: reviews
+        subset: v1
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: ratings
+spec:
+  hosts:
+  - ratings
+  http:
+  - route:
+    - destination:
+        host: ratings
+        subset: v1
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: details
+spec:
+  hosts:
+  - details
+  http:
+  - route:
+    - destination:
+        host: details
+        subset: v1
+---
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;这里创建了几个service，并将流量都转发到各自的v1 destinationrule上（demo中只有rating有多版本），访问服务，发现不管怎么刷页面，都看不到星星，因为v1版本没星星&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;h3 id=&quot;根据用户路由&quot;&gt;根据用户路由&lt;/h3&gt;
+
+&lt;p&gt;在vs中定义转发规则，如果发现header中有个jason用户信息，转发到v2，否则转发到v1后端pod&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;kubectl delete -f samples/bookinfo/networking/virtual-service-all-v1.yaml
+kubectl apply -f samples/bookinfo/networking/virtual-service-reviews-test-v2.yaml
+
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: reviews
+spec:
+  hosts:
+    - reviews
+  http:
+  - match:
+    - headers:
+        end-user:
+          exact: jason
+    route:
+    - destination:
+        host: reviews
+        subset: v2
+  - route:
+    - destination:
+        host: reviews
+        subset: v1
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;再次访问，用jason用户登录就能看到黑星星，而其它方式看到的页面都是无星星&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;h3 id=&quot;故障注入&quot;&gt;故障注入&lt;/h3&gt;
+
+&lt;p&gt;注入错误让jason用户有个7s的延迟:&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;kubectl apply -f samples/bookinfo/networking/virtual-service-reviews-test-delay.yaml
+
+cat samples/bookinfo/networking/virtual-service-reviews-test-delay.yaml
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: reviews
+spec:
+  hosts:
+  - reviews
+  http:
+  - match:
+    - headers:
+        end-user:
+          exact: jason
+    fault:
+      delay:
+        percentage:
+          value: 100.0
+        fixedDelay: 7s
+    route:
+    - destination:
+        host: reviews
+        subset: v2
+  - route:
+    - destination:
+        host: reviews
+        subset: v3
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;使用jason用户访问页面会有7s延迟，其他用户则转发到v3版本的reviews&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;h3 id=&quot;链路切换&quot;&gt;链路切换&lt;/h3&gt;
+&lt;p&gt;把100%流量切到v1&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;kubectl apply -f samples/bookinfo/networking/virtual-service-all-v1.yaml
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;页面不论刷几遍，都没有星星&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;v1 v3各50%流量&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;kubectl apply -f samples/bookinfo/networking/virtual-service-reviews-50-v3.yaml
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;刷新页面, 一会有红星，一会没星，50%的概率&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;把100%流量切到v3&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;kubectl apply -f samples/bookinfo/networking/virtual-service-reviews-v3.yaml
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;刷新页面，我们看到的都是红心了&lt;/p&gt;
+&lt;/blockquote&gt;
+
+</description>
+        <pubDate>Fri, 15 Apr 2022 00:00:00 +0000</pubDate>
+        <link>http://0.0.0.0:4000/blog/2022/04/15/istio-bookinfo/</link>
+        <guid isPermaLink="true">http://0.0.0.0:4000/blog/2022/04/15/istio-bookinfo/</guid>
+        
+        <category>istio</category>
+        
+        <category>bookinfo</category>
+        
+        
+      </item>
     
       <item>
         <title>Istio集成测试</title>
@@ -3081,344 +3558,6 @@ OFPT_GET_CONFIG_REPLY (xid=0x4): frags=normal miss_send_len=0
         <category>go mod</category>
         
         <category>gerrit</category>
-        
-        
-      </item>
-    
-      <item>
-        <title>Cinder CSI</title>
-        <description>&lt;h2 id=&quot;背景&quot;&gt;背景&lt;/h2&gt;
-&lt;p&gt;由于openstack cinder提供丰富的后端存储服务，当k8s部署在openstack的虚拟机中时，使用cinder 的csi提供存储服务可以非常方便对接不同的后端存储&lt;/p&gt;
-
-&lt;h2 id=&quot;要求&quot;&gt;要求&lt;/h2&gt;
-&lt;ul&gt;
-  &lt;li&gt;分别部署openstack和k8s集群&lt;/li&gt;
-  &lt;li&gt;openstack cinder使用v3 api&lt;/li&gt;
-  &lt;li&gt;openstack nova和cinder在keystone中的endpoint url对应的ip地址，k8s的虚机可以访问到&lt;/li&gt;
-  &lt;li&gt;openstack开启metadata服务&lt;/li&gt;
-  &lt;li&gt;openstack虚机中需要安装cloud-init
-    &lt;blockquote&gt;
-      &lt;p&gt;/var/lib/cloud/data/instance-id虚机中这个目录必须是虚机的uuid，这个是通过cloud-init注入的&lt;/p&gt;
-    &lt;/blockquote&gt;
-  &lt;/li&gt;
-  &lt;li&gt;虚机挂盘后要求在/dev/disk/by-id目录下有对应volume的设备存在&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;h2 id=&quot;部署&quot;&gt;部署&lt;/h2&gt;
-
-&lt;p&gt;获取k8s-openstack-provider源码（非必须）&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;git clone https://github.com/kubernetes/cloud-provider-openstack
-cd cloud-provider-openstack
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;编译（需要docker-ce 17.05以上的版本， docker需要翻墙）&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;export ARCH=amd64 # Defaults to amd64
-编译： make build-cmd-cinder-csi-plugin
-生成镜像：make image-cinder-csi-plugin
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;修改kubelet配置&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;vim /etc/kubernetes/kubelet.env
-KUBELET_CLOUDPROVIDER=&quot;--cloud-provider=external&quot;
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;配置openstack信息并使用base64加密&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;vim cloud.conf
-[Global]
-username = ArcherAdmin
-password = ArcherAdmin@123
-domain-name = Default
-auth-url = http://172.118.23.20:45357/v3
-tenant-id = ad88dd5d24ce4e2189a6ae7491c33e9d
-region = RegionOne
-
-[Metadata]
-search-order = configDrive,metadataService
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;使用base64对openstack配置加密&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;cat cloud.conf | base64 -w 0
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;获取社区yaml文件&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;https://github.com/kubernetes/cloud-provider-openstack/tree/master/manifests/cinder-csi-plugin
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;将之前openstack的配置对应的base64结果更新到csi-secret-cinderplugin.yaml文件中&lt;/p&gt;
-
-&lt;p&gt;创建cinder csi资源&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;kubectl apply -f cinder-csi-plugin
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;查看cinder csi pod状态&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;[root@node1 csi-cinder]# kubectl get pods -n kube-system
-NAME                                       READY   STATUS        RESTARTS   AGE
-csi-cinder-controllerplugin-0              5/5     Running       25         4h12m
-csi-cinder-nodeplugin-cwzpr                2/2     Running       0          7m28s
-csi-cinder-nodeplugin-wxl6f                2/2     Running       0          7m29s
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;创建storeageclass和pvc&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-20
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;cat sc.yaml
-apiVersion: storage.k8s.io/v1
-kind: StorageClass
-metadata:
-  name: csi-sc-cinderplugin
-provisioner: cinder.csi.openstack.org
-
-
-cat pvc.yaml
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: csi-pvc-cinderplugin
-spec:
-  accessModes:
-  - ReadWriteOnce
-  resources:
-    requests:
-      storage: 1Gi
-  storageClassName: csi-sc-cinderplugin
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;确认sc和pvc状态&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;[root@node1 resource-yamls]# kubectl get sc
-NAME                  PROVISIONER                RECLAIMPOLICY   VOLUMEBINDINGMODE   ALLOWVOLUMEEXPANSION   AGE
-csi-sc-cinderplugin   cinder.csi.openstack.org   Delete          Immediate           false                  26h
-csi-sc-hujin          arstor.csi.huayun.io       Delete          Immediate           false                  4d9h
-[root@node1 resource-yamls]# kubectl get pvc
-NAME                   STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS          AGE
-csi-pvc-cinderplugin   Bound    pvc-e5aec543-ff37-40ad-85d5-ce038975e14c   1Gi        RWO            csi-sc-cinderplugin   12m
-[root@node1 resource-yamls]#
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;创建pod&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-20
-21
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;cat pod.yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: nginx
-spec:
-  containers:
-  - image: nginx:alpine
-    imagePullPolicy: IfNotPresent
-    name: nginx
-    ports:
-    - containerPort: 80
-      protocol: TCP
-    volumeMounts:
-      - mountPath: /var/lib/www/html
-        name: csi-data-cinderplugin
-  volumes:
-  - name: csi-data-cinderplugin
-    persistentVolumeClaim:
-      claimName: csi-pvc-cinderplugin
-      readOnly: false
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;从pv中获取volume id&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-20
-21
-22
-23
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;[root@node1 resource-yamls]# kubectl describe pv pvc-e5aec543-ff37-40ad-85d5-ce038975e14c
-Name:            pvc-e5aec543-ff37-40ad-85d5-ce038975e14c
-Labels:          &amp;lt;none&amp;gt;
-Annotations:     pv.kubernetes.io/provisioned-by: cinder.csi.openstack.org
-Finalizers:      [kubernetes.io/pv-protection external-attacher/cinder-csi-openstack-org]
-StorageClass:    csi-sc-cinderplugin
-Status:          Bound
-Claim:           default/csi-pvc-cinderplugin
-Reclaim Policy:  Delete
-Access Modes:    RWO
-VolumeMode:      Filesystem
-Capacity:        1Gi
-Node Affinity:   &amp;lt;none&amp;gt;
-Message:
-Source:
-    Type:              CSI (a Container Storage Interface (CSI) volume source)
-    Driver:            cinder.csi.openstack.org
-    FSType:            ext4
-    VolumeHandle:      ef9037a7-9a67-408a-9f92-adbd2badc5db
-    ReadOnly:          false
-    VolumeAttributes:      storage.kubernetes.io/csiProvisionerIdentity=1616250534343-8081-cinder.csi.openstack.org
-Events:                &amp;lt;none&amp;gt;
-[root@node1 resource-yamls]#
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;在openstack中查看volume状态&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;[root@controller01 ~]# cinder list |grep ef9037a7
-| ef9037a7-9a67-408a-9f92-adbd2badc5db |   in-use  | pvc-e5aec543-ff37-40ad-85d5-ce038975e14c |  1   | basic-replica2 |  false   | 94a932d0-79da-4ed2-a228-a4e96264d1c0 |
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;确认pod状态&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;[root@node1 csi-cinder]# kubectl get pods     -owide
-NAME    READY   STATUS    RESTARTS   AGE   IP             NODE    NOMINATED NODE   READINESS GATES
-nginx   1/1     Running   0          35s   10.244.28.16   node3   &amp;lt;none&amp;gt;           &amp;lt;none&amp;gt;
-
-[root@node1 resource-yamls]# kubectl exec -it nginx -- sh
-/ # ls /var/lib/www/html/
-lost+found
-/ #
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;h2 id=&quot;测试场景&quot;&gt;测试场景&lt;/h2&gt;
-
-&lt;h3 id=&quot;命令行删除deployment-pod&quot;&gt;命令行删除deployment pod&lt;/h3&gt;
-&lt;p&gt;删除后正常新建pod，且使用原来的volume&lt;/p&gt;
-
-&lt;h3 id=&quot;k8s虚机网络故障&quot;&gt;k8s虚机网络故障&lt;/h3&gt;
-&lt;p&gt;deployment中其中一个pod所在节点down机后，新建pod失败，报volume in-use
-statefulset中其中一个pod所在节点down机后，不新建pod&lt;/p&gt;
-
-&lt;h3 id=&quot;k8s虚机重启&quot;&gt;k8s虚机重启&lt;/h3&gt;
-&lt;p&gt;同节点down机&lt;/p&gt;
-
-&lt;h3 id=&quot;虚机迁移&quot;&gt;虚机迁移&lt;/h3&gt;
-&lt;p&gt;热迁移不影响pod使用
-冷迁移：同节点down机&lt;/p&gt;
-
-&lt;h3 id=&quot;k8s虚机对应计算节点故障&quot;&gt;k8s虚机对应计算节点故障&lt;/h3&gt;
-&lt;p&gt;此时原来的pod一直是删除状态，新建的pod也无法正常创建，必须等待down机的节点恢复
-这是一种安全的做法&lt;/p&gt;
-
-&lt;h3 id=&quot;虚机挂在最大磁盘个数&quot;&gt;虚机挂在最大磁盘个数&lt;/h3&gt;
-&lt;p&gt;这是一个bug，升级qemu后可以解决&lt;/p&gt;
-
-&lt;h2 id=&quot;参考&quot;&gt;参考&lt;/h2&gt;
-&lt;ul&gt;
-  &lt;li&gt;https://github.com/kubernetes/cloud-provider-openstack/blob/master/docs/cinder-csi-plugin/using-cinder-csi-plugin.md&lt;/li&gt;
-  &lt;li&gt;https://www.jianshu.com/p/87b02040991c&lt;/li&gt;
-  &lt;li&gt;https://silenceper.com/kubernetes-book/csi/how-to-write-csi-driver.html&lt;/li&gt;
-&lt;/ul&gt;
-</description>
-        <pubDate>Wed, 24 Mar 2021 00:00:00 +0000</pubDate>
-        <link>http://0.0.0.0:4000/blog/2021/03/24/k8s-csi-cinder/</link>
-        <guid isPermaLink="true">http://0.0.0.0:4000/blog/2021/03/24/k8s-csi-cinder/</guid>
-        
-        <category>k8s</category>
-        
-        <category>csi</category>
-        
-        <category>cinder</category>
         
         
       </item>
