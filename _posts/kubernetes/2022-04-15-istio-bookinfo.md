@@ -264,10 +264,12 @@ tags:
 v1 v3各50%流量
 
     kubectl apply -f samples/bookinfo/networking/virtual-service-reviews-50-v3.yaml
+
 > 刷新页面, 一会有红星，一会没星，50%的概率
 
 把100%流量切到v3
 
     kubectl apply -f samples/bookinfo/networking/virtual-service-reviews-v3.yaml
+    
 > 刷新页面，我们看到的都是红心了
 
