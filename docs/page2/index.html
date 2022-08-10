@@ -110,6 +110,8 @@
                         
                         
                         
+                        
+                        
                         <li class="search-icon">
                             <a href="javascript:void(0)">
                                 <i class="fa fa-search"></i>
@@ -233,6 +235,212 @@
                 postlist-container
             ">
     			
+<div class="post-preview">
+    <a href="/blog/2021/09/26/istio-1/">
+        <h2 class="post-title">
+            Istio初探
+        </h2>
+        
+        <h3 class="post-subtitle">
+            
+        </h3>
+        
+        <div class="post-content-preview">
+            
+                背景
+网络上很多理论性的说明，包括istio的前世今生，这里就不赘述了，本文将通过安装和实际操作的方式来简单了解下istio的特性.
+
+准备
+下载最新版本istio
+
+1
+2
+3
+yum install -y socat
+curl -L https://istio.io/downloadIstio | sh -
+cd istio-1.11.2
+
+
+安装istioctl
+
+1
+cp bin/i...
+            
+        </div>
+    </a>
+    <p class="post-meta">
+        Posted by hujin on September 26, 2021
+    </p>
+</div>
+<hr>
+
+<div class="post-preview">
+    <a href="/blog/2021/08/06/cri-oci/">
+        <h2 class="post-title">
+            Docker Containerd CRI-O Runc等概念的区别[译]
+        </h2>
+        
+        <h3 class="post-subtitle">
+            cri oci
+        </h3>
+        
+        <div class="post-content-preview">
+            
+                背景
+从Docker引发这场热潮以来，越来越多的工具和标准涌现，来帮助用户使用“容器”这个技术
+
+大型的技术公司由于相互之间的竞争，引入越来越多的技术概念和实现，使得普通用户很容易困惑和不理解。
+
+本文将详细介绍所有相关的概念名称，并尝试解释具体术语，解释容器生态系统如何在2021年协同工作。
+
+你不是唯一一个不理解这些概念的人，也不是最后一个…
+
+理解Docker
+区别Docker这个公司...
+            
+        </div>
+    </a>
+    <p class="post-meta">
+        Posted by hujin on August 6, 2021
+    </p>
+</div>
+<hr>
+
+<div class="post-preview">
+    <a href="/blog/2021/06/28/k8s-multus/">
+        <h2 class="post-title">
+            Multus CNI
+        </h2>
+        
+        <h3 class="post-subtitle">
+            
+        </h3>
+        
+        <div class="post-content-preview">
+            
+                背景
+当前社区支持多个cni插件，当前集群底层网络实现变化后存在切换CNI插件的需求。由于cni插件主要在pod网卡创建和删除流程中使用，切换CNI插件后，要求pod重建，服务和网络都会中断
+
+这里需要一种更加平滑的切换方式，在保证页面和网络不中断的情况下切换CNI
+
+架构
+
+
+
+上图可以看到，一个pod可以同时有多个网卡，其中eth0是默认网卡，也就是默认路由指向的网卡
+
+net0和net...
+            
+        </div>
+    </a>
+    <p class="post-meta">
+        Posted by hujin on June 28, 2021
+    </p>
+</div>
+<hr>
+
+<div class="post-preview">
+    <a href="/blog/2021/05/24/k8s-kubeovn-vpcnatgateway/">
+        <h2 class="post-title">
+            KubeOVN - VPCNatGateway
+        </h2>
+        
+        <h3 class="post-subtitle">
+            vpc nat gateway
+        </h3>
+        
+        <div class="post-content-preview">
+            
+                功能
+用来给k8s中pod/service/ingress等网络资源访问外部网络
+
+支持功能
+
+
+  指定外部网络出口物理网卡
+  指定多子网以及子网的网关
+  浮动IP功能
+  端口转发功能
+  静态路由规则
+  SNAT功能
+
+
+原理
+
+
+
+  创建一个nat gateway deployment，副本数是1
+  通过configmap获取pod对应的镜像文件路径，创建nat gatew...
+            
+        </div>
+    </a>
+    <p class="post-meta">
+        Posted by hujin on May 24, 2021
+    </p>
+</div>
+<hr>
+
+<div class="post-preview">
+    <a href="/blog/2021/05/14/k8s-kuryr-neutron/">
+        <h2 class="post-title">
+            Kuryr CNI
+        </h2>
+        
+        <h3 class="post-subtitle">
+            cni
+        </h3>
+        
+        <div class="post-content-preview">
+            
+                背景
+
+当k8s部署在openstack节点或者虚拟机中时，可以使用openstack提供的网络功能实现k8s cni，这里主要对接的是neutron和lbaas模块，社区提供了kuryr的实现方案。
+Kuryr 是 OpenStack Neutron 的子项目，其主要目标是透过该项目来集成 OpenStack 与 Kubernetes 的网络。该项目在 Kubernetes 中实作了原生 ...
+            
+        </div>
+    </a>
+    <p class="post-meta">
+        Posted by hujin on May 14, 2021
+    </p>
+</div>
+<hr>
+
+<div class="post-preview">
+    <a href="/blog/2021/04/06/k8s-go-mod/">
+        <h2 class="post-title">
+            GO MOD使用私有仓库
+        </h2>
+        
+        <h3 class="post-subtitle">
+            go mod gerrit
+        </h3>
+        
+        <div class="post-content-preview">
+            
+                背景
+
+在常见的项目中使用go mod做包管理，在引用第三方包时这个包可能维护在内部私有仓库中，需要解决几个问题：
+
+
+  引用第三方库
+  引用私有仓库时不使用代理
+  使用git方式获取代码
+
+
+替换引用的仓库地址
+这里直接修改代码中的引用工作量太大了，可以通过在go.mod中添加replace的方式：
+
+
+  github.com/gophercloud/gophercloud =&g...
+            
+        </div>
+    </a>
+    <p class="post-meta">
+        Posted by hujin on April 6, 2021
+    </p>
+</div>
+<hr>
+
 <div class="post-preview">
     <a href="/blog/2021/03/24/k8s-csi-cinder/">
         <h2 class="post-title">
@@ -378,66 +586,6 @@ run
 </div>
 <hr>
 
-<div class="post-preview">
-    <a href="/blog/2021/01/15/k8s-webhook-keystone/">
-        <h2 class="post-title">
-            Kuberntes Webhook -- Keystone
-        </h2>
-        
-        <h3 class="post-subtitle">
-            
-        </h3>
-        
-        <div class="post-content-preview">
-            
-                背景
-k8s本身不提供用户和项目管理功能，需要依赖第三方组件来实现。
-由于k8s和openstack的融合需求，需要提供一种统一的用户鉴权机制，本次重点介绍k8s如何使用keystone进行鉴权。通过调用keystone获取token，并使用这个token调用k8s的接口获取资源信息。
-
-架构图
-
-
-主要流程：
-
-
-  客户端通过rest api调用openstack keystone获取t...
-            
-        </div>
-    </a>
-    <p class="post-meta">
-        Posted by hujin on January 15, 2021
-    </p>
-</div>
-<hr>
-
-<div class="post-preview">
-    <a href="/blog/2021/01/15/k8s-oidc-keycloak/">
-        <h2 class="post-title">
-            Kuberntes OIDC -- Keycloak
-        </h2>
-        
-        <h3 class="post-subtitle">
-            
-        </h3>
-        
-        <div class="post-content-preview">
-            
-                架构图
-
-
-OIDC是一种 OAuth2 认证方式， 被某些 OAuth2 提供者支持，例如 Azure 活动目录、Salesforce 和 Google。 协议对 OAuth2 的主要扩充体现在有一个附加字段会和访问令牌一起返回， 这一字段称作 ID Token（ID 令牌）。 ID 令牌是一种由服务器签名的 JSON Web 令牌（JWT）
-
-
-  登录到你的身份服务（Identity ...
-            
-        </div>
-    </a>
-    <p class="post-meta">
-        Posted by hujin on January 15, 2021
-    </p>
-</div>
-<hr>
-
 
 <!-- Pager -->
 
@@ -447,6 +595,10 @@ OIDC是一种 OAuth2 认证方式， 被某些 OAuth2 提供者支持，例如 A
         <a href="/blog/">&larr; Newer Posts</a>
     </li>
     
+    
+    <li class="next">
+        <a href="/blog/page3">Older Posts &rarr;</a>
+    </li>
     
 </ul>
 
@@ -474,27 +626,32 @@ OIDC是一种 OAuth2 认证方式， 被某些 OAuth2 提供者支持，例如 A
         
         
         
-                <a data-sort="0012" 
+                <a data-sort="0017" 
                     href="/blog/archive/?tag=kubernetes"
                     title="kubernetes"
-                    rel="4">kubernetes</a>
+                    rel="5">kubernetes</a>
         
-                <a data-sort="0009" 
+                <a data-sort="0015" 
                     href="/blog/archive/?tag=k8s"
                     title="k8s"
                     rel="7">k8s</a>
         
-                <a data-sort="0011" 
+                <a data-sort="0017" 
                     href="/blog/archive/?tag=cni"
                     title="cni"
                     rel="5">cni</a>
         
-                <a data-sort="0013" 
+                <a data-sort="0017" 
+                    href="/blog/archive/?tag=neuvector"
+                    title="neuvector"
+                    rel="5">neuvector</a>
+        
+                <a data-sort="0019" 
                     href="/blog/archive/?tag=istio"
                     title="istio"
                     rel="3">istio</a>
         
-                <a data-sort="0014" 
+                <a data-sort="0020" 
                     href="/blog/archive/?tag=tungstenfabric"
                     title="tungstenfabric"
                     rel="2">tungstenfabric</a>

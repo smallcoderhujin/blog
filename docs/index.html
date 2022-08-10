@@ -108,6 +108,8 @@
                         
                         
                         
+                        
+                        
                         <li class="search-icon">
                             <a href="javascript:void(0)">
                                 <i class="fa fa-search"></i>
@@ -232,6 +234,194 @@
             ">
     			
 <div class="post-preview">
+    <a href="/blog/2022/08/13/neuvector-policy/">
+        <h2 class="post-title">
+            Neuvector源码分析之 网络策略
+        </h2>
+        
+        <h3 class="post-subtitle">
+            
+        </h3>
+        
+        <div class="post-content-preview">
+            
+                架构图
+TODO
+
+            
+        </div>
+    </a>
+    <p class="post-meta">
+        Posted by hujin on August 13, 2022
+    </p>
+</div>
+<hr>
+
+<div class="post-preview">
+    <a href="/blog/2022/08/12/neuvector-file/">
+        <h2 class="post-title">
+            Neuvector源码分析之 文件管理
+        </h2>
+        
+        <h3 class="post-subtitle">
+            
+        </h3>
+        
+        <div class="post-content-preview">
+            
+                架构图
+TODO
+
+
+            
+        </div>
+    </a>
+    <p class="post-meta">
+        Posted by hujin on August 12, 2022
+    </p>
+</div>
+<hr>
+
+<div class="post-preview">
+    <a href="/blog/2022/08/11/neuvector-process/">
+        <h2 class="post-title">
+            Neuvector源码分析之 进程管理
+        </h2>
+        
+        <h3 class="post-subtitle">
+            
+        </h3>
+        
+        <div class="post-content-preview">
+            
+                架构图
+TODO
+
+            
+        </div>
+    </a>
+    <p class="post-meta">
+        Posted by hujin on August 11, 2022
+    </p>
+</div>
+<hr>
+
+<div class="post-preview">
+    <a href="/blog/2022/08/10/neuvector-tcpdump/">
+        <h2 class="post-title">
+            Neuvector源码分析之 网络抓包
+        </h2>
+        
+        <h3 class="post-subtitle">
+            
+        </h3>
+        
+        <div class="post-content-preview">
+            
+                功能介绍
+
+
+
+抓包功能是针对容器的功能，用户在界面选择某个容器点击抓包功能，可以控制抓包开始和结束，可以选择抓包时间；完成后可以下载对应的pcap格式的文件，
+在本地的wireshark中直接打开进行分析。底层实际还是通过进入容器的网络namespace，执行tcpdump命令来实现。
+
+说明下：hostnetwork的容器暂不支持抓包功能
+
+API接口：
+
+1
+2
+3
+4
+5
+6
+7
+8...
+            
+        </div>
+    </a>
+    <p class="post-meta">
+        Posted by hujin on August 10, 2022
+    </p>
+</div>
+<hr>
+
+<div class="post-preview">
+    <a href="/blog/2022/08/09/neuvector-introduce/">
+        <h2 class="post-title">
+            Neuvector 初探
+        </h2>
+        
+        <h3 class="post-subtitle">
+            
+        </h3>
+        
+        <div class="post-content-preview">
+            
+                介绍
+
+
+
+NeuVector 是业界首个端到端的开源容器安全平台，唯一为容器化工作负载提供企业级零信任安全的解决方案。
+NeuVector 可以提供实时深入的容器网络可视化、东西向容器网络监控、主动隔离和保护、容器主机安全以及
+容器内部安全，容器管理平台无缝集成并且实现应用级容器安全的自动化，适用于各种云环境、跨云或者本地部署等容器生产环境。
+
+我们重点看neuvector的网络功能。 n...
+            
+        </div>
+    </a>
+    <p class="post-meta">
+        Posted by hujin on August 9, 2022
+    </p>
+</div>
+<hr>
+
+<div class="post-preview">
+    <a href="/blog/2022/08/09/k8s-deploy/">
+        <h2 class="post-title">
+            5分钟快速部署Kubernetes集群
+        </h2>
+        
+        <h3 class="post-subtitle">
+            
+        </h3>
+        
+        <div class="post-content-preview">
+            
+                环境信息
+
+
+  操作系统：centos7.6 4C8G
+  节点个数：1master+2node
+  内核版本：3.10.0-1127.el7.x86_64
+  网络信息：1管理 1业务
+
+
+准备（master+node）
+
+每个节点修改hostname
+
+1
+hostnamectl set-hostname nodex
+
+
+配置/etc/hosts
+
+1
+2
+3
+4
+cat /etc/h...
+            
+        </div>
+    </a>
+    <p class="post-meta">
+        Posted by hujin on August 9, 2022
+    </p>
+</div>
+<hr>
+
+<div class="post-preview">
     <a href="/blog/2022/04/15/istio-bookinfo/">
         <h2 class="post-title">
             Istio Bookinfo
@@ -336,222 +526,17 @@ tungstenfabric cni通过watch kubernetes apiserver中指定的资源，并在sdn
 架构&amp;流程图
 
 
+
 源码解析
 
 在process方法中会处理networkpolicy的创建、更新和删除。这里我们先看下创建和更新
 
-创建和更新方法中有...
+创建和更新方法中...
             
         </div>
     </a>
     <p class="post-meta">
         Posted by hujin on September 28, 2021
-    </p>
-</div>
-<hr>
-
-<div class="post-preview">
-    <a href="/blog/2021/09/26/istio-1/">
-        <h2 class="post-title">
-            Istio初探
-        </h2>
-        
-        <h3 class="post-subtitle">
-            
-        </h3>
-        
-        <div class="post-content-preview">
-            
-                背景
-网络上很多理论性的说明，包括istio的前世今生，这里就不赘述了，本文将通过安装和实际操作的方式来简单了解下istio的特性.
-
-准备
-下载最新版本istio
-
-1
-2
-3
-yum install -y socat
-curl -L https://istio.io/downloadIstio | sh -
-cd istio-1.11.2
-
-
-安装istioctl
-
-1
-cp bin/i...
-            
-        </div>
-    </a>
-    <p class="post-meta">
-        Posted by hujin on September 26, 2021
-    </p>
-</div>
-<hr>
-
-<div class="post-preview">
-    <a href="/blog/2021/08/06/cri-oci/">
-        <h2 class="post-title">
-            Docker Containerd CRI-O Runc等概念的区别[译]
-        </h2>
-        
-        <h3 class="post-subtitle">
-            cri oci
-        </h3>
-        
-        <div class="post-content-preview">
-            
-                背景
-从Docker引发这场热潮以来，越来越多的工具和标准涌现，来帮助用户使用“容器”这个技术
-
-大型的技术公司由于相互之间的竞争，引入越来越多的技术概念和实现，使得普通用户很容易困惑和不理解。
-
-本文将详细介绍所有相关的概念名称，并尝试解释具体术语，解释容器生态系统如何在2021年协同工作。
-
-你不是唯一一个不理解这些概念的人，也不是最后一个…
-
-理解Docker
-区别Docker这个公司...
-            
-        </div>
-    </a>
-    <p class="post-meta">
-        Posted by hujin on August 6, 2021
-    </p>
-</div>
-<hr>
-
-<div class="post-preview">
-    <a href="/blog/2021/06/28/k8s-multus/">
-        <h2 class="post-title">
-            Multus CNI
-        </h2>
-        
-        <h3 class="post-subtitle">
-            
-        </h3>
-        
-        <div class="post-content-preview">
-            
-                背景
-当前社区支持多个cni插件，当前集群底层网络实现变化后存在切换CNI插件的需求。由于cni插件主要在pod网卡创建和删除流程中使用，切换CNI插件后，要求pod重建，服务和网络都会中断
-
-这里需要一种更加平滑的切换方式，在保证页面和网络不中断的情况下切换CNI
-
-架构
-
-
-
-上图可以看到，一个pod可以同时有多个网卡，其中eth0是默认网卡，也就是默认路由指向的网卡
-
-net0和net...
-            
-        </div>
-    </a>
-    <p class="post-meta">
-        Posted by hujin on June 28, 2021
-    </p>
-</div>
-<hr>
-
-<div class="post-preview">
-    <a href="/blog/2021/05/24/k8s-kubeovn-vpcnatgateway/">
-        <h2 class="post-title">
-            KubeOVN - VPCNatGateway
-        </h2>
-        
-        <h3 class="post-subtitle">
-            vpc nat gateway
-        </h3>
-        
-        <div class="post-content-preview">
-            
-                功能
-用来给k8s中pod/service/ingress等网络资源访问外部网络
-
-支持功能
-
-
-  指定外部网络出口物理网卡
-  指定多子网以及子网的网关
-  浮动IP功能
-  端口转发功能
-  静态路由规则
-  SNAT功能
-
-
-原理
-
-
-
-  创建一个nat gateway deployment，副本数是1
-  通过configmap获取pod对应的镜像文件路径，创建nat gatew...
-            
-        </div>
-    </a>
-    <p class="post-meta">
-        Posted by hujin on May 24, 2021
-    </p>
-</div>
-<hr>
-
-<div class="post-preview">
-    <a href="/blog/2021/05/14/k8s-kuryr-neutron/">
-        <h2 class="post-title">
-            Kuryr CNI
-        </h2>
-        
-        <h3 class="post-subtitle">
-            cni
-        </h3>
-        
-        <div class="post-content-preview">
-            
-                背景
-
-当k8s部署在openstack节点或者虚拟机中时，可以使用openstack提供的网络功能实现k8s cni，这里主要对接的是neutron和lbaas模块，社区提供了kuryr的实现方案。
-Kuryr 是 OpenStack Neutron 的子项目，其主要目标是透过该项目来集成 OpenStack 与 Kubernetes 的网络。该项目在 Kubernetes 中实作了原生 ...
-            
-        </div>
-    </a>
-    <p class="post-meta">
-        Posted by hujin on May 14, 2021
-    </p>
-</div>
-<hr>
-
-<div class="post-preview">
-    <a href="/blog/2021/04/06/k8s-go-mod/">
-        <h2 class="post-title">
-            GO MOD使用私有仓库
-        </h2>
-        
-        <h3 class="post-subtitle">
-            go mod gerrit
-        </h3>
-        
-        <div class="post-content-preview">
-            
-                背景
-
-在常见的项目中使用go mod做包管理，在引用第三方包时这个包可能维护在内部私有仓库中，需要解决几个问题：
-
-
-  引用第三方库
-  引用私有仓库时不使用代理
-  使用git方式获取代码
-
-
-替换引用的仓库地址
-这里直接修改代码中的引用工作量太大了，可以通过在go.mod中添加replace的方式：
-
-
-  github.com/gophercloud/gophercloud =&g...
-            
-        </div>
-    </a>
-    <p class="post-meta">
-        Posted by hujin on April 6, 2021
     </p>
 </div>
 <hr>
@@ -592,27 +577,32 @@ Kuryr 是 OpenStack Neutron 的子项目，其主要目标是透过该项目来�
         
         
         
-                <a data-sort="0012" 
+                <a data-sort="0017" 
                     href="/blog/archive/?tag=kubernetes"
                     title="kubernetes"
-                    rel="4">kubernetes</a>
+                    rel="5">kubernetes</a>
         
-                <a data-sort="0009" 
+                <a data-sort="0015" 
                     href="/blog/archive/?tag=k8s"
                     title="k8s"
                     rel="7">k8s</a>
         
-                <a data-sort="0011" 
+                <a data-sort="0017" 
                     href="/blog/archive/?tag=cni"
                     title="cni"
                     rel="5">cni</a>
         
-                <a data-sort="0013" 
+                <a data-sort="0017" 
+                    href="/blog/archive/?tag=neuvector"
+                    title="neuvector"
+                    rel="5">neuvector</a>
+        
+                <a data-sort="0019" 
                     href="/blog/archive/?tag=istio"
                     title="istio"
                     rel="3">istio</a>
         
-                <a data-sort="0014" 
+                <a data-sort="0020" 
                     href="/blog/archive/?tag=tungstenfabric"
                     title="tungstenfabric"
                     rel="2">tungstenfabric</a>

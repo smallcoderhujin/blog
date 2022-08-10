@@ -1,0 +1,997 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="google-site-verification" content="xBT4GhYoi5qRD5tr338pgPM5OWHHIDR6mNg1a3euekI" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="description" content="Hujin，Openstack & SDN & Kubernetes Lover，Software Engineer，| 与你一起发现更大的世界">
+    <meta name="keywords"  content="Openstack, Kubernetes, Neutron， SDN， Tungsten Fabric">
+    <meta name="theme-color" content="#000000">
+    
+    <!-- Open Graph -->
+    <meta property="og:title" content="Neuvector源码分析之 网络抓包 - 胡进的博客 | Hujin's Blog">
+    
+    <meta property="og:type" content="article">
+    <meta property="og:description" content="功能介绍
+">
+    
+    <meta property="article:published_time" content="2022-08-10T00:00:00Z">
+    
+    
+    <meta property="article:author" content="hujin">
+    
+    
+    <meta property="article:tag" content="tcpdump">
+    
+    <meta property="article:tag" content="neuvector">
+    
+    <meta property="article:tag" content="抓包">
+    
+    
+    <meta property="og:image" content="http://0.0.0.0:4000/blog/img/avatar-hux-ny.jpg">
+    <meta property="og:url" content="http://0.0.0.0:4000/2022/08/10/neuvector-tcpdump/">
+    <meta property="og:site_name" content="胡进的博客 | Hujin's Blog">
+    
+    <title>Neuvector源码分析之 网络抓包 - 胡进的博客 | Hujin's Blog</title>
+
+    <!-- Web App Manifest -->
+    <link rel="manifest" href="/blog/pwa/manifest.json">
+
+    <!-- Favicon -->
+    <link rel="shortcut icon" href="/blog/img/favicon.ico">
+    
+    <!-- Canonical URL -->
+    <link rel="canonical" href="http://0.0.0.0:4000/blog/2022/08/10/neuvector-tcpdump/">
+
+    <!-- Bootstrap Core CSS -->
+    <link rel="stylesheet" href="/blog/css/bootstrap.min.css">
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="/blog/css/hux-blog.min.css">
+
+    <!-- Custom Fonts -->
+    <!-- <link href="http://maxcdn.bootstrapcdn.com/font-awesome/4.3.0/css/font-awesome.min.css" rel="stylesheet" type="text/css"> -->
+    <!-- Hujin change font-awesome CDN to qiniu -->
+    <link href="//cdnjs.cloudflare.com/ajax/libs/font-awesome/4.6.3/css/font-awesome.min.css" rel="stylesheet" type="text/css">
+
+
+    <!-- HTML5 Shim and Respond.js IE8 support of HTML5 elements and media queries -->
+    <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
+    <!--[if lt IE 9]>
+        <script src="https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"></script>
+        <script src="https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"></script>
+    <![endif]-->
+
+    <!-- ga & ba script hoook -->
+    <script></script>
+</head>
+
+
+<!-- hack iOS CSS :active style -->
+<body ontouchstart="">
+
+    <!-- Navigation -->
+
+<nav class="navbar navbar-default navbar-custom navbar-fixed-top invert">
+    
+        <div class="container-fluid">
+            <!-- Brand and toggle get grouped for better mobile display -->
+            <div class="navbar-header page-scroll">
+                <button type="button" class="navbar-toggle">
+                    <span class="sr-only">Toggle navigation</span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </button>
+                <a class="navbar-brand" href="/blog/">Hujin Blog</a>
+            </div>
+
+            <!-- Collect the nav links, forms, and other content for toggling -->
+            <div id="huxblog_navbar">
+                <div class="navbar-collapse">
+                    <ul class="nav navbar-nav navbar-right">
+                        <li>
+                            <a href="/blog/">Home</a>
+                        </li>
+                        
+                        
+                        
+                        
+                        <li>
+                            <a href="/blog/about/">About</a>
+                        </li>
+                        
+                        
+                        
+                        <li>
+                            <a href="/blog/archive/">Archive</a>
+                        </li>
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        <li class="search-icon">
+                            <a href="javascript:void(0)">
+                                <i class="fa fa-search"></i>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            <!-- /.navbar-collapse -->
+        </div>
+        <!-- /.container -->
+    </nav>
+
+    <script>
+        // Drop Bootstarp low-performance Navbar
+        // Use customize navbar with high-quality material design animation
+        // in high-perf jank-free CSS3 implementation
+        var $body = document.body;
+        var $toggle = document.querySelector('.navbar-toggle');
+        var $navbar = document.querySelector('#huxblog_navbar');
+        var $collapse = document.querySelector('.navbar-collapse');
+
+        var __HuxNav__ = {
+            close: function () {
+                $navbar.className = " ";
+                // wait until animation end.
+                setTimeout(function () {
+                    // prevent frequently toggle
+                    if ($navbar.className.indexOf('in') < 0) {
+                        $collapse.style.height = "0px"
+                    }
+                }, 400)
+            },
+            open: function () {
+                $collapse.style.height = "auto"
+                $navbar.className += " in";
+            }
+        }
+
+        // Bind Event
+        $toggle.addEventListener('click', function (e) {
+            if ($navbar.className.indexOf('in') > 0) {
+                __HuxNav__.close()
+            } else {
+                __HuxNav__.open()
+            }
+        })
+
+        /**
+         * Since Fastclick is used to delegate 'touchstart' globally
+         * to hack 300ms delay in iOS by performing a fake 'click',
+         * Using 'e.stopPropagation' to stop 'touchstart' event from 
+         * $toggle/$collapse will break global delegation.
+         * 
+         * Instead, we use a 'e.target' filter to prevent handler
+         * added to document close HuxNav.  
+         *
+         * Also, we use 'click' instead of 'touchstart' as compromise
+         */
+        document.addEventListener('click', function (e) {
+            if (e.target == $toggle) return;
+            if (e.target.className == 'icon-bar') return;
+            __HuxNav__.close();
+        })
+    </script>
+    <!-- Search -->
+<div class="search-page">
+  <div class="search-icon-close-container">
+    <span class="search-icon-close">
+      <i class="fa fa-chevron-down"></i>
+    </span>
+  </div>
+  <div class="search-main container">
+    <div class="row">
+      <div class="col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1">
+        <form></form>
+        <input type="text" id="search-input" placeholder="$ grep...">
+        </form>
+        <div id="search-results" class="mini-post-list"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+    <!-- Image to hack wechat -->
+<!-- <img src="/img/icon_wechat.png" width="0" height="0"> -->
+<!-- <img src="/blog/img/home-bg.jpg" width="0" height="0"> -->
+
+<!-- Post Header -->
+
+
+
+<style type="text/css">
+    header.intro-header{
+        position: relative;
+        background-image: url('/blog/img/home-bg.jpg');
+        background: ;
+    }
+
+    
+</style>
+
+<header class="intro-header style-text" >
+
+    <div class="header-mask"></div>
+    
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1">
+                <div class="post-heading">
+                    <div class="tags">
+                        
+                        <a class="tag" href="/blog/archive/?tag=tcpdump" title="tcpdump">tcpdump</a>
+                        
+                        <a class="tag" href="/blog/archive/?tag=neuvector" title="neuvector">neuvector</a>
+                        
+                        <a class="tag" href="/blog/archive/?tag=%E6%8A%93%E5%8C%85" title="抓包">抓包</a>
+                        
+                    </div>
+                    <h1>Neuvector源码分析之 网络抓包</h1>
+                    
+                    <h2 class="subheading"></h2>
+                    <span class="meta">Posted by hujin on August 10, 2022</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</header>
+
+
+
+
+
+
+<!-- Post Content -->
+<article>
+    <div class="container">
+        <div class="row">
+
+    <!-- Post Container -->
+            <div class="
+                col-lg-8 col-lg-offset-2
+                col-md-10 col-md-offset-1
+                post-container">
+
+                <!-- Multi-Lingual -->
+                
+
+				<h2 id="功能介绍">功能介绍</h2>
+
+<p><img src="/blog/img/neuvector_tcpdump.png" alt="neuvector_pcap" /></p>
+
+<p>抓包功能是针对容器的功能，用户在界面选择某个容器点击抓包功能，可以控制抓包开始和结束，可以选择抓包时间；完成后可以下载对应的pcap格式的文件，
+在本地的wireshark中直接打开进行分析。底层实际还是通过进入容器的网络namespace，执行tcpdump命令来实现。</p>
+
+<p>说明下：hostnetwork的容器暂不支持抓包功能</p>
+
+<p>API接口：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+</pre></td><td class="rouge-code"><pre>neuvector\controller\rest\rest.go:1517
+
+r.GET("/v1/sniffer", handlerSnifferList)
+r.GET("/v1/sniffer/:id", handlerSnifferShow)
+r.POST("/v1/sniffer", handlerSnifferStart)
+r.PATCH("/v1/sniffer/stop/:id", handlerSnifferStop)
+r.DELETE("/v1/sniffer/:id", handlerSnifferDelete)
+r.GET("/v1/sniffer/:id/pcap", handlerSnifferGetFile)
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<h2 id="源码分析">源码分析</h2>
+
+<p>这里我们重点看下创建，也就是handlerSnifferStart的代码流程：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+</pre></td><td class="rouge-code"><pre>func handlerSnifferStart(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+  ...
+  # 从request中获取对应的参数，这里是workloadid，也就是对应的pause容器的container id
+  query := restParseQuery(r)
+
+  # 获取容器id参数，并根据容器id获取对应的agentid
+  agentID, wlID, err := getAgentWorkloadFromFilter(query.filters, acc)
+  if err != nil {
+      restRespNotFoundLogAccessDenied(w, login, err)
+      return
+  }
+
+  // Check if we can config workload
+  wl, err := cacher.GetWorkloadBrief(wlID, "", acc)
+  if wl == nil {
+      restRespNotFoundLogAccessDenied(w, login, err)
+      return
+  } else if !acc.Authorize(&amp;share.CLUSSnifferDummy{WorkloadDomain: wl.Domain}, nil) {
+      restRespAccessDenied(w, login)
+      return
+  }
+  ...
+
+  args := proc.Sniffer
+  req := &amp;share.CLUSSnifferRequest{WorkloadID: wlID, Cmd: share.SnifferCmd_StartSniffer}
+  ...
+
+  res, err := rpc.SnifferCmd(agentID, req)
+  ...
+  restRespSuccess(w, r, &amp;resp, acc, login, &amp;proc, "Start sniffer")
+}
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<ul>
+  <li>代码会从request中获取需要抓包的容器id</li>
+  <li>getAgentWorkloadFromFilter中获取容器id并查询对应的agent id</li>
+  <li>GetWorkloadBrief 获取指定容器的详细信息，并校验容器是否允许抓包</li>
+  <li>SnifferCmd 通过grpc调用对应agent的抓包接口，这里会提前配置一些抓包的参数，包括文件名称、文件大小（默认2M）、抓包时间等等</li>
+</ul>
+
+<p>我们在agent中查看对应的调用接口SnifferCmd，文件位置：neuvector\agent\service.go:830</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+</pre></td><td class="rouge-code"><pre>func (rs *RPCService) SnifferCmd(ctx context.Context, req *share.CLUSSnifferRequest) (*share.CLUSSnifferResponse, error) {
+    if req.Cmd == share.SnifferCmd_StartSniffer {
+        id, err := startSniffer(req)
+        return &amp;share.CLUSSnifferResponse{ID: id}, err
+    } else if req.Cmd == share.SnifferCmd_StopSniffer {
+        return &amp;share.CLUSSnifferResponse{}, stopSniffer(req.ID)
+    } else if req.Cmd == share.SnifferCmd_RemoveSniffer {
+        return &amp;share.CLUSSnifferResponse{}, removeSniffer(req.ID)
+    }
+    return &amp;share.CLUSSnifferResponse{}, grpc.Errorf(codes.InvalidArgument, "Invalid sniffer command")
+}
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>继续查看对应的startSniffer方法：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+</pre></td><td class="rouge-code"><pre>func startSniffer(info *share.CLUSSnifferRequest) (string, error) {
+    var pid int
+
+    gInfoRLock()
+    c, ok := gInfo.activeContainers[info.WorkloadID]
+    ...
+
+    proc := &amp;procInfo{
+        workload:   info.WorkloadID,
+        fileNumber: uint(info.FileNumber),
+        duration:   uint(info.DurationInSecond),
+    }
+
+    key := generateSnifferID()
+
+    proc.fileName, proc.args = parseArgs(info, key[:share.SnifferIdAgentField])
+    _, err := startSnifferProc(key, proc, pid)
+    if err != nil {
+        return "", grpc.Errorf(codes.Internal, err.Error())
+    } else {
+        return key, nil
+    }
+}
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<ul>
+  <li>这里根据容器id或者内存中容器对象，这个对象实际是通过独立线程监听节点的runtime维护的信息</li>
+  <li>generateSnifferID 这个是根据agent id生成一个id作为文件名称的一部分</li>
+</ul>
+
+<p>生成tcpdump命令代码</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+</pre></td><td class="rouge-code"><pre>func parseArgs(info *share.CLUSSnifferRequest, keyname string) (string, []string) {
+    ...
+    filename = defaultPcapDir + keyname + "_"
+    filenumber = fmt.Sprintf("%d", info.FileNumber)
+    filesize = fmt.Sprintf("%d", info.FileSizeInMB)
+    ...
+
+    tcpdumpCmd := []string{"-i", "any", "-U", "-C"}
+    cmdStr = append(tcpdumpCmd, filesize, "-w", filename, "-W", filenumber)
+    ...
+    return filename, cmdStr
+}
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<ul>
+  <li>parseArgs用来生成完整的文件名称，并准备具体的tcpdump命令，完整的命令类似： tcpdump -i any -U -C 2 -w /var/neuvector/pcap/0a5bdf2c_0</li>
+</ul>
+
+<p>下面就是进入容器的network namespace然后执行tcpdump命令</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+</pre></td><td class="rouge-code"><pre>func startSnifferProc(key string, proc *procInfo, pid int) (string, error) {
+    ...
+
+    var script string
+    if proc.duration &gt; 0 {
+        script = fmt.Sprintf("timeout %d ", proc.duration)
+    }
+    script += "tcpdump " + strings.Join(proc.args, " ")
+    log.WithFields(log.Fields{"key": key, "cmd": script}).Debug()
+
+    proc.cmd = exec.Command(system.ExecNSTool, system.NSActRun, "-i", "-n", global.SYS.GetNetNamespacePath(pid))
+    proc.cmd.SysProcAttr = &amp;syscall.SysProcAttr{Setsid: true}
+    proc.cmd.Stderr = &amp;proc.errb
+    stdin, err := proc.cmd.StdinPipe()
+    if err != nil {
+        e := fmt.Errorf("Open nsrun stdin error")
+        log.WithFields(log.Fields{"error": err}).Error(e)
+        return "", e
+    }
+
+    err = proc.cmd.Start()
+    if err != nil {
+        e := fmt.Errorf("Failed to start sniffer")
+        log.WithFields(log.Fields{"error": err}).Error(e)
+        return "", e
+    }
+
+    pgid := proc.cmd.Process.Pid
+    global.SYS.AddToolProcess(pgid, pid, "sniffer", script)
+
+    io.WriteString(stdin, script)
+    stdin.Close()
+
+    ...
+    return status, err
+}
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<ul>
+  <li>这里就是通过nstool工具进入容器network namespace, 将tcpdump命令作为stdin在namespace中执行</li>
+  <li>完整的命令类似：echo “tcpdump -i any -U -C 2 -w /var/neuvector/pcap/xxx  -W 5” | ./nstools run -i -n /proc/2271/ns/net</li>
+  <li>nstools这个工具类似nsenter，为了安全工具内部会校验调用方必须是neuvector agent服务，所以一般情况下执行这个命令是会失败的</li>
+  <li>监听tcpdump进程状态并返回状态信息</li>
+</ul>
+
+<p>其他方法比如stop、下载抓包文件的调用路径是类似的</p>
+
+<p>nstools工具使用（移除父进程校验后）：
+<img src="/blog/img/neuvector_nstools.png" alt="neuvector_pcap" /></p>
+
+
+
+                <hr style="visibility: hidden;">
+                <ul class="pager">
+                    
+                    <li class="previous">
+                        <a href="/blog/2022/08/09/neuvector-introduce/" data-toggle="tooltip" data-placement="top" title="Neuvector 初探">
+                        Previous<br>
+                        <span>Neuvector 初探</span>
+                        </a>
+                    </li>
+                    
+                    
+                    <li class="next">
+                        <a href="/blog/2022/08/11/neuvector-process/" data-toggle="tooltip" data-placement="top" title="Neuvector源码分析之 进程管理">
+                        Next<br>
+                        <span>Neuvector源码分析之 进程管理</span>
+                        </a>
+                    </li>
+                    
+                </ul>
+                <hr style="visibility: hidden;">
+
+                
+
+                
+            </div>  
+
+    <!-- Side Catalog Container -->
+        
+            <div class="
+                col-lg-2 col-lg-offset-0
+                visible-lg-block
+                sidebar-container
+                catalog-container">
+                <div class="side-catalog">
+                    <hr class="hidden-sm hidden-xs">
+                    <h5>
+                        <a class="catalog-toggle" href="#">CATALOG</a>
+                    </h5>
+                    <ul class="catalog-body"></ul>
+                </div>
+            </div>
+        
+
+    <!-- Sidebar Container -->
+            <div class="
+                col-lg-8 col-lg-offset-2
+                col-md-10 col-md-offset-1
+                sidebar-container">
+
+                <!-- Featured Tags -->
+                
+
+
+<section>
+    
+        <hr class="hidden-sm hidden-xs">
+    
+    <h5><a href="/blog/archive/">FEATURED TAGS</a></h5>
+    <div class="tags">
+        
+        
+        
+        
+        
+        
+                <a data-sort="0017" 
+                    href="/blog/archive/?tag=kubernetes"
+                    title="kubernetes"
+                    rel="5">kubernetes</a>
+        
+                <a data-sort="0015" 
+                    href="/blog/archive/?tag=k8s"
+                    title="k8s"
+                    rel="7">k8s</a>
+        
+                <a data-sort="0017" 
+                    href="/blog/archive/?tag=cni"
+                    title="cni"
+                    rel="5">cni</a>
+        
+                <a data-sort="0017" 
+                    href="/blog/archive/?tag=neuvector"
+                    title="neuvector"
+                    rel="5">neuvector</a>
+        
+                <a data-sort="0019" 
+                    href="/blog/archive/?tag=istio"
+                    title="istio"
+                    rel="3">istio</a>
+        
+                <a data-sort="0020" 
+                    href="/blog/archive/?tag=tungstenfabric"
+                    title="tungstenfabric"
+                    rel="2">tungstenfabric</a>
+    </div>
+</section>
+
+
+                <!-- Friends Blog -->
+                <!---->
+            </div>
+        </div>
+    </div>
+</article>
+
+<!-- add support for mathjax by voleking-->
+
+
+
+
+
+
+
+
+
+<!-- async load function -->
+<script>
+    function async(u, c) {
+      var d = document, t = 'script',
+          o = d.createElement(t),
+          s = d.getElementsByTagName(t)[0];
+      o.src = u;
+      if (c) { o.addEventListener('load', function (e) { c(null, e); }, false); }
+      s.parentNode.insertBefore(o, s);
+    }
+</script>
+<!-- anchor-js, Doc:http://bryanbraun.github.io/anchorjs/ -->
+<script>
+    async("//cdnjs.cloudflare.com/ajax/libs/anchor-js/1.1.1/anchor.min.js",function(){
+        anchors.options = {
+          visible: 'hover',
+          placement: 'right',
+          // icon: '#'
+        };
+        anchors.add().remove('.intro-header h1').remove('.subheading').remove('.sidebar-container h5');
+    })
+</script>
+<style>
+    /* place left on bigger screen */
+    @media all and (min-width: 800px) {
+        .anchorjs-link{
+            position: absolute;
+            left: -0.75em;
+            font-size: 1.1em;
+            margin-top : -0.1em;
+        }
+    }
+</style>
+
+
+
+    <!-- Footer -->
+<footer>
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1">
+                <!-- SNS Link -->
+                
+
+
+<ul class="list-inline text-center">
+
+
+  
+  
+  
+  
+  
+  
+  <li>
+    <a target="_blank" href="https://github.com/guokehujin">
+      <span class="fa-stack fa-lg">
+        <i class="fa fa-circle fa-stack-2x"></i>
+        <i class="fa fa-github fa-stack-1x fa-inverse"></i>
+      </span>
+    </a>
+  </li>
+  
+  
+</ul>
+
+                <p class="copyright text-muted">
+                    Copyright &copy; Hujin Blog 2022
+                    <br>
+                    Powered by <a href="http://hujin.github.com">Hujin Blog</a> |
+                    <iframe style="margin-left: 2px; margin-bottom:-5px;" frameborder="0" scrolling="0" width="100px"
+                        height="20px"
+                        src="https://ghbtns.com/github-btn.html?user=huxpro&repo=huxpro.github.io&type=star&count=true">
+                    </iframe>
+                </p>
+            </div>
+        </div>
+    </div>
+</footer>
+
+<!-- jQuery -->
+<script src="/blog/js/jquery.min.js "></script>
+
+<!-- Bootstrap Core JavaScript -->
+<!-- Currently, only navbar scroll-down effect at desktop still depends on this -->
+<script src="/blog/js/bootstrap.min.js "></script>
+
+<!-- Custom Theme JavaScript -->
+<script src="/blog/js/hux-blog.min.js "></script>
+
+<!-- Simple Jekyll Search -->
+<script src="/blog/js/simple-jekyll-search.min.js"></script>
+
+<!-- Service Worker -->
+
+<script src="/blog/js/snackbar.js "></script>
+<script src="/blog/js/sw-registration.js "></script>
+
+
+<!-- async load function -->
+<script>
+    function async(u, c) {
+        var d = document, t = 'script',
+            o = d.createElement(t),
+            s = d.getElementsByTagName(t)[0];
+        o.src = u;
+        if (c) { o.addEventListener('load', function (e) { c(null, e); }, false); }
+        s.parentNode.insertBefore(o, s);
+    }
+</script>
+
+<!--
+     Because of the native support for backtick-style fenced code blocks
+     right within the Markdown is landed in Github Pages,
+     From V1.6, There is no need for Highlight.js,
+     so Huxblog drops it officially.
+
+     - https://github.com/blog/2100-github-pages-now-faster-and-simpler-with-jekyll-3-0
+     - https://help.github.com/articles/creating-and-highlighting-code-blocks/
+     - https://github.com/jneen/rouge/wiki/list-of-supported-languages-and-lexers
+-->
+<!--
+    <script>
+        async("http://cdn.bootcss.com/highlight.js/8.6/highlight.min.js", function(){
+            hljs.initHighlightingOnLoad();
+        })
+    </script>
+    <link href="http://cdn.bootcss.com/highlight.js/8.6/styles/github.min.css" rel="stylesheet">
+-->
+
+
+
+
+
+
+
+<!--fastClick.js -->
+<script>
+    async("//cdnjs.cloudflare.com/ajax/libs/fastclick/1.0.6/fastclick.min.js", function () {
+        var $nav = document.querySelector("nav");
+        if ($nav) FastClick.attach($nav);
+    })
+</script>
+
+
+<!-- Google Analytics -->
+
+<script>
+    // dynamic User by Hujin
+    var _gaId = 'UA-49627206-1';
+    var _gaDomain = 'smallcoderhujin.github.io/blog/';
+
+    // Originial
+    (function (i, s, o, g, r, a, m) {
+        i['GoogleAnalyticsObject'] = r; i[r] = i[r] || function () {
+            (i[r].q = i[r].q || []).push(arguments)
+        }, i[r].l = 1 * new Date(); a = s.createElement(o),
+            m = s.getElementsByTagName(o)[0]; a.async = 1; a.src = g; m.parentNode.insertBefore(a, m)
+    })(window, document, 'script', '//www.google-analytics.com/analytics.js', 'ga');
+
+    ga('create', _gaId, _gaDomain);
+    ga('send', 'pageview');
+</script>
+
+
+
+<!-- Baidu Tongji -->
+
+
+
+<!-- Side Catalog -->
+
+<script type="text/javascript">
+    function generateCatalog(selector) {
+
+        // interop with multilangual 
+        if ('' == 'true') {
+            _containerSelector = 'div.post-container.active'
+        } else {
+            _containerSelector = 'div.post-container'
+        }
+
+        // init
+        var P = $(_containerSelector), a, n, t, l, i, c;
+        a = P.find('h1,h2,h3,h4,h5,h6');
+
+        // clean
+        $(selector).html('')
+
+        // appending
+        a.each(function () {
+            n = $(this).prop('tagName').toLowerCase();
+            i = "#" + $(this).prop('id');
+            t = $(this).text();
+            c = $('<a href="' + i + '" rel="nofollow">' + t + '</a>');
+            l = $('<li class="' + n + '_nav"></li>').append(c);
+            $(selector).append(l);
+        });
+        return true;
+    }
+
+    generateCatalog(".catalog-body");
+
+    // toggle side catalog
+    $(".catalog-toggle").click((function (e) {
+        e.preventDefault();
+        $('.side-catalog').toggleClass("fold")
+    }))
+
+    /*
+     * Doc: https://github.com/davist11/jQuery-One-Page-Nav
+     * Fork by Hujin to support padding
+     */
+    async("/blog/js/jquery.nav.js", function () {
+        $('.catalog-body').onePageNav({
+            currentClass: "active",
+            changeHash: !1,
+            easing: "swing",
+            filter: "",
+            scrollSpeed: 700,
+            scrollOffset: 0,
+            scrollThreshold: .2,
+            begin: null,
+            end: null,
+            scrollChange: null,
+            padding: 80
+        });
+    });
+</script>
+
+
+
+<!-- Multi-Lingual -->
+
+
+<!-- Simple Jekyll Search -->
+<script>
+    // https://stackoverflow.com/questions/1912501/unescape-html-entities-in-javascript
+    function htmlDecode(input) {
+        var e = document.createElement('textarea');
+        e.innerHTML = input;
+        // handle case of empty input
+        return e.childNodes.length === 0 ? "" : e.childNodes[0].nodeValue;
+    }
+
+    SimpleJekyllSearch({
+        searchInput: document.getElementById('search-input'),
+        resultsContainer: document.getElementById('search-results'),
+        json: '/search.json',
+        searchResultTemplate: '<div class="post-preview item"><a href="{url}"><h2 class="post-title">{title}</h2><h3 class="post-subtitle">{subtitle}</h3><hr></a></div>',
+        noResultsText: 'No results',
+        limit: 50,
+        fuzzy: false,
+        // a hack to get escaped subtitle unescaped. for some reason, 
+        // post.subtitle w/o escape filter nuke entire search.
+        templateMiddleware: function (prop, value, template) {
+            if (prop === 'subtitle' || prop === 'title') {
+                if (value.indexOf("code")) {
+                    return htmlDecode(value);
+                } else {
+                    return value;
+                }
+            }
+        }
+    });
+
+    $(document).ready(function () {
+        var $searchPage = $('.search-page');
+        var $searchOpen = $('.search-icon');
+        var $searchClose = $('.search-icon-close');
+        var $searchInput = $('#search-input');
+        var $body = $('body');
+
+        $searchOpen.on('click', function (e) {
+            e.preventDefault();
+            $searchPage.toggleClass('search-active');
+            var prevClasses = $body.attr('class') || '';
+            setTimeout(function () {
+                $body.addClass('no-scroll');
+            }, 400)
+
+            if ($searchPage.hasClass('search-active')) {
+                $searchClose.on('click', function (e) {
+                    e.preventDefault();
+                    $searchPage.removeClass('search-active');
+                    $body.attr('class', prevClasses);  // from closure 
+                });
+                $searchInput.focus();
+            }
+        });
+    });
+</script>
+
+
+<!-- Image to hack wechat -->
+<img src="/img/icon_wechat.png" width="0" height="0" />
+<!-- Migrate from head to bottom, no longer block render and still work -->
+
+</body>
+
+</html>

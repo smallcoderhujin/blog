@@ -125,6 +125,8 @@ tungstenfabric cni通过watch kubernetes apiserver中指定的资源，并在sdn
                         
                         
                         
+                        
+                        
                         <li class="search-icon">
                             <a href="javascript:void(0)">
                                 <i class="fa fa-search"></i>
@@ -279,6 +281,7 @@ tungstenfabric cni通过watch kubernetes apiserver中指定的资源，并在sdn
 <p>tungstenfabric cni通过watch kubernetes apiserver中指定的资源，并在sdn中创建对应的网络设备来实现对应功能。本文重点介绍cni针对networkpolicy的处理，根据源码逐步分析。</p>
 
 <h2 id="架构流程图">架构&amp;流程图</h2>
+
 <p><img src="http://hujin.dynv6.net:50008/index.php?user/publicLink&amp;fid=826f91FDc9_ivLXP-2TgqvVlTnWAWUUm5hE6qr_ef-KVP_3RWxuNClqp0L86chmPdHcV9GGK4fY5BLr3ualYY8IkFXQI_OHUoI2btmUla-PRxN494bUH8DsY7FAajC-fCOHFQHOBwYVnU8BSRZOxaVGZsp2WPTQ&amp;file_name=/arch_network_policy.png" alt="arch_network_policy" /></p>
 
 <h2 id="源码解析">源码解析</h2>
@@ -986,27 +989,32 @@ def _set_tags_on_pod_vmi(self, pod_id, old_lables=None):
         
         
         
-                <a data-sort="0012" 
+                <a data-sort="0017" 
                     href="/blog/archive/?tag=kubernetes"
                     title="kubernetes"
-                    rel="4">kubernetes</a>
+                    rel="5">kubernetes</a>
         
-                <a data-sort="0009" 
+                <a data-sort="0015" 
                     href="/blog/archive/?tag=k8s"
                     title="k8s"
                     rel="7">k8s</a>
         
-                <a data-sort="0011" 
+                <a data-sort="0017" 
                     href="/blog/archive/?tag=cni"
                     title="cni"
                     rel="5">cni</a>
         
-                <a data-sort="0013" 
+                <a data-sort="0017" 
+                    href="/blog/archive/?tag=neuvector"
+                    title="neuvector"
+                    rel="5">neuvector</a>
+        
+                <a data-sort="0019" 
                     href="/blog/archive/?tag=istio"
                     title="istio"
                     rel="3">istio</a>
         
-                <a data-sort="0014" 
+                <a data-sort="0020" 
                     href="/blog/archive/?tag=tungstenfabric"
                     title="tungstenfabric"
                     rel="2">tungstenfabric</a>

@@ -5,9 +5,765 @@
     <description>Hujin，Openstack &amp; SDN &amp; Kubernetes Lover，Software Engineer，| 与你一起发现更大的世界</description>
     <link>http://0.0.0.0:4000/blog/</link>
     <atom:link href="http://0.0.0.0:4000/blog/feed.xml" rel="self" type="application/rss+xml" />
-    <pubDate>Fri, 15 Apr 2022 01:44:16 +0000</pubDate>
-    <lastBuildDate>Fri, 15 Apr 2022 01:44:16 +0000</lastBuildDate>
-    <generator>Jekyll v4.2.0</generator>
+    <pubDate>Wed, 10 Aug 2022 05:53:28 +0000</pubDate>
+    <lastBuildDate>Wed, 10 Aug 2022 05:53:28 +0000</lastBuildDate>
+    <generator>Jekyll v4.2.2</generator>
+    
+      <item>
+        <title>Neuvector源码分析之 网络策略</title>
+        <description>&lt;h2 id=&quot;架构图&quot;&gt;架构图&lt;/h2&gt;
+&lt;p&gt;TODO&lt;/p&gt;
+</description>
+        <pubDate>Sat, 13 Aug 2022 00:00:00 +0000</pubDate>
+        <link>http://0.0.0.0:4000/blog/2022/08/13/neuvector-policy/</link>
+        <guid isPermaLink="true">http://0.0.0.0:4000/blog/2022/08/13/neuvector-policy/</guid>
+        
+        <category>neuvector</category>
+        
+        <category>网络策略</category>
+        
+        
+      </item>
+    
+      <item>
+        <title>Neuvector源码分析之 文件管理</title>
+        <description>&lt;h2 id=&quot;架构图&quot;&gt;架构图&lt;/h2&gt;
+&lt;p&gt;TODO&lt;/p&gt;
+
+</description>
+        <pubDate>Fri, 12 Aug 2022 00:00:00 +0000</pubDate>
+        <link>http://0.0.0.0:4000/blog/2022/08/12/neuvector-file/</link>
+        <guid isPermaLink="true">http://0.0.0.0:4000/blog/2022/08/12/neuvector-file/</guid>
+        
+        <category>neuvector</category>
+        
+        <category>文件管理</category>
+        
+        
+      </item>
+    
+      <item>
+        <title>Neuvector源码分析之 进程管理</title>
+        <description>&lt;h2 id=&quot;架构图&quot;&gt;架构图&lt;/h2&gt;
+&lt;p&gt;TODO&lt;/p&gt;
+</description>
+        <pubDate>Thu, 11 Aug 2022 00:00:00 +0000</pubDate>
+        <link>http://0.0.0.0:4000/blog/2022/08/11/neuvector-process/</link>
+        <guid isPermaLink="true">http://0.0.0.0:4000/blog/2022/08/11/neuvector-process/</guid>
+        
+        <category>neuvector</category>
+        
+        <category>进程管理</category>
+        
+        
+      </item>
+    
+      <item>
+        <title>Neuvector源码分析之 网络抓包</title>
+        <description>&lt;h2 id=&quot;功能介绍&quot;&gt;功能介绍&lt;/h2&gt;
+
+&lt;p&gt;&lt;img src=&quot;/blog/img/neuvector_tcpdump.png&quot; alt=&quot;neuvector_pcap&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;抓包功能是针对容器的功能，用户在界面选择某个容器点击抓包功能，可以控制抓包开始和结束，可以选择抓包时间；完成后可以下载对应的pcap格式的文件，
+在本地的wireshark中直接打开进行分析。底层实际还是通过进入容器的网络namespace，执行tcpdump命令来实现。&lt;/p&gt;
+
+&lt;p&gt;说明下：hostnetwork的容器暂不支持抓包功能&lt;/p&gt;
+
+&lt;p&gt;API接口：&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;neuvector\controller\rest\rest.go:1517
+
+r.GET(&quot;/v1/sniffer&quot;, handlerSnifferList)
+r.GET(&quot;/v1/sniffer/:id&quot;, handlerSnifferShow)
+r.POST(&quot;/v1/sniffer&quot;, handlerSnifferStart)
+r.PATCH(&quot;/v1/sniffer/stop/:id&quot;, handlerSnifferStop)
+r.DELETE(&quot;/v1/sniffer/:id&quot;, handlerSnifferDelete)
+r.GET(&quot;/v1/sniffer/:id/pcap&quot;, handlerSnifferGetFile)
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h2 id=&quot;源码分析&quot;&gt;源码分析&lt;/h2&gt;
+
+&lt;p&gt;这里我们重点看下创建，也就是handlerSnifferStart的代码流程：&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;func handlerSnifferStart(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+  ...
+  # 从request中获取对应的参数，这里是workloadid，也就是对应的pause容器的container id
+  query := restParseQuery(r)
+
+  # 获取容器id参数，并根据容器id获取对应的agentid
+  agentID, wlID, err := getAgentWorkloadFromFilter(query.filters, acc)
+  if err != nil {
+      restRespNotFoundLogAccessDenied(w, login, err)
+      return
+  }
+
+  // Check if we can config workload
+  wl, err := cacher.GetWorkloadBrief(wlID, &quot;&quot;, acc)
+  if wl == nil {
+      restRespNotFoundLogAccessDenied(w, login, err)
+      return
+  } else if !acc.Authorize(&amp;amp;share.CLUSSnifferDummy{WorkloadDomain: wl.Domain}, nil) {
+      restRespAccessDenied(w, login)
+      return
+  }
+  ...
+
+  args := proc.Sniffer
+  req := &amp;amp;share.CLUSSnifferRequest{WorkloadID: wlID, Cmd: share.SnifferCmd_StartSniffer}
+  ...
+
+  res, err := rpc.SnifferCmd(agentID, req)
+  ...
+  restRespSuccess(w, r, &amp;amp;resp, acc, login, &amp;amp;proc, &quot;Start sniffer&quot;)
+}
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;代码会从request中获取需要抓包的容器id&lt;/li&gt;
+  &lt;li&gt;getAgentWorkloadFromFilter中获取容器id并查询对应的agent id&lt;/li&gt;
+  &lt;li&gt;GetWorkloadBrief 获取指定容器的详细信息，并校验容器是否允许抓包&lt;/li&gt;
+  &lt;li&gt;SnifferCmd 通过grpc调用对应agent的抓包接口，这里会提前配置一些抓包的参数，包括文件名称、文件大小（默认2M）、抓包时间等等&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;我们在agent中查看对应的调用接口SnifferCmd，文件位置：neuvector\agent\service.go:830&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;func (rs *RPCService) SnifferCmd(ctx context.Context, req *share.CLUSSnifferRequest) (*share.CLUSSnifferResponse, error) {
+    if req.Cmd == share.SnifferCmd_StartSniffer {
+        id, err := startSniffer(req)
+        return &amp;amp;share.CLUSSnifferResponse{ID: id}, err
+    } else if req.Cmd == share.SnifferCmd_StopSniffer {
+        return &amp;amp;share.CLUSSnifferResponse{}, stopSniffer(req.ID)
+    } else if req.Cmd == share.SnifferCmd_RemoveSniffer {
+        return &amp;amp;share.CLUSSnifferResponse{}, removeSniffer(req.ID)
+    }
+    return &amp;amp;share.CLUSSnifferResponse{}, grpc.Errorf(codes.InvalidArgument, &quot;Invalid sniffer command&quot;)
+}
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;继续查看对应的startSniffer方法：&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;func startSniffer(info *share.CLUSSnifferRequest) (string, error) {
+    var pid int
+
+    gInfoRLock()
+    c, ok := gInfo.activeContainers[info.WorkloadID]
+    ...
+
+    proc := &amp;amp;procInfo{
+        workload:   info.WorkloadID,
+        fileNumber: uint(info.FileNumber),
+        duration:   uint(info.DurationInSecond),
+    }
+
+    key := generateSnifferID()
+
+    proc.fileName, proc.args = parseArgs(info, key[:share.SnifferIdAgentField])
+    _, err := startSnifferProc(key, proc, pid)
+    if err != nil {
+        return &quot;&quot;, grpc.Errorf(codes.Internal, err.Error())
+    } else {
+        return key, nil
+    }
+}
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;这里根据容器id或者内存中容器对象，这个对象实际是通过独立线程监听节点的runtime维护的信息&lt;/li&gt;
+  &lt;li&gt;generateSnifferID 这个是根据agent id生成一个id作为文件名称的一部分&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;生成tcpdump命令代码&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;func parseArgs(info *share.CLUSSnifferRequest, keyname string) (string, []string) {
+    ...
+    filename = defaultPcapDir + keyname + &quot;_&quot;
+    filenumber = fmt.Sprintf(&quot;%d&quot;, info.FileNumber)
+    filesize = fmt.Sprintf(&quot;%d&quot;, info.FileSizeInMB)
+    ...
+
+    tcpdumpCmd := []string{&quot;-i&quot;, &quot;any&quot;, &quot;-U&quot;, &quot;-C&quot;}
+    cmdStr = append(tcpdumpCmd, filesize, &quot;-w&quot;, filename, &quot;-W&quot;, filenumber)
+    ...
+    return filename, cmdStr
+}
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;parseArgs用来生成完整的文件名称，并准备具体的tcpdump命令，完整的命令类似： tcpdump -i any -U -C 2 -w /var/neuvector/pcap/0a5bdf2c_0&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;下面就是进入容器的network namespace然后执行tcpdump命令&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;func startSnifferProc(key string, proc *procInfo, pid int) (string, error) {
+    ...
+
+    var script string
+    if proc.duration &amp;gt; 0 {
+        script = fmt.Sprintf(&quot;timeout %d &quot;, proc.duration)
+    }
+    script += &quot;tcpdump &quot; + strings.Join(proc.args, &quot; &quot;)
+    log.WithFields(log.Fields{&quot;key&quot;: key, &quot;cmd&quot;: script}).Debug()
+
+    proc.cmd = exec.Command(system.ExecNSTool, system.NSActRun, &quot;-i&quot;, &quot;-n&quot;, global.SYS.GetNetNamespacePath(pid))
+    proc.cmd.SysProcAttr = &amp;amp;syscall.SysProcAttr{Setsid: true}
+    proc.cmd.Stderr = &amp;amp;proc.errb
+    stdin, err := proc.cmd.StdinPipe()
+    if err != nil {
+        e := fmt.Errorf(&quot;Open nsrun stdin error&quot;)
+        log.WithFields(log.Fields{&quot;error&quot;: err}).Error(e)
+        return &quot;&quot;, e
+    }
+
+    err = proc.cmd.Start()
+    if err != nil {
+        e := fmt.Errorf(&quot;Failed to start sniffer&quot;)
+        log.WithFields(log.Fields{&quot;error&quot;: err}).Error(e)
+        return &quot;&quot;, e
+    }
+
+    pgid := proc.cmd.Process.Pid
+    global.SYS.AddToolProcess(pgid, pid, &quot;sniffer&quot;, script)
+
+    io.WriteString(stdin, script)
+    stdin.Close()
+
+    ...
+    return status, err
+}
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;这里就是通过nstool工具进入容器network namespace, 将tcpdump命令作为stdin在namespace中执行&lt;/li&gt;
+  &lt;li&gt;完整的命令类似：echo “tcpdump -i any -U -C 2 -w /var/neuvector/pcap/xxx  -W 5” | ./nstools run -i -n /proc/2271/ns/net&lt;/li&gt;
+  &lt;li&gt;nstools这个工具类似nsenter，为了安全工具内部会校验调用方必须是neuvector agent服务，所以一般情况下执行这个命令是会失败的&lt;/li&gt;
+  &lt;li&gt;监听tcpdump进程状态并返回状态信息&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;其他方法比如stop、下载抓包文件的调用路径是类似的&lt;/p&gt;
+
+&lt;p&gt;nstools工具使用（移除父进程校验后）：
+&lt;img src=&quot;/blog/img/neuvector_nstools.png&quot; alt=&quot;neuvector_pcap&quot; /&gt;&lt;/p&gt;
+
+</description>
+        <pubDate>Wed, 10 Aug 2022 00:00:00 +0000</pubDate>
+        <link>http://0.0.0.0:4000/blog/2022/08/10/neuvector-tcpdump/</link>
+        <guid isPermaLink="true">http://0.0.0.0:4000/blog/2022/08/10/neuvector-tcpdump/</guid>
+        
+        <category>tcpdump</category>
+        
+        <category>neuvector</category>
+        
+        <category>抓包</category>
+        
+        
+      </item>
+    
+      <item>
+        <title>Neuvector 初探</title>
+        <description>&lt;h2 id=&quot;介绍&quot;&gt;介绍&lt;/h2&gt;
+
+&lt;p&gt;&lt;img src=&quot;/blog/img/neuvector_arch1.png&quot; alt=&quot;neuvector_arch&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;NeuVector 是业界首个端到端的开源容器安全平台，唯一为容器化工作负载提供企业级零信任安全的解决方案。
+NeuVector 可以提供实时深入的容器网络可视化、东西向容器网络监控、主动隔离和保护、容器主机安全以及
+容器内部安全，容器管理平台无缝集成并且实现应用级容器安全的自动化，适用于各种云环境、跨云或者本地部署等容器生产环境。&lt;/p&gt;
+
+&lt;p&gt;我们重点看neuvector的网络功能。 neuvector的网络架构中分为controller和agent端&lt;/p&gt;
+&lt;ul&gt;
+  &lt;li&gt;controller：控制服务，提供api接口，启动并watch consul数据库&lt;/li&gt;
+  &lt;li&gt;agent：节点服务，负责监控节点上容器资源，根据用户规则执行响应操作&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;控制服务在提供统一的接口服务的同时，还运行consul服务，用来提供数据持久化功能，用户在调用neuvector接口后会将数据保存到key/value数据库consul中
+控制服务和agent的通信有两种方式：&lt;/p&gt;
+&lt;ul&gt;
+  &lt;li&gt;watch consul:由于每个节点上的agent服务会watch consul的数据变动（类似etcd），其实是watch指定的key；在控制服务往consul中增加新的记录后，
+agent在watch到后根据对应key调用对应的方法处理。&lt;/li&gt;
+  &lt;li&gt;grpc：controller在某些功能中会直接通过grpc的方式调用agent，比如容器网络抓包功能&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;agent服务除了响应controller的grpc调用以外，在启动时会创建一个独立的协程来监听当前节点容器资源的变化，会获取当前节点使用的runtime来调用对应的monitor方法
+runtime支持docker/containerd/crio，支持获取容器的事件包括：&lt;/p&gt;
+&lt;ul&gt;
+  &lt;li&gt;start&lt;/li&gt;
+  &lt;li&gt;stop&lt;/li&gt;
+  &lt;li&gt;delete&lt;/li&gt;
+  &lt;li&gt;copyin&lt;/li&gt;
+  &lt;li&gt;copyout&lt;/li&gt;
+  &lt;li&gt;network create&lt;/li&gt;
+  &lt;li&gt;network delete&lt;/li&gt;
+  &lt;li&gt;socket error&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;dp是一个内核模块，在agent中维护，通过socket和agent进行通信，用来具体执行用户的网络规则，对容器网卡的in/out/status流量进行处理，详细的会在网络策略时讲&lt;/p&gt;
+
+&lt;p&gt;后面会重点从源码角度对neuvector的网络抓包、进程管理、文件管理和网络策略进行分析&lt;/p&gt;
+
+&lt;h2 id=&quot;部署&quot;&gt;部署&lt;/h2&gt;
+
+&lt;p&gt;这里我们通过helm快速部署&lt;/p&gt;
+
+&lt;p&gt;安装helm&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;curl -fsSL -o get_helm.sh     https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+chmod 700 get_helm.sh
+./get_helm.sh
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;添加repo&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;helm repo add neuvector https://neuvector.github.io/neuvector-helm/
+helm search repo neuvector/core
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;开始部署&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;kubectl create namespace neuvector
+kubectl create serviceaccount neuvector -n neuvector
+
+helm install neuvector --namespace neuvector neuvector/core  \
+--set registry=harbor.archeros.cn/dev  --set tag=5.0.1 \
+--set=controller.image.repository=neuvector/controller \
+--set=enforcer.image.repository=neuvector/enforcer \
+--set manager.image.repository=neuvector/manager \
+--set cve.scanner.image.repository=neuvector/scanner \
+--set cve.updater.image.repository=neuvector/updater
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;访问webui&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;[root@node1 ~]# kubectl get svc -n neuvector  |grep webui
+neuvector-service-webui           NodePort    10.68.204.173   &amp;lt;none&amp;gt;        8443:30080/TCP                  5d
+
+浏览器访问： https://&amp;lt;管理ip&amp;gt;:30080
+默认用户密码都是: admin
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;后面我们将从源码级别来逐个分析neuvector的网络功能&lt;/p&gt;
+
+</description>
+        <pubDate>Tue, 09 Aug 2022 00:00:00 +0000</pubDate>
+        <link>http://0.0.0.0:4000/blog/2022/08/09/neuvector-introduce/</link>
+        <guid isPermaLink="true">http://0.0.0.0:4000/blog/2022/08/09/neuvector-introduce/</guid>
+        
+        <category>neuvector</category>
+        
+        
+      </item>
+    
+      <item>
+        <title>5分钟快速部署Kubernetes集群</title>
+        <description>&lt;h2 id=&quot;环境信息&quot;&gt;环境信息&lt;/h2&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;操作系统：centos7.6 4C8G&lt;/li&gt;
+  &lt;li&gt;节点个数：1&lt;em&gt;master+2&lt;/em&gt;node&lt;/li&gt;
+  &lt;li&gt;内核版本：3.10.0-1127.el7.x86_64&lt;/li&gt;
+  &lt;li&gt;网络信息：1&lt;em&gt;管理 1&lt;/em&gt;业务&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&quot;准备masternode&quot;&gt;准备（master+node）&lt;/h2&gt;
+
+&lt;p&gt;每个节点修改hostname&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;hostnamectl set-hostname nodex
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;配置/etc/hosts&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;cat /etc/hosts
+179.20.23.30 node1
+179.20.23.31 node2
+179.20.23.32 node3
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;配置免密登录&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;ssh-keygen
+ssh-copy-id node1
+ssh-copy-id node2
+ssh-copy-id node3
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;同步hosts文件&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;scp /etc/hosts node2:/etc
+scp /etc/hosts node3:/etc
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;配置内核参数&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;vi /etc/sysctl.conf
+net.ipv4.conf.all.forwarding=1
+net.bridge.bridge-nf-call-iptables = 1
+net.bridge.bridge-nf-call-arptables = 1
+net.ipv4.conf.default.rp_filter = 0
+net.ipv4.conf.all.rp_filter = 0
+net.ipv4.conf.default.send_redirects = 0
+
+sysctl -p
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;关闭防火墙&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;systemctl stop firewalld
+systemctl disable firewalld
+setenforce 0
+
+vi /etc/selinux/config
+SELINUX=disabled
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;关闭swap&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;swapoff -a
+vi /etc/sysctl.d/k8s.conf 添加下面一行：
+vm.swappiness=0
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;安装docker-ce&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;yum install -y yum-utils device-mapper-persistent-data lvm2 wget
+wget -O /etc/yum.repos.d/docker-ce.repo https://download.docker.com/linux/centos/docker-ce.repo
+sudo sed -i &apos;s+download.docker.com+mirrors.tuna.tsinghua.edu.cn/docker-ce+&apos; /etc/yum.repos.d/docker-ce.repo
+yum install docker-ce -y
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;安装kubectl kubeadm kubelet(版本自定义)&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;cat &amp;lt;&amp;lt;EOF &amp;gt; /etc/yum.repos.d/kubernetes.repo
+[kubernetes]
+name=Kubernetes
+baseurl=http://mirrors.aliyun.com/kubernetes/yum/repos/kubernetes-el7-x86_64
+enabled=1
+gpgcheck=0
+repo_gpgcheck=0
+EOF
+
+yum install kubelet-1.18.15 kubeadm-1.18.15 kubectl-1.18.15 -y
+systemctl enable kubelet &amp;amp;&amp;amp; sudo systemctl start kubelet
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;预下载镜像（master节点即可）&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;kubeadm config images list --kubernetes-version=v1.18.15
+
+cat images.sh 
+#!/bin/bash
+images=(kube-proxy:v1.18.15 kube-scheduler:v1.18.15 kube-controller-manager:v1.18.15 kube-apiserver:v1.18.15 etcd:3.4.3-0 pause:3.2 coredns:1.6.7)
+for imageName in ${images[@]} ; do
+docker pull harbor.archeros.cn/huayun-kubernetes/amd64/$imageName
+docker tag harbor.archeros.cn/huayun-kubernetes/amd64/$imageName k8s.gcr.io/$imageName
+docker rmi harbor.archeros.cn/huayun-kubernetes/amd64/$imageName
+done
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h2 id=&quot;部署master节点&quot;&gt;部署master节点&lt;/h2&gt;
+
+&lt;p&gt;创建配置文件&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;vi kubeadm.yaml 
+apiVersion: kubeadm.k8s.io/v1beta2
+kind: InitConfiguration
+localAPIEndpoint:
+  advertiseAddress: &quot;179.20.23.33&quot;
+  bindPort: 6443
+nodeRegistration:
+  taints:
+  - effect: PreferNoSchedule
+    key: node-role.kubernetes.io/master
+---
+apiVersion: kubeadm.k8s.io/v1beta2
+kind: ClusterConfiguration
+kubernetesVersion: v1.18.15
+networking:
+  podSubnet: 10.244.0.0/16
+  serviceSubnet: 10.96.0.0/16
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;配置k8s集群master节点的管理ip和端口
+配置k8s集群版本
+设置pod/service cidr&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;开始部署&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;kubeadm init --config=kubeadm.yaml
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;post deploy配置&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;mkdir -p $HOME/.kube
+sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+sudo chown $(id -u):$(id -g) $HOME/.kube/config
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;允许master节点作为node节点使用&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;kubectl taint node node1 node-role.kubernetes.io/master-
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h2 id=&quot;部署node节点&quot;&gt;部署node节点&lt;/h2&gt;
+
+&lt;p&gt;在master节点获取token&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;kubeadm token list |grep &quot;system:bootstrappers:kubeadm:default-node-token&quot; |awk &apos;{print $1}&apos;
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;join集群&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;kubeadm join --token &amp;lt;mastertoken&amp;gt; --discovery-token-unsafe-skip-ca-verification &amp;lt;k8s_master_ip&amp;gt;:6443
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h2 id=&quot;部署cni&quot;&gt;部署cni&lt;/h2&gt;
+
+&lt;p&gt;此时k8s集群实际已经可以运行，只是无法创建pod资源，这里我们来部署cni组件，以calico为例&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;curl https://docs.projectcalico.org/v3.18/manifests/calico.yaml -O
+kubectl apply -f calico.yaml
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;这里如果需要管理和业务分离部署，可以修改配置文件指定业务网卡&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;h2 id=&quot;总结&quot;&gt;总结&lt;/h2&gt;
+&lt;p&gt;我们这里的大部分准备操作，可以通过制作模板的方式提高效率，在实际的开发验证或者学习中可以极大节省我们的环境部署时间&lt;/p&gt;
+</description>
+        <pubDate>Tue, 09 Aug 2022 00:00:00 +0000</pubDate>
+        <link>http://0.0.0.0:4000/blog/2022/08/09/k8s-deploy/</link>
+        <guid isPermaLink="true">http://0.0.0.0:4000/blog/2022/08/09/k8s-deploy/</guid>
+        
+        <category>kubernetes</category>
+        
+        <category>部署</category>
+        
+        <category>kubeadm</category>
+        
+        
+      </item>
     
       <item>
         <title>Istio Bookinfo</title>
@@ -1081,6 +1837,7 @@ GO_VERSION=1.16.9 &amp;gt; 注意：不是升级本地的golang，是容器中�
 &lt;p&gt;tungstenfabric cni通过watch kubernetes apiserver中指定的资源，并在sdn中创建对应的网络设备来实现对应功能。本文重点介绍cni针对networkpolicy的处理，根据源码逐步分析。&lt;/p&gt;
 
 &lt;h2 id=&quot;架构流程图&quot;&gt;架构&amp;amp;流程图&lt;/h2&gt;
+
 &lt;p&gt;&lt;img src=&quot;http://hujin.dynv6.net:50008/index.php?user/publicLink&amp;amp;fid=826f91FDc9_ivLXP-2TgqvVlTnWAWUUm5hE6qr_ef-KVP_3RWxuNClqp0L86chmPdHcV9GGK4fY5BLr3ualYY8IkFXQI_OHUoI2btmUla-PRxN494bUH8DsY7FAajC-fCOHFQHOBwYVnU8BSRZOxaVGZsp2WPTQ&amp;amp;file_name=/arch_network_policy.png&quot; alt=&quot;arch_network_policy&quot; /&gt;&lt;/p&gt;
 
 &lt;h2 id=&quot;源码解析&quot;&gt;源码解析&lt;/h2&gt;
@@ -1733,1831 +2490,6 @@ def _set_tags_on_pod_vmi(self, pod_id, old_lables=None):
         <category>cni</category>
         
         <category>networkpolicy</category>
-        
-        
-      </item>
-    
-      <item>
-        <title>Istio初探</title>
-        <description>&lt;h2 id=&quot;背景&quot;&gt;背景&lt;/h2&gt;
-&lt;p&gt;网络上很多理论性的说明，包括&lt;a href=&quot;https://skyao.io/learning-servicemesh/docs/introduction.html&quot;&gt;istio的前世今生&lt;/a&gt;，这里就不赘述了，本文将通过安装和实际操作的方式来简单了解下istio的特性.&lt;/p&gt;
-
-&lt;h2 id=&quot;准备&quot;&gt;准备&lt;/h2&gt;
-&lt;p&gt;下载最新版本istio&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;yum install -y socat
-curl -L https://istio.io/downloadIstio | sh -
-cd istio-1.11.2
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;安装istioctl&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;cp bin/istioctl /usr/bin
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;自动补全&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;yum install -y bash-completion
-echo &quot;source /usr/share/bash-completion/bash_completion&quot;&amp;gt;&amp;gt;/root/.bashrc
-source /root/.bashrc
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;h2 id=&quot;安装&quot;&gt;安装&lt;/h2&gt;
-
-&lt;p&gt;安装istio，这里使用的profile是demo&lt;/p&gt;
-&lt;blockquote&gt;
-  &lt;p&gt;profile实际对应一些参数的开关，可以通过istioctl profile list和istioctl profile dump demo查看具体的参数设置，通过也可以自己修改和创建profile；默认情况下dashboard工具（kiali）是没有安装的，需要手动安装&lt;/p&gt;
-&lt;/blockquote&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;istioctl manifest apply --set profile=demo
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;卸载istio&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;istioctl manifest generate --set profile=demo | kubectl delete -f -
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;安装kiali&lt;/p&gt;
-
-&lt;blockquote&gt;
-  &lt;p&gt;安装kiali时发现必须安装prometheus，否则界面会报错，应该是有依赖的&lt;/p&gt;
-&lt;/blockquote&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;kubectl apply -f samples/addons/kiali.yaml
-kubectl apply -f samples/addons/prometheus.yaml
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;登录kiali&lt;/p&gt;
-
-&lt;blockquote&gt;
-  &lt;p&gt;当有实际访问流量时，在kiali的Graph界面中会实时展示访问的设备，以及报文流向、流速，百分比等等，可以在界面选择&lt;/p&gt;
-&lt;/blockquote&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;[root@controller01 istio-1.11.2]# kubectl get svc  -n istio-system  kiali
-NAME    TYPE       CLUSTER-IP     EXTERNAL-IP   PORT(S)                          AGE
-kiali   NodePort   10.96.140.29   &amp;lt;none&amp;gt;        20001:31919/TCP,9090:32281/TCP   13h
-
-浏览器访问：http://178.104.163.66:31919/
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;h2 id=&quot;更新istio&quot;&gt;更新istio&lt;/h2&gt;
-
-&lt;p&gt;升级istioctl&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;istioctl profile dump demo &amp;gt; demo.yaml
-sed &apos;s/jwtPolicy: third-party-jwt/jwtPolicy: first-party-jwt/g&apos; demo.yaml
-istioctl upgrade -f demo.yaml
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;已经inject过的资源升级（再inject一次）&lt;/p&gt;
-
-&lt;blockquote&gt;
-  &lt;p&gt;这里分两种情况，如果是通过设置namespace的方式自动inject，则可以rollupdate；如果之前是手动inject的，则再执行一次inject后apply下，触发更新&lt;/p&gt;
-&lt;/blockquote&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;istioctl kube-inject -f xx.yaml | kubectl apply -f -
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;h2 id=&quot;功能验证demo&quot;&gt;功能验证DEMO&lt;/h2&gt;
-
-&lt;p&gt;我们会通过创建两个pod，三个svc，一个virtualservice是完成demo，其中：&lt;/p&gt;
-&lt;ul&gt;
-  &lt;li&gt;svc1：绑定pod1，暴露80端口&lt;/li&gt;
-  &lt;li&gt;svc2：绑定pod2，暴露80端口&lt;/li&gt;
-  &lt;li&gt;svc-vs: 绑定pod1和pod2，会发现访问每个后端的概率都是50%，无法调整&lt;/li&gt;
-  &lt;li&gt;virtual-service: 通过注入svc-vs，设置访问svc1和svc2的概率分别是10%和90%&lt;/li&gt;
-  &lt;li&gt;client pod： 用来作为客户端访问virtual-service的&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;架构如下：&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;                                        svc1 --&amp;gt; pod1
-client  --&amp;gt; virtual-service(svc-vs)
-                                        svc2 -- pod2
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;h3 id=&quot;创建资源&quot;&gt;创建资源&lt;/h3&gt;
-
-&lt;p&gt;创建三个deployment&lt;/p&gt;
-
-&lt;p&gt;deployment1.yaml&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-20
-21
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: my-nginx
-spec:
-  selector:
-    matchLabels:
-      app: my-nginx
-      run: vs
-  replicas: 1
-  template:
-    metadata:
-      labels:
-        app: my-nginx
-        run: vs
-    spec:
-      containers:
-      - name: my-nginx
-        image: httpd:alpine
-        ports:
-        - containerPort: 80
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;deployment2.yaml&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-20
-21
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: my-nginx-2
-spec:
-  selector:
-    matchLabels:
-      app: my-nginx-2
-      run: vs
-  replicas: 1
-  template:
-    metadata:
-      labels:
-        app: my-nginx-2
-        run: vs
-    spec:
-      containers:
-      - name: my-nginx-2
-        image: httpd:alpine
-        ports:
-        - containerPort: 80
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;deployment-client.yaml&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: my-nginx-client
-spec:
-  selector:
-    matchLabels:
-      client: my-nginx
-  replicas: 1
-  template:
-    metadata:
-      labels:
-        client: my-nginx
-    spec:
-      containers:
-      - name: my-nginx
-        image: httpd:alpine
-        ports:
-        - containerPort: 80
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;创建两个svc，后端对应deployment中的pod&lt;/p&gt;
-
-&lt;p&gt;svc1.yaml&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;apiVersion: v1
-kind: Service
-metadata:
-  name: my-apache
-  labels:
-    run: my-apache
-spec:
-  ports:
-  - port: 80
-    protocol: TCP
-  selector:
-    app: my-nginx
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;svc2.yaml&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;apiVersion: v1
-kind: Service
-metadata:
-  name: my-apache-2
-  labels:
-    run: my-apache-2
-spec:
-  ports:
-  - port: 80
-    protocol: TCP
-  selector:
-    app: my-nginx-2
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;创建一个svc，后端对应所有deployment中的pod&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;apiVersion: v1
-kind: Service
-metadata:
-  name: my-apache-vs
-  labels:
-    run: my-apache-vs
-spec:
-  ports:
-  - port: 80
-    protocol: TCP
-  selector:
-    run: vs
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;创建virtualservice&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;apiVersion: networking.istio.io/v1alpha3
-kind: VirtualService
-metadata:
-  name: hujin-virtual-svc
-spec:
-  hosts:
-  - my-apache-vs
-  http:
-  - route:
-    - destination:
-        host: my-apache
-        port:
-          number: 80
-      weight: 10
-    - destination:
-        host: my-apache-2
-        port:
-          number: 80
-      weight: 90
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;部署&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;istioctl kube-inject -f deployment1.yaml  | kubectl apply -f -
-istioctl kube-inject -f deployment2.yaml  | kubectl apply -f -
-istioctl kube-inject -f svc1.yaml  | kubectl apply -f -
-istioctl kube-inject -f svc2.yaml  | kubectl apply -f -
-istioctl kube-inject -f svc-vs.yaml  | kubectl apply -f -
-
-kubectl apply -f virtualservice.yaml
-kubectl apply -f deployment-client.yaml
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;通过k8s原生方式访问资源&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;获取所有service资源
-[root@controller01 istio]# kubectl get svc
-NAME           TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)   AGE
-kubernetes     ClusterIP   10.96.0.1       &amp;lt;none&amp;gt;        443/TCP   107d
-my-apache      ClusterIP   10.96.40.245    &amp;lt;none&amp;gt;        80/TCP    41m
-my-apache-2    ClusterIP   10.96.155.136   &amp;lt;none&amp;gt;        80/TCP    35m
-my-apache-vs   ClusterIP   10.96.57.227    &amp;lt;none&amp;gt;        80/TCP    27m
-
-访问每个svc，可以发现此时svc-vs中访问每个后端的概率是50%，且无法调整
-[root@controller01 istio]# curl 10.96.40.245
-&amp;lt;html&amp;gt;&amp;lt;body&amp;gt;&amp;lt;h1&amp;gt;test1&amp;lt;/h1&amp;gt;&amp;lt;/body&amp;gt;&amp;lt;/html&amp;gt;
-[root@controller01 istio]# curl 10.96.155.136
-&amp;lt;html&amp;gt;&amp;lt;body&amp;gt;&amp;lt;h1&amp;gt;test2&amp;lt;/h1&amp;gt;&amp;lt;/body&amp;gt;&amp;lt;/html&amp;gt;
-[root@controller01 istio]# curl 10.96.57.227
-&amp;lt;html&amp;gt;&amp;lt;body&amp;gt;&amp;lt;h1&amp;gt;test1&amp;lt;/h1&amp;gt;&amp;lt;/body&amp;gt;&amp;lt;/html&amp;gt;
-[root@controller01 istio]# curl 10.96.57.227
-&amp;lt;html&amp;gt;&amp;lt;body&amp;gt;&amp;lt;h1&amp;gt;test2&amp;lt;/h1&amp;gt;&amp;lt;/body&amp;gt;&amp;lt;/html&amp;gt;
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;通过istio注入方式访问资源，可以发现访问比例是按照设置的百分比来的&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;[root@controller01 istio]# kubectl exec -it my-nginx-client-7f844864c7-cq7tq -- sh
-/usr/local/apache2 # wget -q -O - http://my-apache-vs
-&amp;lt;html&amp;gt;&amp;lt;body&amp;gt;&amp;lt;h1&amp;gt;test2&amp;lt;/h1&amp;gt;&amp;lt;/body&amp;gt;&amp;lt;/html&amp;gt;
-/usr/local/apache2 # wget -q -O - http://my-apache-vs
-&amp;lt;html&amp;gt;&amp;lt;body&amp;gt;&amp;lt;h1&amp;gt;test1&amp;lt;/h1&amp;gt;&amp;lt;/body&amp;gt;&amp;lt;/html&amp;gt;
-/usr/local/apache2 # wget -q -O - http://my-apache-vs
-&amp;lt;html&amp;gt;&amp;lt;body&amp;gt;&amp;lt;h1&amp;gt;test2&amp;lt;/h1&amp;gt;&amp;lt;/body&amp;gt;&amp;lt;/html&amp;gt;
-/usr/local/apache2 # wget -q -O - http://my-apache-vs
-&amp;lt;html&amp;gt;&amp;lt;body&amp;gt;&amp;lt;h1&amp;gt;test2&amp;lt;/h1&amp;gt;&amp;lt;/body&amp;gt;&amp;lt;/html&amp;gt;
-/usr/local/apache2 # wget -q -O - http://my-apache-vs
-&amp;lt;html&amp;gt;&amp;lt;body&amp;gt;&amp;lt;h1&amp;gt;test2&amp;lt;/h1&amp;gt;&amp;lt;/body&amp;gt;&amp;lt;/html&amp;gt;
-/usr/local/apache2 # wget -q -O - http://my-apache-vs
-&amp;lt;html&amp;gt;&amp;lt;body&amp;gt;&amp;lt;h1&amp;gt;test2&amp;lt;/h1&amp;gt;&amp;lt;/body&amp;gt;&amp;lt;/html&amp;gt;
-/usr/local/apache2 # wget -q -O - http://my-apache-vs
-&amp;lt;html&amp;gt;&amp;lt;body&amp;gt;&amp;lt;h1&amp;gt;test2&amp;lt;/h1&amp;gt;&amp;lt;/body&amp;gt;&amp;lt;/html&amp;gt;
-/usr/local/apache2 # wget -q -O - http://my-apache-vs
-&amp;lt;html&amp;gt;&amp;lt;body&amp;gt;&amp;lt;h1&amp;gt;test2&amp;lt;/h1&amp;gt;&amp;lt;/body&amp;gt;&amp;lt;/html&amp;gt;
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-</description>
-        <pubDate>Sun, 26 Sep 2021 00:00:00 +0000</pubDate>
-        <link>http://0.0.0.0:4000/blog/2021/09/26/istio-1/</link>
-        <guid isPermaLink="true">http://0.0.0.0:4000/blog/2021/09/26/istio-1/</guid>
-        
-        <category>k8s</category>
-        
-        <category>istio</category>
-        
-        
-      </item>
-    
-      <item>
-        <title>Docker Containerd CRI-O Runc等概念的区别[译]</title>
-        <description>&lt;h2 id=&quot;背景&quot;&gt;背景&lt;/h2&gt;
-&lt;p&gt;从Docker引发这场热潮以来，越来越多的工具和标准涌现，来帮助用户使用“容器”这个技术&lt;/p&gt;
-
-&lt;p&gt;大型的技术公司由于相互之间的竞争，引入越来越多的技术概念和实现，使得普通用户很容易困惑和不理解。&lt;/p&gt;
-
-&lt;p&gt;本文将详细介绍所有相关的概念名称，并尝试解释具体术语，解释容器生态系统如何在2021年协同工作。&lt;/p&gt;
-
-&lt;p&gt;你不是唯一一个不理解这些概念的人，也不是最后一个…&lt;/p&gt;
-
-&lt;h2 id=&quot;理解docker&quot;&gt;理解Docker&lt;/h2&gt;
-&lt;p&gt;区别Docker这个公司，Docker容器，Docker镜像以及我们使用的Docker开发工具。&lt;/p&gt;
-
-&lt;p&gt;我们需要认识一点：容器并不是和Docker紧密耦合，Docker只是容器整套工具的一种&lt;/p&gt;
-
-&lt;h2 id=&quot;架构&quot;&gt;架构&lt;/h2&gt;
-
-&lt;p&gt;&lt;img src=&quot;/blog/img/container-ecosystem.png&quot; alt=&quot;container_ecosystem_arch&quot; /&gt;&lt;/p&gt;
-
-&lt;p&gt;容器生态系统由很多专业的技术、大量技术术语还包括大公司的竞争组成&lt;/p&gt;
-
-&lt;p&gt;不过幸运的是，这些大公司偶尔会休战并站到一起，去制定一些标准，这些标准将有助于容器生态系统的操作便捷、跨平台、减少对某个公司或者项目的依赖&lt;/p&gt;
-
-&lt;p&gt;相关的主要标准有：&lt;/p&gt;
-&lt;ul&gt;
-  &lt;li&gt;Container Runtime Interface(CRI): 定义了容器runtime和K8S的交互API&lt;/li&gt;
-  &lt;li&gt;Open Container Initiative(OCI)：定义发布镜像和容器的规则&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;h2 id=&quot;docker&quot;&gt;Docker&lt;/h2&gt;
-&lt;p&gt;由于Docker是使用容器最流行的开发工具，必须先从Docker开始。对很多人来说，“Docker”和“Container”两个词是等价的&lt;/p&gt;
-
-&lt;p&gt;Docker公司触发了整个容器革命，并且提供了一套非常易使用的容器开发工具，称为“Docker”&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&quot;/blog/img/container-ecosystem-docker.png&quot; alt=&quot;container_ecosystem_arch&quot; /&gt;&lt;/p&gt;
-
-&lt;p&gt;Docker被设计安装在工作站或者服务器上，并附带一系列方便开发者build和run容器的工具&lt;/p&gt;
-
-&lt;p&gt;Docker命令行工具可以从registry pull镜像，可以build容器镜像，也可以create/start容器&lt;/p&gt;
-
-&lt;p&gt;Docker项目包含：&lt;/p&gt;
-
-&lt;ul&gt;
-  &lt;li&gt;docker-cli： 这是和容器交互的docker命令行工具&lt;/li&gt;
-  &lt;li&gt;containerd： 这是一个daemon进程，用来管理并运行容器。可以push、pull镜像，管理存储和网络，监控运行中的容器&lt;/li&gt;
-  &lt;li&gt;runc: 这是底层容器runtime，主要包含使用GO语言实现的libcontainer组件&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;当使用docker运行一个容器时，执行流程是： docker daemon – containerd – runc&lt;/p&gt;
-
-&lt;h3 id=&quot;dockershim-docker-in-kubernetes&quot;&gt;Dockershim: Docker in Kubernetes&lt;/h3&gt;
-
-&lt;p&gt;Kubernetes包括一个叫dockershim的组件，用来支持docker&lt;/p&gt;
-
-&lt;p&gt;Kubernetes希望使用任意的容器runtime来运行容器，只需要支持CRI规范即可。&lt;/p&gt;
-
-&lt;p&gt;但是由于Docker比K8S出现还早，Docker出现时CRI规范还没有形成，所以在K8S发布后，K8S官方通过dockershim组件来支持Docker&lt;/p&gt;
-
-&lt;p&gt;K8S将会在后面直接移除对Docker的支持，也就是移除dockershim，只会使用支持CRI的runtime，类似containerd或者CRI-O&lt;/p&gt;
-
-&lt;p&gt;这个并不意味着K8S不能运行Docker格式的容器，Containerd和CRI-O都可以运行Docker格式的容器，因为他们都属于OCI格式的镜像&lt;/p&gt;
-
-&lt;p&gt;所以如果你想在K8S中使用容器，并不一定要安装Docker，containerd或者CRI-O等实现了CRI接口的组件都可以成为你的选择&lt;/p&gt;
-
-&lt;h3 id=&quot;docker-images&quot;&gt;Docker images&lt;/h3&gt;
-&lt;p&gt;大家常说的Docker镜像，实际是OCI格式的镜像，属于同一个规范&lt;/p&gt;
-
-&lt;p&gt;所以当你从DockerHub或其他registry上pull一个镜像，你可以直接通过docker工具来使用它，也可以在K8S集群使用，也可以通过podman或者任意支持OCI标准的工具来使用这个镜像&lt;/p&gt;
-
-&lt;h2 id=&quot;cri&quot;&gt;CRI&lt;/h2&gt;
-
-&lt;p&gt;&lt;img src=&quot;/blog/img/container-ecosystem-cri.png&quot; alt=&quot;container_ecosystem_arch&quot; /&gt;&lt;/p&gt;
-
-&lt;p&gt;CRI是K8S用来管理不同runtime 创建和管理容器的API规范&lt;/p&gt;
-
-&lt;p&gt;CRI使得K8S更容易使用不同的容器runtime，定义了K8S如何和每个runtime交互&lt;/p&gt;
-
-&lt;p&gt;因此实际上只取决于runtime本身如何管理容器，只要这个runtime支持CRI API的规范，类似的你可以根据喜好任意选择使用containerd或者CRI-O作为你的runtime，因为他们都支持CRI规范&lt;/p&gt;
-
-&lt;p&gt;CRI设计上是可插拔的，如果你是终端用户，那么CRI具体的实现细节其实你是不关心的，你只需要使用一个支持这个规范的组件，能实现某些功能即可。&lt;/p&gt;
-
-&lt;p&gt;当前Red Hat负责维护CRI-O，Docker负责维护自家的产品Containerd&lt;/p&gt;
-
-&lt;h3 id=&quot;containerd&quot;&gt;Containerd&lt;/h3&gt;
-&lt;p&gt;Containerd是Docker公司负责开发的高级容器runtime，支持CRI规范。从registry中pull镜像、管理镜像，负责和底层具体的runtime交互&lt;/p&gt;
-
-&lt;p&gt;Containerd已经从Docker项目分离出来，是一个独立的项目，使得Docker更加模块化&lt;/p&gt;
-
-&lt;p&gt;也就是说Docker内部会使用containerd，当前安装Docker时，也会安装Containerd&lt;/p&gt;
-
-&lt;p&gt;Conatinerd通过cri插件支持k8s CRI规范&lt;/p&gt;
-
-&lt;h3 id=&quot;cri-o&quot;&gt;CRI-O&lt;/h3&gt;
-
-&lt;p&gt;CRI-O是支持容器CRI规范的另一种高级容器runtime，它是containerd的一个替代选择，从registry获取镜像，在磁盘上管理镜像，然后调用底层runtime来运行容器进程&lt;/p&gt;
-
-&lt;p&gt;CRI-O是由Red Hat/IBM/Intel/SUSE等厂商提出并维护&lt;/p&gt;
-
-&lt;p&gt;在K8S中提供启动、停止、重启容器的能力，类似containerd&lt;/p&gt;
-
-&lt;h2 id=&quot;oci&quot;&gt;OCI&lt;/h2&gt;
-
-&lt;p&gt;OCI是一群技术公司组织定义的容器镜像格式、容器如何运行的规范&lt;/p&gt;
-
-&lt;p&gt;OCI的设计思想是允许用户选择任意符合规范的runtime，这些不同的runtime都有各自的实现，比如可以针对linux 有一个runtime，同时针对windows还有一个&lt;/p&gt;
-
-&lt;p&gt;OCI得益于：one standard, many implementations, 一种标准，多种实现&lt;/p&gt;
-
-&lt;h3 id=&quot;runc&quot;&gt;runc&lt;/h3&gt;
-
-&lt;p&gt;runc是一种支持OCI规范的容器runtime&lt;/p&gt;
-
-&lt;p&gt;runc为容器提供所有的底层功能，和底层Linux模块交互，类似namespace、cgroup等模块，通过这些模块来创建和运行容器进程&lt;/p&gt;
-
-&lt;p&gt;runc的可替代方案：&lt;/p&gt;
-&lt;ul&gt;
-  &lt;li&gt;crun： 使用C语言编写的runtime（runc使用Go语言编写）&lt;/li&gt;
-  &lt;li&gt;kata-runtime： 由katacontainers项目提供，在支持OCI规范下，提供一个轻量级虚拟机功能&lt;/li&gt;
-  &lt;li&gt;gVisor：Google提供，在支持OCI规范下，支持容器有独立的内核模块&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;h2 id=&quot;总结&quot;&gt;总结&lt;/h2&gt;
-
-&lt;p&gt;从上文可以发现，Docker只是很多容器组件的一小部分&lt;/p&gt;
-
-&lt;p&gt;K8S通过制定CRI来实现对不同runtime的交互，这里CRI包括：containerd和CRI-O，dockershim即将不支持&lt;/p&gt;
-
-&lt;p&gt;对应的runtime标准是OCI，这里包括runc、kata-runtime以及其他runtime，用来具体和底层的Linux交互，并最终创建和运行一个真正的容器&lt;/p&gt;
-
-&lt;h2 id=&quot;参考&quot;&gt;参考&lt;/h2&gt;
-&lt;ul&gt;
-  &lt;li&gt;https://www.tutorialworks.com/difference-docker-containerd-runc-crio-oci/&lt;/li&gt;
-&lt;/ul&gt;
-</description>
-        <pubDate>Fri, 06 Aug 2021 00:00:00 +0000</pubDate>
-        <link>http://0.0.0.0:4000/blog/2021/08/06/cri-oci/</link>
-        <guid isPermaLink="true">http://0.0.0.0:4000/blog/2021/08/06/cri-oci/</guid>
-        
-        <category>k8s</category>
-        
-        <category>cni</category>
-        
-        <category>oci</category>
-        
-        <category>runc</category>
-        
-        <category>containerd</category>
-        
-        
-      </item>
-    
-      <item>
-        <title>Multus CNI</title>
-        <description>&lt;h2 id=&quot;背景&quot;&gt;背景&lt;/h2&gt;
-&lt;p&gt;当前社区支持多个cni插件，当前集群底层网络实现变化后存在切换CNI插件的需求。由于cni插件主要在pod网卡创建和删除流程中使用，切换CNI插件后，要求pod重建，服务和网络都会中断&lt;/p&gt;
-
-&lt;p&gt;这里需要一种更加平滑的切换方式，在保证页面和网络不中断的情况下切换CNI&lt;/p&gt;
-
-&lt;h2 id=&quot;架构&quot;&gt;架构&lt;/h2&gt;
-
-&lt;p&gt;&lt;img src=&quot;/blog/img/multus1.png&quot; alt=&quot;multus_arch&quot; /&gt;&lt;/p&gt;
-
-&lt;p&gt;上图可以看到，一个pod可以同时有多个网卡，其中eth0是默认网卡，也就是默认路由指向的网卡&lt;/p&gt;
-
-&lt;p&gt;net0和net1是通过在pod的annotation中指定的网络创建的网卡&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&quot;/blog/img/multus2.png&quot; alt=&quot;multus_arch2&quot; /&gt;&lt;/p&gt;
-
-&lt;p&gt;这里通过创建pod来看multus-cni的实现方法：&lt;/p&gt;
-
-&lt;ul&gt;
-  &lt;li&gt;multus-cni实际是一个CNI插件，实现的接口也是CmdAdd CmdCheck CmdDel，这里通过提供CRD：NetworkAttachmentDefinition来定义其他CNI插件的内容，格式见下文&lt;/li&gt;
-  &lt;li&gt;在kubelet调用cni创建网卡时，multus-cni会通过查询pod annotation定义的key获取是否有指定使用的cni插件，并通过调用k8s api获取crd的具体数据&lt;/li&gt;
-  &lt;li&gt;将指定的pod和crd中定义的cni数据进行处理，最终得到符合CNI规范的格式，这个配置实际是保存在内存中的&lt;/li&gt;
-  &lt;li&gt;调用cni提供的AddNetwork方法，将内存中第三方的cni配置作为参数传递过去（默认网络在内存中也是一种CNI配置）&lt;/li&gt;
-  &lt;li&gt;最终实现动态创建POD网卡&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;annotations key：&lt;/p&gt;
-
-&lt;ul&gt;
-  &lt;li&gt;k8s.v1.cni.cncf.io/resourceName：创建网络CRD时指定的资源名称，一般用来指定底层物理设备的名称，比如sriov场景&lt;/li&gt;
-  &lt;li&gt;v1.multus-cni.io/default-network：配置pod的默认网络，只能配置一个。用来替换k8s集群中原来默认的网络&lt;/li&gt;
-  &lt;li&gt;k8s.v1.cni.cncf.io/networks：配置pod的网络，支持配置多个&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;注意：&lt;/p&gt;
-
-&lt;ul&gt;
-  &lt;li&gt;这里的网络是指通过multus crd建出来的network-attachment-definition对象&lt;/li&gt;
-  &lt;li&gt;指定网络时支持指定ip、mac、ifname、qos、portmap、gateway、device id&lt;/li&gt;
-  &lt;li&gt;默认路由对应的网卡名称不支持指定&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;h2 id=&quot;部署&quot;&gt;部署&lt;/h2&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;git clone https://github.com/k8snetworkplumbingwg/multus-cni.git
-cd multus-cni
-kubectl apply -f images/multus-daemonset.yml
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;h2 id=&quot;打包&quot;&gt;打包&lt;/h2&gt;
-&lt;p&gt;编译可执行文件&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;cd multus-cni
-./build
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;打包镜像，使用分支：release-3.7&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;cd multus-cni
-docker build --file ./Dockerfile -t harbor.huayun.org/huayun-kubernetes/multus-cni:dev .
-docker push harbor.huayun.org/huayun-kubernetes/multus-cni:dev
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;h2 id=&quot;功能验证&quot;&gt;功能验证&lt;/h2&gt;
-&lt;p&gt;创建macvlan NetworkAttachmentDefinition&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-20
-21
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;apiVersion: &quot;k8s.cni.cncf.io/v1&quot;
-kind: NetworkAttachmentDefinition
-metadata:
-  name: macvlan-conf
-spec:
-  config: &apos;{
-      &quot;cniVersion&quot;: &quot;0.3.0&quot;,
-      &quot;type&quot;: &quot;macvlan&quot;,
-      &quot;master&quot;: &quot;ens192&quot;,
-      &quot;mode&quot;: &quot;bridge&quot;,
-      &quot;ipam&quot;: {
-        &quot;type&quot;: &quot;host-local&quot;,
-        &quot;subnet&quot;: &quot;192.168.1.0/24&quot;,
-        &quot;rangeStart&quot;: &quot;192.168.1.200&quot;,
-        &quot;rangeEnd&quot;: &quot;192.168.1.216&quot;,
-        &quot;routes&quot;: [
-          { &quot;dst&quot;: &quot;0.0.0.0/0&quot; }
-        ],
-        &quot;gateway&quot;: &quot;192.168.1.1&quot;
-      }
-    }&apos;
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;创建pod并指定使用macvlan cni&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;apiVersion: v1
-kind: Pod
-metadata:
-  name: samplepod
-  annotations:
-    k8s.v1.cni.cncf.io/networks: macvlan-conf
-spec:
-  containers:
-  - name: samplepod
-    command: [&quot;/bin/ash&quot;, &quot;-c&quot;, &quot;trap : TERM INT; sleep infinity &amp;amp; wait&quot;]
-    image: alpine
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;查看pod中网卡创建情况&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;[root@node1 multus]# kubectl get pods  -owide
-NAME        READY   STATUS    RESTARTS   AGE   IP            NODE    NOMINATED NODE   READINESS GATES
-busybox     1/1     Running   213        8d    10.244.1.12   node2   &amp;lt;none&amp;gt;           &amp;lt;none&amp;gt;
-samplepod   1/1     Running   0          8s    10.244.2.22   node3   &amp;lt;none&amp;gt;           &amp;lt;none&amp;gt;
-[root@node1 multus]# kubectl exec -it samplepod -- ip a 
-1: lo: &amp;lt;LOOPBACK,UP,LOWER_UP&amp;gt; mtu 65536 qdisc noqueue state UNKNOWN qlen 1000
-    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
-    inet 127.0.0.1/8 scope host lo
-       valid_lft forever preferred_lft forever
-2: tunl0@NONE: &amp;lt;NOARP&amp;gt; mtu 1480 qdisc noop state DOWN qlen 1000
-    link/ipip 0.0.0.0 brd 0.0.0.0
-4: eth0@if19: &amp;lt;BROADCAST,MULTICAST,UP,LOWER_UP,M-DOWN&amp;gt; mtu 1440 qdisc noqueue state UP 
-    link/ether a2:3e:de:3e:fd:d0 brd ff:ff:ff:ff:ff:ff
-    inet 10.244.2.22/32 scope global eth0
-       valid_lft forever preferred_lft forever
-5: net1@if14: &amp;lt;BROADCAST,MULTICAST,UP,LOWER_UP,M-DOWN&amp;gt; mtu 1500 qdisc noqueue state UNKNOWN 
-    link/ether 32:b2:70:77:50:df brd ff:ff:ff:ff:ff:ff
-    inet 192.168.1.201/24 brd 192.168.1.255 scope global net1
-       valid_lft forever preferred_lft forever
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;h2 id=&quot;总结&quot;&gt;总结&lt;/h2&gt;
-&lt;p&gt;优点&lt;/p&gt;
-
-&lt;ul&gt;
-  &lt;li&gt;创建pod时支持指定多种cni&lt;/li&gt;
-  &lt;li&gt;pod中存在多种cni的网卡，默认路由使用默认网络的&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;缺点&lt;/p&gt;
-
-&lt;ul&gt;
-  &lt;li&gt;不支持更新，pod如果已经创建，不支持动态创建其他cni的网卡
-    &lt;blockquote&gt;
-      &lt;p&gt;查看代码发现multus实际也是走的CNI的流程，实现CmdAdd和CmdDelete接口
-也就是说在pod创建完成后，CNI是不响应增加和删除网卡操作的，只响应创建和删除POD的操作&lt;/p&gt;
-    &lt;/blockquote&gt;
-  &lt;/li&gt;
-&lt;/ul&gt;
-</description>
-        <pubDate>Mon, 28 Jun 2021 00:00:00 +0000</pubDate>
-        <link>http://0.0.0.0:4000/blog/2021/06/28/k8s-multus/</link>
-        <guid isPermaLink="true">http://0.0.0.0:4000/blog/2021/06/28/k8s-multus/</guid>
-        
-        <category>k8s</category>
-        
-        <category>cni</category>
-        
-        <category>multus</category>
-        
-        
-      </item>
-    
-      <item>
-        <title>KubeOVN - VPCNatGateway</title>
-        <description>&lt;h2 id=&quot;功能&quot;&gt;功能&lt;/h2&gt;
-&lt;p&gt;用来给k8s中pod/service/ingress等网络资源访问外部网络&lt;/p&gt;
-
-&lt;h3 id=&quot;支持功能&quot;&gt;支持功能&lt;/h3&gt;
-
-&lt;ul&gt;
-  &lt;li&gt;指定外部网络出口物理网卡&lt;/li&gt;
-  &lt;li&gt;指定多子网以及子网的网关&lt;/li&gt;
-  &lt;li&gt;浮动IP功能&lt;/li&gt;
-  &lt;li&gt;端口转发功能&lt;/li&gt;
-  &lt;li&gt;静态路由规则&lt;/li&gt;
-  &lt;li&gt;SNAT功能&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;h2 id=&quot;原理&quot;&gt;原理&lt;/h2&gt;
-&lt;p&gt;&lt;img src=&quot;/blog/img/vpc-nat-gateway.png&quot; alt=&quot;kube-ovn vpc-nat-gateway&quot; /&gt;&lt;/p&gt;
-
-&lt;ul&gt;
-  &lt;li&gt;创建一个nat gateway deployment，副本数是1&lt;/li&gt;
-  &lt;li&gt;通过configmap获取pod对应的镜像文件路径，创建nat gateway pod；重建策略是recreate&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;pod中设置annotations：&lt;/p&gt;
-
-&lt;ul&gt;
-  &lt;li&gt;ovn.kubernetes.io/vpc_nat_gw： nat gateway的名称&lt;/li&gt;
-  &lt;li&gt;k8s.v1.cni.cncf.io/networks： 指定pod对应namespace的外部网络&lt;/li&gt;
-  &lt;li&gt;ovn.kubernetes.io/logical_switch：为nat gateway添加的子网列表&lt;/li&gt;
-  &lt;li&gt;ovn.kubernetes.io/ip_address：为nat gateway设置的网关IP列表&lt;/li&gt;
-  &lt;li&gt;等待nat gateway pod变成Running后，触发nat gateway初始化，执行命令： 
-  bash /kube-ovn/nat-gateway.sh init&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;init执行的命令：&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;ip link set net1 up
-ip rule add iif net1 table $ROUTE_TABLE
-ip rule add iif eth0 table $ROUTE_TABLE
-
-# add static chain
-iptables -t nat -N DNAT_FILTER
-iptables -t nat -N SNAT_FILTER
-iptables -t nat -N EXCLUSIVE_DNAT # floatingIp DNAT
-iptables -t nat -N EXCLUSIVE_SNAT # floatingIp SNAT
-iptables -t nat -N SHARED_DNAT
-iptables -t nat -N SHARED_SNAT
-
-iptables -t nat -A PREROUTING -j DNAT_FILTER
-iptables -t nat -A DNAT_FILTER -j EXCLUSIVE_DNAT
-iptables -t nat -A DNAT_FILTER -j SHARED_DNAT
-
-iptables -t nat -A POSTROUTING -j SNAT_FILTER
-iptables -t nat -A SNAT_FILTER -j EXCLUSIVE_SNAT
-iptables -t nat -A SNAT_FILTER -j SHARED_SNAT
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;vpc nat gateway相关线程说明:&lt;/p&gt;
-
-&lt;ul&gt;
-  &lt;li&gt;addVpcWorker:监听vpc创建事件，并在ovn中创建logical router&lt;/li&gt;
-  &lt;li&gt;AddOrUpdateVpcNatGwWorker：监听vpc nat gateway创建或更新事件，创建或更新对应的nat gateway deployment&lt;/li&gt;
-  &lt;li&gt;initVpcNatGwWorker：初始化nat gateway deployment中对应的pod容器，执行命令见上文&lt;/li&gt;
-  &lt;li&gt;delVpcNatGwWorker：删除nat gateway deployment&lt;/li&gt;
-  &lt;li&gt;updateVpcEipWorker：找到nat gateway deployment对应的pod，获取annotations中eip相关字段，判断需要删除和新增的eip，并更新到annotations中&lt;/li&gt;
-  &lt;li&gt;updateVpcFloatingIpWorker：在nat gateway 中更新浮动IP的映射关系&lt;/li&gt;
-  &lt;li&gt;updateVpcDnatWorker：在nat gateway 中更新端口转发的映射关系&lt;/li&gt;
-  &lt;li&gt;updateVpcSnatWorker：在nat gateway 中更新子网和eip的snat的映射关系&lt;/li&gt;
-  &lt;li&gt;updateVpcSubnetWorker：在nat gateway 中新增、删除子网网卡，创建或者删除对应子网的路由信息&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;h2 id=&quot;使用方式&quot;&gt;使用方式&lt;/h2&gt;
-&lt;p&gt;开启VPC Nat Gatway功能&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;kind: ConfigMap
-apiVersion: v1
-metadata:
-  name: ovn-vpc-nat-gw-config
-  namespace: kube-system
-data:
-  image: &apos;kubeovn/vpc-nat-gateway:v1.7.0&apos;  # Docker image for vpc nat gateway
-  enable-vpc-nat-gw: true                  # &apos;true&apos; for enable, &apos;false&apos; for disable 
-  nic: eth1                                # The nic that connect to underlay network, use as the &apos;master&apos; for macvlan
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;创建VPC Nat Gateway&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-20
-21
-22
-23
-24
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;kind: VpcNatGateway
-apiVersion: kubeovn.io/v1
-  name: ngw
-spec:
-  vpc: test-vpc-1                  # Specifies which VPC the gateway belongs to 
-  subnet: sn                       # Subnet in VPC  
-  lanIp: 10.0.1.254                # Internal IP for nat gateway pod, IP should be within the range of the subnet 
-  eips:                            # Underlay IPs assigned to the gateway
-    - eipCIDR: 192.168.0.111/24
-       gateway: 192.168.0.254
-    - eipCIDR: 192.168.0.112/24
-       gateway: 192.168.0.254
-  floatingIpRules: 
-    - eip: 192.168.0.111
-      internalIp: 10.0.1.5
-  dnatRules:
-    - eip: 192.168.0.112
-      externalPort: 8888
-      protocol: tcp
-      internalIp: 10.0.1.10
-      internalPort: 80
-  snatRules:
-    - eip: 192.168.0.112
-       internalCIDR: 10.0.1.0/24
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;给VPC添加静态路由&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;kind: Vpc
-apiVersion: kubeovn.io/v1
-metadata:
-  name: test-vpc-1
-spec:
-  staticRoutes:
-    - cidr: 0.0.0.0/0
-      nextHopIP: 10.0.1.254     # Should be the same as the &apos;lanIp&apos; for vpc gateway
-      policy: policyDst
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-</description>
-        <pubDate>Mon, 24 May 2021 00:00:00 +0000</pubDate>
-        <link>http://0.0.0.0:4000/blog/2021/05/24/k8s-kubeovn-vpcnatgateway/</link>
-        <guid isPermaLink="true">http://0.0.0.0:4000/blog/2021/05/24/k8s-kubeovn-vpcnatgateway/</guid>
-        
-        <category>k8s</category>
-        
-        <category>cni</category>
-        
-        <category>kube-ovn</category>
-        
-        <category>vpc-nat-gateway</category>
-        
-        
-      </item>
-    
-      <item>
-        <title>Kuryr CNI</title>
-        <description>&lt;h2 id=&quot;背景&quot;&gt;背景&lt;/h2&gt;
-
-&lt;p&gt;当k8s部署在openstack节点或者虚拟机中时，可以使用openstack提供的网络功能实现k8s cni，这里主要对接的是neutron和lbaas模块，社区提供了kuryr的实现方案。
-Kuryr 是 OpenStack Neutron 的子项目，其主要目标是透过该项目来集成 OpenStack 与 Kubernetes 的网络。该项目在 Kubernetes 中实作了原生 Neutron-based 的网络，
-因此使用 Kuryr-Kubernetes 可以让 OpenStack VM 与 Kubernetes Pods 能够选择在同一个子网络上运作，并且能够使用 Neutron L3 与 Security Group 来对网络进行路由，以及阻挡特定来源 Port，并且也提供基于 Neutron LBaaS 的 Service 集成。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&quot;/blog/img/kuryr_k8s_arch.png&quot; alt=&quot;kuryr_kubernetes_arch&quot; /&gt;
-&lt;img src=&quot;/blog/img/kuryr_k8s_pipline.png&quot; alt=&quot;kuryr_kubernetes_arch&quot; /&gt;&lt;/p&gt;
-
-&lt;p&gt;kuryr kubernetes支持两种部署模式：&lt;/p&gt;
-
-&lt;ul&gt;
-  &lt;li&gt;nested：嵌套部署，通过虚机网卡子接口的方式实现，依赖社区trunk port功能&lt;/li&gt;
-  &lt;li&gt;none-nested：非嵌套部署，pod网卡类似虚机网卡直接添加到OVS网桥中，通过ovn-agent管理流表&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;控制节点&lt;/p&gt;
-
-&lt;p&gt;通过kuryr controller来watch kubernetes资源创建、更新和删除&lt;/p&gt;
-
-&lt;ul&gt;
-  &lt;li&gt;pod&lt;/li&gt;
-  &lt;li&gt;service&lt;/li&gt;
-  &lt;li&gt;endpoints&lt;/li&gt;
-  &lt;li&gt;namespace&lt;/li&gt;
-  &lt;li&gt;ingress(待定)&lt;/li&gt;
-  &lt;li&gt;networkpolicy&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;在watch到资源创建后，在neutron中创建对应的网络资源
-Kubernetes|Neutron |说明&lt;/p&gt;
-&lt;ul&gt;
-  &lt;li&gt;
-    &lt;table&gt;
-      &lt;tbody&gt;
-        &lt;tr&gt;
-          &lt;td&gt;Pod&lt;/td&gt;
-          &lt;td&gt;VM&lt;/td&gt;
-        &lt;/tr&gt;
-        &lt;tr&gt;
-          &lt;td&gt;Service&lt;/td&gt;
-          &lt;td&gt;LB&lt;/td&gt;
-        &lt;/tr&gt;
-        &lt;tr&gt;
-          &lt;td&gt;Ingress&lt;/td&gt;
-          &lt;td&gt;L7Router/LB&lt;/td&gt;
-        &lt;/tr&gt;
-        &lt;tr&gt;
-          &lt;td&gt;Endpoints&lt;/td&gt;
-          &lt;td&gt;LB&lt;/td&gt;
-        &lt;/tr&gt;
-        &lt;tr&gt;
-          &lt;td&gt;NetworkPolicy&lt;/td&gt;
-          &lt;td&gt;SecurityGroup&lt;/td&gt;
-        &lt;/tr&gt;
-        &lt;tr&gt;
-          &lt;td&gt;Namespaces&lt;/td&gt;
-          &lt;td&gt;Network&lt;/td&gt;
-        &lt;/tr&gt;
-      &lt;/tbody&gt;
-    &lt;/table&gt;
-  &lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;计算节点&lt;/p&gt;
-
-&lt;p&gt;计算节点中有两个服务：&lt;/p&gt;
-
-&lt;ul&gt;
-  &lt;li&gt;kuryr cni：kuryr cni当前有python和golang两种实现，golang实现是标准的cni方式，社区慢慢往这个方向切换&lt;/li&gt;
-  &lt;li&gt;kuryr daemon服务：为cni提供api服务用来配置、更新和删除容器网卡&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;当kubelet收到pod创建事件时，kubelet会调用kuryr cni的方法cmdAdd，这里kuryrcni会调用kuryr daemon的addNetwork接口&lt;/p&gt;
-
-&lt;p&gt;kuryr daemon有三个线程：&lt;/p&gt;
-
-&lt;ul&gt;
-  &lt;li&gt;watcher：watch k8s中当前节点上的pod操作&lt;/li&gt;
-  &lt;li&gt;server：提供api供kuryr cni调用；对watch到的pod执行addNetwork：创建并配置pod网卡，delNetwork:删除pod网卡&lt;/li&gt;
-  &lt;li&gt;health check： 健康检查&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;PS: kuryr controller在watch 资源创建后，会在neutron中创建对应资源，同时更新k8s中资源，将neutron中的资源信息设置到annotations中&lt;/p&gt;
-
-&lt;h2 id=&quot;安装三节点openstack&quot;&gt;安装三节点OpenStack&lt;/h2&gt;
-
-&lt;p&gt;准备&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;cat  /etc/yum.repos.d/qemu-kvm-rhev.repo
-[qemu-kvm-rhev]
-name=oVirt rebuilds of qemu-kvm-rhev
-baseurl=http://resources.ovirt.org/pub/ovirt-3.5/rpm/el7Server/
-mirrorlist=http://resources.ovirt.org/pub/yum-repo/mirrorlist-ovirt-3.5-el7Server
-enabled=1
-skip_if_unavailable=1
-gpgcheck=0
-
-yum install -y centos-release-openstack-train
-yum update -y
-yum install -y openstack-packstack
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;生成部署配置文件并修改&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;packstack --gen-answer-file=/root/answer.txt
-CONFIG_CONTROLLER_HOST=192.168.1.30
-CONFIG_COMPUTE_HOSTS=192.168.1.31,192.168.1.32
-CONFIG_NETWORK_HOSTS=192.168.1.30
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;开始部署&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;packstack --answer-file=./answer.conf
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;ps: 部署时发现nova报qmeu版本需要2.8以上，这里参考文档https://www.huaweicloud.com/articles/023bb022255569c81600e6e372fa06c0.html安装2.8版本的qemu&lt;/p&gt;
-
-&lt;h2 id=&quot;部署kubernetes&quot;&gt;部署Kubernetes&lt;/h2&gt;
-&lt;p&gt;TODO: kubespray&lt;/p&gt;
-
-&lt;p&gt;修改apiserver配置，开放8080端口&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;vim /etc/kubernetes/manifests/kube-apiserver.yaml
-- --insecure-bind-address=0.0.0.0
-- --insecure-port=8080
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;h2 id=&quot;部署kuryr&quot;&gt;部署kuryr&lt;/h2&gt;
-
-&lt;h3 id=&quot;控制节点&quot;&gt;控制节点&lt;/h3&gt;
-
-&lt;p&gt;获取代码&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;git clone https://opendev.org/openstack/kuryr-kubernetes.git
-cd kuryr-kubernetes
-git checkout remotes/origin/stable/train
-cd ..
-pip install -e kuryr-kubernetes
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;生成配置文件&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;cd kuryr-kubernetes
-./tools/generate_config_file_samples.sh
-mkdir -p /etc/kuryr/
-cp etc/kuryr.conf.sample /etc/kuryr/kuryr.conf
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;创建kuryr租户和用户&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;openstack project create --domain Default --description &quot;kuryr Project&quot; kuryr
-openstack user create --domain Default --password kuryr kuryr --project kuryr
-openstack role add --project kuryr --user kuryr admin
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;创建k8s pod、service网络&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;neutron net-create pod-net
-neutron subnet-create pod-net 10.244.0.0/16
-
-neutron net-create service-net
-neutron subnet-create service-net 10.96.0.0/16
-
-neutron security-group-create kuryr-sg
-neutron security-group-rule-create kuryr-sg --direction ingress
-neutron security-group-rule-create kuryr-sg --direction egress
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;修改kuryr controller配置&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-20
-21
-22
-23
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;vim /etc/kuryr/kuryr.conf
-[DEFAULT]use_stderr = true
-bindir = /usr/local/libexec/kuryr
-
-[kubernetes]
-api_root = http://172.16.41.130:8080
-enabled_handlers = vif,kuryrport  # lb, lbaasspec
-
-[neutron]
-auth_url = http://172.16.41.130:5000/v3
-username = kuryr
-user_domain_name = Default
-password = kuryr
-project_name = kuryr
-project_domain_name = Default
-auth_type = password
-
-[neutron_defaults]
-ovs_bridge = br-int
-pod_security_groups = {id_of_secuirity_group_for_pods}
-pod_subnet = {id_of_subnet_for_pods}
-project = {id_of_project}
-service_subnet = {id_of_subnet_for_k8s_services}
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;启动kuryr controller服务（需要做成systemd服务）&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;kuryr-k8s-controller --config-file /etc/kuryr/kuryr.conf
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;h3 id=&quot;计算节点&quot;&gt;计算节点&lt;/h3&gt;
-
-&lt;p&gt;获取代码&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;git clone https://opendev.org/openstack/kuryr-kubernetes.git
-cd kuryr-kubernetes
-git checkout remotes/origin/stable/train
-cd ..
-pip install -e kuryr-kubernetes
-pip install &apos;oslo.privsep&amp;gt;=1.20.0&apos; &apos;os-vif&amp;gt;=1.5.0&apos;
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;创建配置文件&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;vim /etc/kuryr/kuryr.conf
-[DEFAULT]
-use_stderr = true
-bindir = /usr/local/libexec/kuryr
-
-[kubernetes]
-api_root = http://172.16.41.130:8080
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;创建软链接kuryr-cni&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;mkdir -p /opt/cni/bin
-ln -s $(which kuryr-cni) /opt/cni/bin/
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;创建cni配置文件&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;rm -rf /etc/cni/net.d/
-mkdir -p /etc/cni/net.d/
-vim /etc/cni/net.d/10-kuryr.conf
-{
-    &quot;cniVersion&quot;: &quot;0.3.1&quot;,
-    &quot;name&quot;: &quot;kuryr&quot;,
-    &quot;type&quot;: &quot;kuryr-cni&quot;,
-    &quot;kuryr_conf&quot;: &quot;/etc/kuryr/kuryr.conf&quot;,
-    &quot;debug&quot;: true
-}
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;重启kubelet&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;systemctl daemon-reload &amp;amp;&amp;amp; systemctl restart kubelet.service
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;启动kuryr daemon服务&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;kuryr-daemon --config-file /etc/kuryr/kuryr.conf -d
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;h2 id=&quot;自测&quot;&gt;自测&lt;/h2&gt;
-
-&lt;p&gt;创建虚机&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-20
-21
-22
-23
-24
-25
-26
-27
-28
-29
-30
-31
-32
-33
-34
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;[root@controller01 ~]# glance image-list
-+--------------------------------------+--------+
-| ID                                   | Name   |
-+--------------------------------------+--------+
-| 5d87d4cf-384f-4644-9e81-3aafaec567f9 | cirros |
-| e9e97933-c2e7-40a7-bd39-9520be75f937 | cirros |
-+--------------------------------------+--------+
-[root@controller01 ~]# nova flavor-list
-+----+-----------+------------+------+-----------+------+-------+-------------+-----------+-------------+
-| ID | Name      | Memory_MiB | Disk | Ephemeral | Swap | VCPUs | RXTX_Factor | Is_Public | Description |
-+----+-----------+------------+------+-----------+------+-------+-------------+-----------+-------------+
-| 1  | m1.tiny   | 512        | 1    | 0         | 0    | 1     | 1.0         | True      | -           |
-| 2  | m1.small  | 2048       | 20   | 0         | 0    | 1     | 1.0         | True      | -           |
-| 3  | m1.medium | 4096       | 40   | 0         | 0    | 2     | 1.0         | True      | -           |
-| 4  | m1.large  | 8192       | 80   | 0         | 0    | 4     | 1.0         | True      | -           |
-| 5  | m1.xlarge | 16384      | 160  | 0         | 0    | 8     | 1.0         | True      | -           |
-+----+-----------+------------+------+-----------+------+-------+-------------+-----------+-------------+
-[root@controller01 ~]# neutron net-list
-neutron CLI is deprecated and will be removed in the future. Use openstack CLI instead.
-+--------------------------------------+-------------+----------------------------------+----------------------------------------------------+
-| id                                   | name        | tenant_id                        | subnets                                            |
-+--------------------------------------+-------------+----------------------------------+----------------------------------------------------+
-| 032a6394-4efe-4ef5-949e-e9717bcaeed6 | public      | 298316f4f2574e898ba50b89cdae58c3 | 8255a4e7-4902-4bdf-9feb-5b552371c924 172.24.4.0/24 |
-| acd5d8f3-8b1b-495a-98f2-78a8bb23290b | service-net | 497fd0c4ce624c18a8007c4f72f021f6 | a9f5361a-9e71-457c-bd3d-6e52b638f52c 10.96.0.0/16  |
-| b3102426-e8d5-4a9e-b18b-6cdd28fd5af4 | pod-net     | 497fd0c4ce624c18a8007c4f72f021f6 | eddcc6a4-0c65-413b-9aaf-31548b31e10e 10.244.0.0/16 |
-| b5962808-53ee-4ab4-a19b-f0396535302f | private     | 1fbe0c13d018486d8c53a112621b9fc1 | 39e76bea-fc39-432c-bb28-3b1e40a350f9 10.0.0.0/24   |
-+--------------------------------------+-------------+----------------------------------+----------------------------------------------------+
-[root@controller01 ~]# nova boot  --image e9e97933-c2e7-40a7-bd39-9520be75f937 --nic net-id=b3102426-e8d5-4a9e-b18b-6cdd28fd5af4 hujin1  --flavor 1
-[root@controller01 ~]# nova list
-+--------------------------------------+--------+--------+------------+-------------+---------------------+
-| ID                                   | Name   | Status | Task State | Power State | Networks            |
-+--------------------------------------+--------+--------+------------+-------------+---------------------+
-| 88e871ff-05c8-45c4-9c09-3cbc6e61eb61 | hujin1 | ACTIVE | -          | Running     | pod-net=10.244.2.62 |
-+--------------------------------------+--------+--------+------------+-------------+---------------------+
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;创建pod&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;[root@controller01 ~]# cat busybox.yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: busybox
-  namespace: default
-spec:
-  containers:
-  - image: busybox:latest
-    command:
-      - sleep
-      - &quot;3600&quot;
-    imagePullPolicy: IfNotPresent
-    name: busybox
-  restartPolicy: Always
-[root@controller01 ~]# kubectl get pods -owide
-NAME      READY   STATUS    RESTARTS   AGE   IP             NODE        NOMINATED NODE   READINESS GATES
-busybox   1/1     Running   19         19h   10.244.2.195   compute02   &amp;lt;none&amp;gt;           &amp;lt;none&amp;gt;
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;pod和虚机通信&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-20
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;[root@controller01 ~]# nova list
-+--------------------------------------+--------+--------+------------+-------------+---------------------+
-| ID                                   | Name   | Status | Task State | Power State | Networks            |
-+--------------------------------------+--------+--------+------------+-------------+---------------------+
-| 88e871ff-05c8-45c4-9c09-3cbc6e61eb61 | hujin1 | ACTIVE | -          | Running     | pod-net=10.244.2.62 |
-+--------------------------------------+--------+--------+------------+-------------+---------------------+
-[root@controller01 ~]# kubectl get pods -owide
-NAME      READY   STATUS    RESTARTS   AGE   IP             NODE        NOMINATED NODE   READINESS GATES
-busybox   1/1     Running   19         19h   10.244.2.195   compute02   &amp;lt;none&amp;gt;           &amp;lt;none&amp;gt;
-[root@controller01 ~]# kubectl exec -it busybox -- sh
-/ # ping 10.244.2.62
-PING 10.244.2.62 (10.244.2.62): 56 data bytes
-64 bytes from 10.244.2.62: seq=0 ttl=64 time=1.193 ms
-64 bytes from 10.244.2.62: seq=1 ttl=64 time=0.961 ms
-64 bytes from 10.244.2.62: seq=2 ttl=64 time=0.594 ms
-64 bytes from 10.244.2.62: seq=3 ttl=64 time=0.685 ms
-^C
---- 10.244.2.62 ping statistics ---
-4 packets transmitted, 4 packets received, 0% packet loss
-round-trip min/avg/max = 0.594/0.858/1.193 ms   
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;pod和虚机互通实现&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-20
-21
-22
-23
-24
-25
-26
-27
-28
-29
-30
-31
-32
-33
-34
-35
-36
-37
-38
-39
-40
-41
-42
-43
-44
-45
-46
-47
-48
-49
-50
-51
-52
-53
-54
-55
-56
-57
-58
-59
-60
-61
-62
-63
-64
-65
-66
-67
-68
-69
-70
-71
-72
-73
-74
-75
-76
-77
-78
-79
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;[root@compute02 qemu]# ovs-vsctl show
-0e110214-9c8c-438d-9bee-d1f4ad0f89d7
-    Manager &quot;ptcp:6640:127.0.0.1&quot;
-        is_connected: true
-    Bridge br-int
-        fail_mode: secure
-        datapath_type: system
-        Port &quot;tap59fdfbe4-10&quot;
-            Interface &quot;tap59fdfbe4-10&quot;
-        Port &quot;tap6e153f27-29&quot;
-            Interface &quot;tap6e153f27-29&quot;
-        Port &quot;ovn-b6c0da-0&quot;
-            Interface &quot;ovn-b6c0da-0&quot;
-                type: geneve
-                options: {csum=&quot;true&quot;, key=flow, remote_ip=&quot;172.16.41.131&quot;}
-        Port br-int
-            Interface br-int
-                type: internal
-        Port &quot;ovn-11a523-0&quot;
-            Interface &quot;ovn-11a523-0&quot;
-                type: geneve
-                options: {csum=&quot;true&quot;, key=flow, remote_ip=&quot;172.16.41.130&quot;}
-        Port &quot;tap2d79fedf-f5&quot;
-            Interface &quot;tap2d79fedf-f5&quot;
-    ovs_version: &quot;2.12.0&quot;
-[root@compute02 qemu]# ovs-ofctl show br-int
-OFPT_FEATURES_REPLY (xid=0x2): dpid:0000ee3ac6759a4e
-n_tables:254, n_buffers:0
-capabilities: FLOW_STATS TABLE_STATS PORT_STATS QUEUE_STATS ARP_MATCH_IP
-actions: output enqueue set_vlan_vid set_vlan_pcp strip_vlan mod_dl_src mod_dl_dst mod_nw_src mod_nw_dst mod_nw_tos mod_tp_src mod_tp_dst
- 7(tap2d79fedf-f5): addr:2a:c3:86:4f:bc:f2
-     config:     0
-     state:      0
-     current:    10GB-FD COPPER
-     speed: 10000 Mbps now, 0 Mbps max
- 9(tap6e153f27-29): addr:fe:16:3e:bc:48:d9
-     config:     0
-     state:      0
-     current:    10MB-FD COPPER
-     speed: 10 Mbps now, 0 Mbps max
- 12(tap59fdfbe4-10): addr:8e:f5:d0:5f:9d:4d
-     config:     0
-     state:      0
-     current:    10GB-FD COPPER
-     speed: 10000 Mbps now, 0 Mbps max
- 13(ovn-b6c0da-0): addr:ea:25:f6:13:cc:a7
-     config:     0
-     state:      0
-     speed: 0 Mbps now, 0 Mbps max
- 14(ovn-11a523-0): addr:da:7e:b4:cd:6c:c2
-     config:     0
-     state:      0
-     speed: 0 Mbps now, 0 Mbps max
- LOCAL(br-int): addr:ee:3a:c6:75:9a:4e
-     config:     PORT_DOWN
-     state:      LINK_DOWN
-     speed: 0 Mbps now, 0 Mbps max
-OFPT_GET_CONFIG_REPLY (xid=0x4): frags=normal miss_send_len=0
-[root@compute02 qemu]# cat flows |grep reg15=0x5,metadata=0x4
- cookie=0x0, duration=23100.073s, table=33, n_packets=1094, n_bytes=107044, idle_age=158, priority=100,reg15=0x5,metadata=0x4 actions=load:0x1-&amp;gt;NXM_NX_REG13[],load:0x3-&amp;gt;NXM_NX_REG11[],load:0x2-&amp;gt;NXM_NX_REG12[],resubmit(,34)
- cookie=0x0, duration=23100.073s, table=34, n_packets=0, n_bytes=0, idle_age=23100, priority=100,reg10=0/0x1,reg14=0x5,reg15=0x5,metadata=0x4 actions=drop
- cookie=0xb623d20f, duration=23100.061s, table=44, n_packets=0, n_bytes=0, idle_age=23100, priority=34000,udp,reg15=0x5,metadata=0x4,dl_src=fa:16:3e:18:1f:10,nw_src=10.244.0.1,tp_src=67,tp_dst=68 actions=ct(commit,zone=NXM_NX_REG13[0..15]),resubmit(,45)
- cookie=0xc28406ec, duration=22063.406s, table=44, n_packets=0, n_bytes=0, idle_age=22063, priority=2002,ct_state=-new+est-rpl+trk,ct_label=0x1/0x1,ip,reg15=0x5,metadata=0x4 actions=load:0x1-&amp;gt;NXM_NX_XXREG0[97],resubmit(,45)
- cookie=0x22d5455a, duration=22063.406s, table=44, n_packets=47, n_bytes=4606, idle_age=22012, priority=2002,ct_state=-new+est-rpl+trk,ct_label=0/0x1,ip,reg15=0x5,metadata=0x4 actions=resubmit(,45)
- cookie=0xc28406ec, duration=22063.406s, table=44, n_packets=2, n_bytes=196, idle_age=22054, priority=2002,ct_state=+new-est+trk,ip,reg15=0x5,metadata=0x4 actions=load:0x1-&amp;gt;NXM_NX_XXREG0[97],resubmit(,45)
- cookie=0x43b1967d, duration=23100.063s, table=44, n_packets=0, n_bytes=0, idle_age=23100, priority=2001,ct_state=+est+trk,ct_label=0x1/0x1,ipv6,reg15=0x5,metadata=0x4 actions=drop
- cookie=0x4a7b7997, duration=23100.062s, table=44, n_packets=0, n_bytes=0, idle_age=23100, priority=2001,ct_state=+est+trk,ct_label=0/0x1,ip,reg15=0x5,metadata=0x4 actions=ct(commit,zone=NXM_NX_REG13[0..15],exec(load:0x1-&amp;gt;NXM_NX_CT_LABEL[0]))
- cookie=0x43b1967d, duration=23100.062s, table=44, n_packets=0, n_bytes=0, idle_age=23100, priority=2001,ct_state=+est+trk,ct_label=0x1/0x1,ip,reg15=0x5,metadata=0x4 actions=drop
- cookie=0x4a7b7997, duration=23100.061s, table=44, n_packets=0, n_bytes=0, idle_age=23100, priority=2001,ct_state=+est+trk,ct_label=0/0x1,ipv6,reg15=0x5,metadata=0x4 actions=ct(commit,zone=NXM_NX_REG13[0..15],exec(load:0x1-&amp;gt;NXM_NX_CT_LABEL[0]))
- cookie=0x43b1967d, duration=23100.063s, table=44, n_packets=0, n_bytes=0, idle_age=23100, priority=2001,ct_state=-est+trk,ipv6,reg15=0x5,metadata=0x4 actions=drop
- cookie=0x43b1967d, duration=23100.062s, table=44, n_packets=1036, n_bytes=101528, idle_age=22063, priority=2001,ct_state=-est+trk,ip,reg15=0x5,metadata=0x4 actions=drop
- cookie=0xa1320a97, duration=23100.062s, table=48, n_packets=0, n_bytes=0, idle_age=23100, priority=90,ip,reg15=0x5,metadata=0x4,dl_dst=fa:16:3e:57:d9:64,nw_dst=255.255.255.255 actions=resubmit(,49)
- cookie=0xa1320a97, duration=23100.062s, table=48, n_packets=55, n_bytes=5390, idle_age=158, priority=90,ip,reg15=0x5,metadata=0x4,dl_dst=fa:16:3e:57:d9:64,nw_dst=10.244.2.195 actions=resubmit(,49)
- cookie=0xa1320a97, duration=23100.061s, table=48, n_packets=0, n_bytes=0, idle_age=23100, priority=90,ip,reg15=0x5,metadata=0x4,dl_dst=fa:16:3e:57:d9:64,nw_dst=224.0.0.0/4 actions=resubmit(,49)
- cookie=0xe6b695a, duration=23100.062s, table=48, n_packets=0, n_bytes=0, idle_age=23100, priority=80,ip,reg15=0x5,metadata=0x4,dl_dst=fa:16:3e:57:d9:64 actions=drop
- cookie=0xe6b695a, duration=23100.062s, table=48, n_packets=0, n_bytes=0, idle_age=23100, priority=80,ipv6,reg15=0x5,metadata=0x4,dl_dst=fa:16:3e:57:d9:64 actions=drop
- cookie=0xf4e4ab82, duration=23100.063s, table=49, n_packets=58, n_bytes=5516, idle_age=158, priority=50,reg15=0x5,metadata=0x4,dl_dst=fa:16:3e:57:d9:64 actions=resubmit(,64)
- cookie=0x0, duration=23100.073s, table=64, n_packets=3, n_bytes=126, idle_age=176, priority=100,reg10=0x1/0x1,reg15=0x5,metadata=0x4 actions=push:NXM_OF_IN_PORT[],load:0-&amp;gt;NXM_OF_IN_PORT[],resubmit(,65),pop:NXM_OF_IN_PORT[]
- cookie=0x0, duration=23100.073s, table=65, n_packets=61, n_bytes=5642, idle_age=158, priority=100,reg15=0x5,metadata=0x4 actions=output:7
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;h2 id=&quot;参考&quot;&gt;参考&lt;/h2&gt;
-&lt;ul&gt;
-  &lt;li&gt;packstack部署： https://www.rdoproject.org/install/packstack/&lt;/li&gt;
-  &lt;li&gt;kuryr部署： https://docs.openstack.org/kuryr-kubernetes/latest/installation/manual.html&lt;/li&gt;
-  &lt;li&gt;kuryr设计文档： https://docs.openstack.org/kuryr-kubernetes/latest/devref/kuryr_kubernetes_design.html&lt;/li&gt;
-&lt;/ul&gt;
-</description>
-        <pubDate>Fri, 14 May 2021 00:00:00 +0000</pubDate>
-        <link>http://0.0.0.0:4000/blog/2021/05/14/k8s-kuryr-neutron/</link>
-        <guid isPermaLink="true">http://0.0.0.0:4000/blog/2021/05/14/k8s-kuryr-neutron/</guid>
-        
-        <category>k8s</category>
-        
-        <category>cni</category>
-        
-        <category>neutron</category>
-        
-        <category>kuryr</category>
-        
-        
-      </item>
-    
-      <item>
-        <title>GO MOD使用私有仓库</title>
-        <description>&lt;h2 id=&quot;背景&quot;&gt;背景&lt;/h2&gt;
-
-&lt;p&gt;在常见的项目中使用go mod做包管理，在引用第三方包时这个包可能维护在内部私有仓库中，需要解决几个问题：&lt;/p&gt;
-
-&lt;ul&gt;
-  &lt;li&gt;引用第三方库&lt;/li&gt;
-  &lt;li&gt;引用私有仓库时不使用代理&lt;/li&gt;
-  &lt;li&gt;使用git方式获取代码&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;h2 id=&quot;替换引用的仓库地址&quot;&gt;替换引用的仓库地址&lt;/h2&gt;
-&lt;p&gt;这里直接修改代码中的引用工作量太大了，可以通过在go.mod中添加replace的方式：&lt;/p&gt;
-
-&lt;ul&gt;
-  &lt;li&gt;github.com/gophercloud/gophercloud =&amp;gt; gerrit-infrastructure.xxx.org/gerrit/a/container/gophercloud.git xxx-v0.7&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;blockquote&gt;
-  &lt;p&gt;注意这里末尾要加.git，否则默认使用https获取代码&lt;/p&gt;
-&lt;/blockquote&gt;
-
-&lt;h2 id=&quot;私有仓库&quot;&gt;私有仓库&lt;/h2&gt;
-
-&lt;p&gt;设置GOPRIVATE&lt;/p&gt;
-
-&lt;ul&gt;
-  &lt;li&gt;export GOPRIVATE=gerrit-infrastructure.xxx.org&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;h2 id=&quot;使用git方式获取代码&quot;&gt;使用git方式获取代码&lt;/h2&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;[root@localhost cloud-provider-openstack]# cat /root/.gitconfig
-[user]
-    name = xxx
-    email = xxx@xxxx.com
-[url &quot;ssh://xxx@gerrit-infrastructure.xxx.org:29418/container/gophercloud&quot;]
-    insteadOf = https://gerrit-infrastructure.xxx.org/gerrit/a/container/gophercloud
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;h2 id=&quot;参考&quot;&gt;参考&lt;/h2&gt;
-&lt;ul&gt;
-  &lt;li&gt;https://goproxy.io/zh/&lt;/li&gt;
-  &lt;li&gt;https://segmentfault.com/a/1190000021127791&lt;/li&gt;
-  &lt;li&gt;https://juejin.cn/post/6844903975859257352&lt;/li&gt;
-&lt;/ul&gt;
-</description>
-        <pubDate>Tue, 06 Apr 2021 00:00:00 +0000</pubDate>
-        <link>http://0.0.0.0:4000/blog/2021/04/06/k8s-go-mod/</link>
-        <guid isPermaLink="true">http://0.0.0.0:4000/blog/2021/04/06/k8s-go-mod/</guid>
-        
-        <category>go mod</category>
-        
-        <category>gerrit</category>
         
         
       </item>
