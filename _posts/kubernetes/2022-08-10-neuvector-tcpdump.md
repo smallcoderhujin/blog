@@ -5,8 +5,9 @@ layout: post
 author: "hujin"
 header-style: text
 tags:
-  - istio
-  - bookinfo
+  - tcpdump
+  - neuvector
+  - 抓包
 
 ---
 
@@ -30,6 +31,8 @@ API接口：
 	r.PATCH("/v1/sniffer/stop/:id", handlerSnifferStop)
 	r.DELETE("/v1/sniffer/:id", handlerSnifferDelete)
 	r.GET("/v1/sniffer/:id/pcap", handlerSnifferGetFile)
+
+## 源码分析
 
 这里我们重点看下创建，也就是handlerSnifferStart的代码流程：
 
@@ -113,6 +116,8 @@ API接口：
 - 这里根据容器id或者内存中容器对象，这个对象实际是通过独立线程监听节点的runtime维护的信息
 - generateSnifferID 这个是根据agent id生成一个id作为文件名称的一部分
 
+生成tcpdump命令代码
+
     func parseArgs(info *share.CLUSSnifferRequest, keyname string) (string, []string) {
         ...
         filename = defaultPcapDir + keyname + "_"
@@ -168,8 +173,12 @@ API接口：
     }
 
 - 这里就是通过nstool工具进入容器network namespace, 将tcpdump命令作为stdin在namespace中执行
-- 完整的命令类似：echo "tcpdump -i any -U -C 2 -w /var/neuvector/pcap/xxx  -W 5" | ./nstools run -i -n /proc/2271/ns/net
+- 完整的命令类似：echo "tcpdump -i any -U -C 2 -w /var/neuvector/pcap/xxx  -W 5" \| ./nstools run -i -n /proc/2271/ns/net
 - nstools这个工具类似nsenter，为了安全工具内部会校验调用方必须是neuvector agent服务，所以一般情况下执行这个命令是会失败的
 - 监听tcpdump进程状态并返回状态信息
 
 其他方法比如stop、下载抓包文件的调用路径是类似的
+
+nstools工具使用（移除父进程校验后）：
+![neuvector_pcap](/blog/img/neuvector_nstools.png)
+
