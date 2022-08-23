@@ -236,6 +236,38 @@
             ">
     			
 <div class="post-preview">
+    <a href="/blog/2021/01/18/k8s-coredns/">
+        <h2 class="post-title">
+            CoreDNS
+        </h2>
+        
+        <h3 class="post-subtitle">
+            
+        </h3>
+        
+        <div class="post-content-preview">
+            
+                架构
+
+
+搭建
+
+正常使用kubeadm等工具部署的集群中默认都已经部署有coredns，以下为手动部署的流程：
+
+  创建一个serviceaccount用来做鉴权用
+  创建clusterrole对象system:coredns
+  绑定serviceaccount和clusterrole
+  创建coredns的配置configmap，在后面创建deployment时引用。这里需要注意...
+            
+        </div>
+    </a>
+    <p class="post-meta">
+        Posted by hujin on January 18, 2021
+    </p>
+</div>
+<hr>
+
+<div class="post-preview">
     <a href="/blog/2021/01/15/k8s-webhook-keystone/">
         <h2 class="post-title">
             Kuberntes Webhook -- Keystone
@@ -331,32 +363,32 @@ OIDC是一种 OAuth2 认证方式， 被某些 OAuth2 提供者支持，例如 A
         
         
         
-                <a data-sort="0017" 
+                <a data-sort="0018" 
                     href="/blog/archive/?tag=kubernetes"
                     title="kubernetes"
                     rel="5">kubernetes</a>
         
-                <a data-sort="0015" 
+                <a data-sort="0016" 
                     href="/blog/archive/?tag=k8s"
                     title="k8s"
                     rel="7">k8s</a>
         
                 <a data-sort="0017" 
+                    href="/blog/archive/?tag=neuvector"
+                    title="neuvector"
+                    rel="6">neuvector</a>
+        
+                <a data-sort="0018" 
                     href="/blog/archive/?tag=cni"
                     title="cni"
                     rel="5">cni</a>
         
-                <a data-sort="0017" 
-                    href="/blog/archive/?tag=neuvector"
-                    title="neuvector"
-                    rel="5">neuvector</a>
-        
-                <a data-sort="0019" 
+                <a data-sort="0020" 
                     href="/blog/archive/?tag=istio"
                     title="istio"
                     rel="3">istio</a>
         
-                <a data-sort="0020" 
+                <a data-sort="0021" 
                     href="/blog/archive/?tag=tungstenfabric"
                     title="tungstenfabric"
                     rel="2">tungstenfabric</a>

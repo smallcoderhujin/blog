@@ -5,9 +5,403 @@
     <description>Hujin，Openstack &amp; SDN &amp; Kubernetes Lover，Software Engineer，| 与你一起发现更大的世界</description>
     <link>http://0.0.0.0:4000/blog/</link>
     <atom:link href="http://0.0.0.0:4000/blog/feed.xml" rel="self" type="application/rss+xml" />
-    <pubDate>Wed, 10 Aug 2022 05:58:09 +0000</pubDate>
-    <lastBuildDate>Wed, 10 Aug 2022 05:58:09 +0000</lastBuildDate>
+    <pubDate>Tue, 23 Aug 2022 01:47:40 +0000</pubDate>
+    <lastBuildDate>Tue, 23 Aug 2022 01:47:40 +0000</lastBuildDate>
     <generator>Jekyll v4.2.2</generator>
+    
+      <item>
+        <title>Neuvector源码分析之 dp引流的实现</title>
+        <description>&lt;h2 id=&quot;背景&quot;&gt;背景&lt;/h2&gt;
+&lt;p&gt;在secvector中通过监听runtime事件来动态维护节点上容器基础信息，在界面支持策略配置、模式管理都对容器流量产生影响。用户从学习模式调整成保护模式时可以对容器流量进行阻断操作，那么agent
+中是如何实现阻断的？
+这里我们将核心流程抽离出来，通过demo的方式来介绍具体的实现细节&lt;/p&gt;
+
+&lt;h2 id=&quot;原理&quot;&gt;原理&lt;/h2&gt;
+&lt;h3 id=&quot;默认形态&quot;&gt;默认形态&lt;/h3&gt;
+
+&lt;p&gt;&lt;img src=&quot;/blog/img/neuvector_dp1.png&quot; alt=&quot;neuvector_pcap&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;开始之前先看下默认情况下容器的网络形态（以calico为例）:&lt;/p&gt;
+&lt;ul&gt;
+  &lt;li&gt;容器网卡使用veth设备，一端在容器内部，一端在host上&lt;/li&gt;
+  &lt;li&gt;在host上通过路由规则的方式将流量引到host上的veth设备，最终到达容器内部&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 id=&quot;引流形态&quot;&gt;引流形态&lt;/h3&gt;
+
+&lt;p&gt;&lt;img src=&quot;/blog/img/neuvector_dp2.png&quot; alt=&quot;neuvector_pcap&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;引流形态下流量会优先经过agent容器，根据策略规则过滤后转发到具体的容器内部。本次我们需要从host上直接ping container-ns中的网卡ip 10.10.10.88,&lt;/p&gt;
+
+&lt;p&gt;首先创建两个network namespace&lt;/p&gt;
+&lt;ul&gt;
+  &lt;li&gt;ns1：引流实现位置&lt;/li&gt;
+  &lt;li&gt;ns2：模拟普通容器的network namespace&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;命令&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;ip netns add agent-ns
+ip netns add container-ns
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;在host上创建三组veth&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;vex：流量入口&lt;/li&gt;
+  &lt;li&gt;vin：跨agent-ns和container-ns，在agent中将流量转发到这个设备就可以到达容器内部&lt;/li&gt;
+  &lt;li&gt;vbr：监控设备，也是dp工作的设备&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;命令：&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;# 创建veth
+ip link add vex type veth peer name vex-peer
+ip link add vin type veth peer name vin-peer
+ip link add vbr type veth peer name vth
+ 
+# 将vex放入agent-ns
+ip link set vex netns agent-ns
+ip netns exec agent-ns ip link set vex up
+ 
+# 将vin放入agent-ns
+ip link set vin netns agent-ns
+ip netns exec agent-ns ip link set vin up
+ 
+# 将vin-peer放入container-ns
+ip link set vin-peer netns container-ns
+ 
+# 在container-ns修改网卡名称为eth0
+ip netns exec container-ns ip link set vin-peer name eth0
+ip addr add 10.10.10.88/24 dev eth0
+ip netns exec container-ns ip link set eth0 up
+ 
+# 将vbr和vth都放入agent-ns
+ip link set vbr netns agent-ns
+ip link set vth netns agent-ns
+ip netns exec agent-ns ip link set vbr up
+ip netns exec agent-ns ip link set vth up
+
+# 配置host上的vex-peer
+ip addr add 10.10.10.66/24 dev vex-peer
+ip link set vex-peer up
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;tc引流&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;# 创建qdisc
+tc qdisc add dev vin ingress
+tc qdisc add dev vex ingress
+tc qdisc add dev vbr ingress
+
+# 创建filter
+tc filter add dev vex pref 10001 parent ffff: protocol ip u32 match u8 0 1 at -14 match u16 0x1a27 0xffff at -14 match u32 0xf3873a27 0xffffffff at -12 action pedit munge offset -14 u16 set 0x4e65 munge offset -12 u32 set 0x755600b4 pipe action mirred egress mirror dev vbr
+ 
+tc filter add dev vex pref 10002 parent ffff: protocol all u32 match u8 0 0 action mirred egress mirror dev vin
+ 
+tc filter add dev vbr pref 5 parent ffff: protocol all u32 match u16 0x4e65 0xffff at -14 match u32 0x755600b4 0xffffffff at -12 action pedit munge offset -14 u16 set 0x1a27 munge offset -12 u32 set 0xf3873a27 pipe action mirred egress mirror dev vin
+ 
+tc filter add dev vin pref 10002 parent ffff: protocol all u32 match u8 0 0 action mirred egress mirror dev vex
+ 
+tc filter add dev vin pref 10001 parent ffff: protocol ip u32 match u8 0 1 at -14 match u32 0x1a27f387 0xffffffff at -8 match u16 0x3a27 0xffff at -4 action pedit munge offset -8 u32 set 0x4e657556 munge offset -4 u16 set 0x00b4 pipe action mirred egress mirror dev vbr
+ 
+tc filter add dev vbr pref 172 parent ffff: protocol all u32 match u32 0x4e657556 0xffffffff at -8 match u16 0x00b4 0xffff at -4 action pedit munge offset -8 u32 set 0x1a27f387 munge offset -4 u16 set 0x3a27 pipe action mirred egress mirror dev vex
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;此时我们从host上ping 10.10.10.88，同时在agent-ns的vex和vbr抓包会看到数据包&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;这里从抓包结果会看到目标mac变了，这个是通过tc完成的&lt;/li&gt;
+  &lt;li&gt;但是在vin上是抓不到包的（可以抓到广播包），因为dp没有开始工作&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;抓包结果：&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;sh-4.2# tcpdump -enpli vex
+tcpdump: verbose output suppressed, use -v or -vv for full protocol decode
+listening on vex, link-type EN10MB (Ethernet), capture size 262144 bytes
+17:31:40.761531 06:82:9c:02:54:91 &amp;gt; 1a:27:f3:87:3a:27, ethertype IPv4 (0x0800), length 98: 10.10.10.66 &amp;gt; 10.10.10.88: ICMP echo request, id 32052, seq 214, length 64
+17:31:41.761533 06:82:9c:02:54:91 &amp;gt; 1a:27:f3:87:3a:27, ethertype IPv4 (0x0800), length 98: 10.10.10.66 &amp;gt; 10.10.10.88: ICMP echo request, id 32052, seq 215, length 64
+17:31:42.761516 06:82:9c:02:54:91 &amp;gt; 1a:27:f3:87:3a:27, ethertype IPv4 (0x0800), length 98: 10.10.10.66 &amp;gt; 10.10.10.88: ICMP echo request, id 32052, seq 216, length 64
+^C
+3 packets captured
+3 packets received by filter
+0 packets dropped by kernel
+sh-4.2# tcpdump -enpli vbr
+tcpdump: verbose output suppressed, use -v or -vv for full protocol decode
+listening on vbr, link-type EN10MB (Ethernet), capture size 262144 bytes
+17:31:45.761528 06:82:9c:02:54:91 &amp;gt; 4e:65:75:56:00:b4, ethertype IPv4 (0x0800), length 98: 10.10.10.66 &amp;gt; 10.10.10.88: ICMP echo request, id 32052, seq 219, length 64
+17:31:46.761515 06:82:9c:02:54:91 &amp;gt; 4e:65:75:56:00:b4, ethertype IPv4 (0x0800), length 98: 10.10.10.66 &amp;gt; 10.10.10.88: ICMP echo request, id 32052, seq 220, length 64
+17:31:47.761531 06:82:9c:02:54:91 &amp;gt; 4e:65:75:56:00:b4, ethertype IPv4 (0x0800), length 98: 10.10.10.66 &amp;gt; 10.10.10.88: ICMP echo request, id 32052, seq 221, length 64
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;运行dp&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;ip netns exec agent-ns dp -n 1
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;这里需要重新编译dp，对dp做一些改造，保证可以在host运行，主要是mmap那部分逻辑&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;调用dp接口&lt;/p&gt;
+
+&lt;p&gt;分别调用dp接口：&lt;/p&gt;
+&lt;ul&gt;
+  &lt;li&gt;ctrl_add_srvc_port： 配置引流设备名称等参数&lt;/li&gt;
+  &lt;li&gt;ctrl_cfg_internal_net：配置当前节点设备ip和类型&lt;/li&gt;
+  &lt;li&gt;ctrl_add_mac：在引流设备中添加需要引流的mac&lt;/li&gt;
+  &lt;li&gt;ctrl_cfg_mac：配置mac参数&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;调用脚本&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+55
+56
+57
+58
+59
+60
+61
+62
+63
+64
+65
+66
+67
+68
+69
+70
+71
+72
+73
+74
+75
+76
+77
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;import socket
+import json
+ 
+DP_SERVER_PATH = &apos;/tmp/dp_listen.sock&apos;
+SOCK = None
+
+def connect_dp():
+    global SOCK
+    if SOCK:
+        return SOCK
+    socket_family = socket.AF_UNIX
+    socket_type = socket.SOCK_DGRAM
+ 
+    sock = socket.socket(socket_family, socket_type)
+    sock.connect(DP_SERVER_PATH)
+    SOCK = sock
+    print(&quot;dp connected&quot;)
+    return sock
+ 
+ 
+def send_msg(msg):
+    sock = connect_dp()
+    sock.sendall(json.dumps(msg).encode())
+ 
+    # data = sock.recv(1024)
+    # print(&quot;receive data:&quot;, data)
+    print(&apos;send msg: %s success&apos; % msg)
+ 
+ 
+def add_srvc_port():
+    data = {
+        &quot;iface&quot;: &quot;vth&quot;,
+        &quot;jumboframe&quot;: False
+    }
+    send_msg({&apos;ctrl_add_srvc_port&apos;: data})
+ 
+ 
+def add_internal_net():
+    data = {
+        &quot;flag&quot;: 3,
+        &quot;subnet_addr&quot;: [
+            {&quot;ip&quot;: &quot;172.17.0.0&quot;, &quot;mask&quot;: &quot;255.255.0.0&quot;},
+            {&quot;ip&quot;: &quot;179.20.23.0&quot;, &quot;mask&quot;: &quot;255.255.255.0&quot;},
+            {&quot;ip&quot;: &quot;10.10.10.0&quot;, &quot;mask&quot;: &quot;255.255.255.0&quot;},
+            {&quot;ip&quot;: &quot;172.20.166.0&quot;, &quot;mask&quot;: &quot;255.255.255.0&quot;},
+            {&quot;ip&quot;: &quot;10.10.10.66&quot;, &quot;mask&quot;: &quot;255.255.255.0&quot;, &quot;iptype&quot;: &quot;devip&quot;},
+            {&quot;ip&quot;: &quot;10.10.10.88&quot;, &quot;mask&quot;: &quot;255.255.255.0&quot;, &quot;iptype&quot;: &quot;devip&quot;},
+ 
+        ]
+    }
+    send_msg({&apos;ctrl_cfg_internal_net&apos;: data})
+ 
+ 
+def add_mac():
+    data = {
+        &quot;iface&quot;: &quot;vth&quot;,
+        &quot;mac&quot;: &quot;1a:27:f3:87:3a:27&quot;,
+        &quot;ucmac&quot;: &quot;4e:65:75:56:00:b4&quot;,
+        &quot;bcmac&quot;: &quot;ff:ff:ff:00:00:b4&quot;,
+        &quot;oldmac&quot;: &quot;&quot;,
+        &quot;pmac&quot;: &quot;&quot;,
+        &quot;pips&quot;: None,
+    }
+    send_msg({&apos;ctrl_add_mac&apos;: data})
+ 
+ 
+def cfg_mac():
+    data = {
+        &quot;tap&quot;: False,
+        &quot;macs&quot;: [&quot;1a:27:f3:87:3a:27&quot;],
+    }
+    send_msg({&apos;ctrl_cfg_mac&apos;: data})
+ 
+add_internal_net()
+add_srvc_port()
+add_mac()
+cfg_mac()
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h2 id=&quot;总结&quot;&gt;总结&lt;/h2&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;可以看到neuvector的引流方式和容器使用的cni无关&lt;/li&gt;
+  &lt;li&gt;引流的准备操作实际是agent执行的，dp只是对经过vth的数据包根据策略规则进行过滤，并转发&lt;/li&gt;
+  &lt;li&gt;后期可以探索这种使用方式是否可以应用到虚拟机状态下&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;这里只是调用dp接口，dp内部实现将在后面详细分析&lt;/p&gt;
+</description>
+        <pubDate>Tue, 23 Aug 2022 00:00:00 +0000</pubDate>
+        <link>http://0.0.0.0:4000/blog/2022/08/23/neuvector-dp/</link>
+        <guid isPermaLink="true">http://0.0.0.0:4000/blog/2022/08/23/neuvector-dp/</guid>
+        
+        <category>neuvector</category>
+        
+        <category>deep packet inspection</category>
+        
+        <category>dpi</category>
+        
+        <category>tc</category>
+        
+        
+      </item>
     
       <item>
         <title>Neuvector源码分析之 网络策略</title>
@@ -44,8 +438,21 @@
     
       <item>
         <title>Neuvector源码分析之 进程管理</title>
-        <description>&lt;h2 id=&quot;架构图&quot;&gt;架构图&lt;/h2&gt;
-&lt;p&gt;TODO&lt;/p&gt;
+        <description>&lt;h2 id=&quot;功能介绍&quot;&gt;功能介绍&lt;/h2&gt;
+&lt;p&gt;&lt;img src=&quot;/blog/img/neuvector_process.png&quot; alt=&quot;neuvector_pcap&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;进程管理是针对容器资源的进程进行管理，用户在界面可以先查询资源，在资源的进程列表中维护进程信息
+在agent中进程管理的实现实际就是kill，只是在kill之前根据探测到的资源进程信息和用户下发的规则对比，得到哪些进程需要kill&lt;/p&gt;
+
+&lt;p&gt;通过进程管理，可以防止异常命令的执行，只要在容器中执行非正常命令，直接就被kill掉，有效保护容器安全&lt;/p&gt;
+
+&lt;h2 id=&quot;源码&quot;&gt;源码&lt;/h2&gt;
+
+&lt;p&gt;接口：&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;r.PATCH(&quot;/v1/process_profile/:name&quot;, handlerProcessProfileConfig)
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
 </description>
         <pubDate>Thu, 11 Aug 2022 00:00:00 +0000</pubDate>
         <link>http://0.0.0.0:4000/blog/2022/08/11/neuvector-process/</link>
@@ -1827,669 +2234,6 @@ GO_VERSION=1.16.9 &amp;gt; 注意：不是升级本地的golang，是容器中�
         <category>docker</category>
         
         <category>docker-ce</category>
-        
-        
-      </item>
-    
-      <item>
-        <title>Tungstenfabric CNI源码 -- NetworkPolicy</title>
-        <description>&lt;h2 id=&quot;背景&quot;&gt;背景&lt;/h2&gt;
-&lt;p&gt;tungstenfabric cni通过watch kubernetes apiserver中指定的资源，并在sdn中创建对应的网络设备来实现对应功能。本文重点介绍cni针对networkpolicy的处理，根据源码逐步分析。&lt;/p&gt;
-
-&lt;h2 id=&quot;架构流程图&quot;&gt;架构&amp;amp;流程图&lt;/h2&gt;
-
-&lt;p&gt;&lt;img src=&quot;http://hujin.dynv6.net:50008/index.php?user/publicLink&amp;amp;fid=826f91FDc9_ivLXP-2TgqvVlTnWAWUUm5hE6qr_ef-KVP_3RWxuNClqp0L86chmPdHcV9GGK4fY5BLr3ualYY8IkFXQI_OHUoI2btmUla-PRxN494bUH8DsY7FAajC-fCOHFQHOBwYVnU8BSRZOxaVGZsp2WPTQ&amp;amp;file_name=/arch_network_policy.png&quot; alt=&quot;arch_network_policy&quot; /&gt;&lt;/p&gt;
-
-&lt;h2 id=&quot;源码解析&quot;&gt;源码解析&lt;/h2&gt;
-
-&lt;p&gt;在process方法中会处理networkpolicy的创建、更新和删除。这里我们先看下创建和更新&lt;/p&gt;
-
-&lt;p&gt;创建和更新方法中有两个步骤：&lt;/p&gt;
-
-&lt;ul&gt;
-  &lt;li&gt;_add_labels： 获取networkpolicy中selector相关的lable，并在sdn中创建或更新对应的tag资源&lt;/li&gt;
-  &lt;li&gt;vnc_network_policy_add：在sdn中创建对应的aps（application policy set）policy资源&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;在_add_labels中：&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-20
-21
-22
-23
-24
-25
-26
-27
-28
-29
-30
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;def _get_np_pod_selector(self, spec):
-    pod_selector = spec.get(&apos;podSelector&apos;)
-    if not pod_selector or &apos;matchLabels&apos; not in pod_selector:
-        labels = {}
-    else:
-        labels = pod_selector.get(&apos;matchLabels&apos;)
-    return labels
-
-def _add_labels(self, event, namespace, np_uuid):
-    all_labels = []
-    spec = event[&apos;object&apos;][&apos;spec&apos;]
-    if spec:
-        # Get pod selector labels.
-        all_labels.append(self._get_np_pod_selector(spec))
-
-        # Get ingress podSelector labels
-        ingress_spec_list = spec.get(&quot;ingress&quot;, [])
-        for ingress_spec in ingress_spec_list:
-            from_rules = ingress_spec.get(&apos;from&apos;, [])
-            for from_rule in from_rules:
-                if &apos;namespaceSelector&apos; in from_rule:
-                    all_labels.append(
-                        from_rule.get(&apos;namespaceSelector&apos;).get(
-                            &apos;matchLabels&apos;, {}))
-                if &apos;podSelector&apos; in from_rule:
-                    all_labels.append(
-                        from_rule.get(&apos;podSelector&apos;).get(&apos;matchLabels&apos;, {}))
-
-        # Call label mgmt API.
-        self._labels.process(np_uuid, list_curr_labels_dict=all_labels)
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;这里可以看到程序从networkpolicy的spec中获取了podSelector，从ingress中获取了namespaceSelector和podSelector对应的labels，最终在labels资源的process方法中进行处理&lt;/p&gt;
-
-&lt;p&gt;我们在label_cache.py的process中可以看到：&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-20
-21
-22
-23
-24
-25
-26
-27
-28
-29
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;def process(self, obj_uuid, curr_labels={}, list_curr_labels_dict=[]):
-    ...
-    all_labels = set()
-
-    if list_curr_labels_dict:
-        for labels_dict in list_curr_labels_dict:
-            for key, value in labels_dict.items():
-                key, value = self._validate_key_value(key, value)
-                # Construct the label key.
-                label_key = self._update_label_to_guid_cache(key, value, obj_uuid)
-                # Construct a set of all input label keys.
-                all_labels.add(label_key)
-    ... 针对从networkpolicy中传入的labels，在这里做了validate，然后做了_update_label_to_guid_cache：
-
-def _update_label_to_guid_cache(self, key, value, obj_uuid):
-
-    # Construct the label key.
-    label_key = self.get_key(key, value)
-
-    # If an entry exists for this label, add guid to the existing entry.
-    # If not, create one.
-    ltg_cache = XLabelCache.k8s_label_to_guid_cache[self.resource_type]
-    if label_key in ltg_cache:
-        ltg_cache[label_key].add(obj_uuid)
-    else:
-        ltg_cache[label_key] = {obj_uuid}
-        XLabelCache.label_add_cb(key, value)
-
-    return label_key
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;这里将key和value先转换成sdn的tag格式，再调用XLabelCache.label_add_cb方法处理，这里的label_add_cb方法处理实际是一个callback方法，是在初始化时传入的，具体看下：&lt;/p&gt;
-
-&lt;p&gt;vnc_kubernetes.py中初始化VncKubernetes时：&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;def __init_():
-    ...
-    # Register label add and delete callbacks with label management entity.
-    label_cache.XLabelCache.register_label_add_callback(VncKubernetes.create_tags)
-    label_cache.XLabelCache.register_label_delete_callback(VncKubernetes.delete_tags)
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;label_cache.py中&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;@classmethod
-def register_label_add_callback(cls, cb_func):
-    cls.label_add_cb = cb_func
-    
-@classmethod
-def register_label_delete_callback(cls, cb_func):
-    cls.label_delete_cb = cb_func
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;这里在初始化VncKubernetes是，调用label_cache.py中的register_label_add_callback，注册了两个方法，分别是创建和删除tag&lt;/p&gt;
-
-&lt;p&gt;我们在vnc_tag.py最终找到实际调用vnc创建和删除tag的方法：&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-20
-21
-22
-23
-24
-25
-26
-27
-28
-29
-30
-31
-32
-33
-34
-35
-36
-37
-38
-39
-40
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;def create(self, type, value):
-    tag_name = &quot;=&quot;.join([type, value])
-    tag = Tag(name=tag_name,
-              parent_obj=self.proj_obj,
-              tag_type_name=type,
-              tag_value=value)
-    try:
-        TagKM.add_annotations(self, tag, &quot;default&quot;, tag_name)
-        self._vnc_lib.tag_create(tag)
-    except RefsExistError:
-        # Tags cannot be updated.
-        pass
-
-    try:
-        tag_obj = self._vnc_lib.tag_read(fq_name=tag.get_fq_name())
-    except NoIdError as e:
-        self._logger.error(
-            &quot;Unable to create tag [%s]. Error [%s]&quot; %
-            (tag.get_fq_name(), str(e)))
-        return
-    # Cache the object in local db.
-    TagKM.locate(tag_obj.uuid)
-
-def delete(self, type, value):
-    tag_uuid = TagKM.get_fq_name_to_uuid(
-        self._construct_tag_fq_name(type, value))
-    try:
-        self._vnc_lib.tag_delete(id=tag_uuid)
-
-        TagKM.delete(tag_uuid)
-        self._logger.debug(&quot;Tag (%s) deleted successfully.&quot;
-                           % (self._construct_tag_fq_name(type, value)))
-    except RefsExistError:
-        self._logger.debug(&quot;Tag (%s) deletion failed. Tag is in use.&quot;
-                           % (self._construct_tag_fq_name(type, value)))
-    except NoIdError:
-        self._logger.debug(&quot;Tag delete failed. Tag [%s] not found.&quot;
-                           % (self._construct_tag_fq_name(type, value)))
-
-    return
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;这里我们可以得到一个结论，当存在多个k8s集群的时候，实际tag是共享的。也就是说当多个k8s集群有同名的labels时，实际在sdn中是复用的&lt;/p&gt;
-
-&lt;p&gt;看完labels的操作后，我们看下networkpolicy在sdn中的处理吧，在看之前我们需要知道一个前提条件：&lt;/p&gt;
-
-&lt;p&gt;vnc_kubernetes.py中：&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;def _provision_cluster(self):
-    ...
-    # Create application policy set for the cluster project.
-    VncSecurityPolicy.create_application_policy_set(
-        vnc_kube_config.application_policy_set_name(), namespace=proj_obj.name)
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;我们发现kube-manager实际会为每个接入tungstenfabric的k8s集群创建一个aps，也就是一个防火墙。然后初始化三个policy，分别是：denyall/allowall/ingress，然后创建一些初始化规则，这里不展开讲了。&lt;/p&gt;
-
-&lt;p&gt;了解这个前提后，我们看下面的代码就容易理解了：&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;def vnc_network_policy_add(self, event, namespace, name, uid):
-    spec = event[&apos;object&apos;][&apos;spec&apos;]
-    if not spec:
-        self._logger.error(
-            &quot;%s - %s:%s Spec Not Found&quot;
-            % (self._name, name, uid))
-        return
-
-    fw_policy_uuid = VncSecurityPolicy.create_firewall_policy(name, namespace,
-                                                              spec, k8s_uuid=uid)
-    VncSecurityPolicy.add_firewall_policy(fw_policy_uuid)
-
-    # Update kube config db entry for the network policy.
-    np = NetworkPolicyKM.find_by_name_or_uuid(uid)
-    if np:
-        fw_policy_obj = self._vnc_lib.firewall_policy_read(id=fw_policy_uuid)
-        np.set_vnc_fq_name(&quot;:&quot;.join(fw_policy_obj.get_fq_name()))
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;实际k8s中的networkpolicy对应sdn的资源就是aps policy资源。上面可以看到会在create_firewall_policy中创建一个policy，然后将policy绑定到aps中，也就是add_firewall_policy的动作。这里我们重点看下create_firewall_policy：&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-20
-21
-22
-23
-24
-25
-26
-27
-28
-29
-30
-31
-32
-33
-34
-35
-36
-37
-38
-39
-40
-41
-42
-43
-44
-45
-46
-47
-48
-49
-50
-51
-52
-53
-54
-55
-56
-57
-58
-59
-60
-61
-62
-63
-64
-65
-66
-67
-68
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;@classmethod
-def create_firewall_policy(cls, name, namespace, spec, tag_last=False,
-                           tag_after_tail=False, is_global=False,
-                           k8s_uuid=None):
-    ...
-    policy_name = cls.get_firewall_policy_name(name, namespace, is_global)
-    fw_policy_obj = FirewallPolicy(policy_name, pm_obj)
-
-    custom_ann_kwargs = {}
-    custom_ann_kwargs[&apos;k8s_uuid&apos;] = k8s_uuid
-    curr_fw_policy = None
-    fw_rules_del_candidates = set()
-
-    # If this firewall policy already exists, get its uuid.
-    fw_policy_uuid = VncSecurityPolicy.get_firewall_policy_uuid(
-        name, namespace, is_global)
-    ...
-
-    # Parse input spec and construct the list of rules for this FW policy.
-    fw_rules = []
-    deny_all_rule_uuid = None
-    egress_deny_all_rule_uuid = None
-
-    if spec is not None:
-        fw_rules, deny_all_rule_uuid, egress_deny_all_rule_uuid =\
-            FWRule.parser(name, namespace, pm_obj, spec)
-
-    for rule in fw_rules:
-        try:
-            FirewallRuleKM.add_annotations(cls, rule, namespace, rule.name)
-            rule_uuid = cls.vnc_lib.firewall_rule_create(rule)
-        except RefsExistError:
-            cls.vnc_lib.firewall_rule_update(rule)
-            rule_uuid = rule.get_uuid()
-
-            # The rule is in use and needs to stay.
-            # Remove it from delete candidate collection.
-            if fw_rules_del_candidates and\
-               rule_uuid in fw_rules_del_candidates:
-                fw_rules_del_candidates.remove(rule_uuid)
-
-        rule_obj = cls.vnc_lib.firewall_rule_read(id=rule_uuid)
-        FirewallRuleKM.locate(rule_uuid)
-
-        fw_policy_obj.add_firewall_rule(
-            rule_obj,
-            cls.construct_sequence_number(fw_rules.index(rule)))
-
-    if deny_all_rule_uuid:
-        VncSecurityPolicy.add_firewall_rule(
-            VncSecurityPolicy.deny_all_fw_policy_uuid, deny_all_rule_uuid)
-        custom_ann_kwargs[&apos;deny_all_rule_uuid&apos;] = deny_all_rule_uuid
-
-    if egress_deny_all_rule_uuid:
-        VncSecurityPolicy.add_firewall_rule(
-            VncSecurityPolicy.deny_all_fw_policy_uuid,
-            egress_deny_all_rule_uuid)
-        custom_ann_kwargs[&apos;egress_deny_all_rule_uuid&apos;] =\
-            egress_deny_all_rule_uuid
-
-    FirewallPolicyKM.add_annotations(
-        VncSecurityPolicy.vnc_security_policy_instance,
-        fw_policy_obj, namespace, name, None, **custom_ann_kwargs)
-
-    try:
-        fw_policy_uuid = cls.vnc_lib.firewall_policy_create(fw_policy_obj)
-    except RefsExistError:
-    ...
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;这里是创建aps policy，并提取spec中的数据生成policy rule并创建，然后将rule绑定到policy中，这里需要重点看下FWRule.parser，看看如何转化policy rule的：&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-20
-21
-22
-23
-24
-25
-26
-27
-28
-29
-30
-31
-32
-33
-34
-35
-36
-37
-38
-39
-40
-41
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;@classmethod
-def parser(cls, name, namespace, pobj, spec):
-
-    fw_rules = []
-
-    # Get pod selectors.
-    podSelector_dict = cls._get_np_pod_selector(spec, namespace)
-    tags = VncSecurityPolicy.get_tags_fn(podSelector_dict, True)
-
-    deny_all_rule_uuid = None
-    egress_deny_all_rule_uuid = None
-    policy_types = spec.get(&apos;policyTypes&apos;, [&apos;Ingress&apos;])
-    for policy_type in policy_types:
-        if policy_type == &apos;Ingress&apos;:
-            # Get ingress spec.
-            ingress_spec_list = spec.get(&quot;ingress&quot;, [])
-            for ingress_spec in ingress_spec_list:
-                fw_rules +=\
-                    cls.ingress_parser(
-                        name, namespace, pobj, tags,
-                        ingress_spec, ingress_spec_list.index(ingress_spec))
-
-            # Add ingress deny-all for all other non-explicit traffic.
-            deny_all_rule_name = namespace + &quot;-ingress-&quot; + name + &quot;-denyall&quot;
-            deny_all_rule_uuid =\
-                VncSecurityPolicy.create_firewall_rule_deny_all(
-                    deny_all_rule_name, tags, namespace)
-
-        if policy_type == &apos;Egress&apos;:
-            # Get egress spec.
-            egress_spec_list = spec.get(&quot;egress&quot;, [])
-            for egress_spec in egress_spec_list:
-                fw_rules +=\
-                    cls.egress_parser(name, namespace, pobj, tags,
-                                      egress_spec)
-            # Add egress deny-all for all other non-explicit traffic.
-            egress_deny_all_rule_uuid =\
-                VncSecurityPolicy.create_firewall_rule_egress_deny_all(
-                    name, namespace, tags)
-
-    return fw_rules, deny_all_rule_uuid, egress_deny_all_rule_uuid
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;_get_np_pod_selector会获取spec中podSelector和namespace两个label的数据，然后通过get_tags_fn查询sdn中已经创建的tag数据，这里的tag数据有：&lt;/p&gt;
-
-&lt;ul&gt;
-  &lt;li&gt;podselector: matchLabels: xxx:xxx&lt;/li&gt;
-  &lt;li&gt;namespace:xxx&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;然后会获取spec中ingress和egress对应的规则，通过ingress_parser和egress_parser做转换，转换成具体的sdn policy rule格式，这里需要注意：&lt;/p&gt;
-
-&lt;ul&gt;
-  &lt;li&gt;会优先根据spec中ingress和egress添加的规则创建policy rule&lt;/li&gt;
-  &lt;li&gt;ingress末尾会添加一条默认规则，一条ingress deny规则到此集群对应的deny-all的policy中&lt;/li&gt;
-  &lt;li&gt;如果指定了egress规则，会在末尾添加一条deny规则到此集群的deny-all的policy中，即绑定此tag的资源无法访问任意其他资源&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;至此，我们基本分析完了networkpolicy的工作流程，但是我们似乎漏了点什么，policy和rule都创建了，但是如何生效的？ 资源和tag的绑定关系发生在什么时候？这里我们通过pod的创建流程来分析下&lt;/p&gt;
-
-&lt;p&gt;在pod创建过程中，我们看到有涉及labels的处理流程(vnc_pod.py process):&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-20
-21
-22
-23
-24
-25
-26
-27
-28
-29
-30
-31
-32
-33
-34
-35
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;def process(self, event):
-    ...
-    # Add implicit namespace labels on this pod.
-    labels.update(self._get_namespace_labels(pod_namespace))
-    self._labels.process(pod_id, labels) 和之前的流程类似，这里会获取pod中metadata的label，并创建出对应的tag资源
-
-def vnc_pod_add(self, pod_id, pod_name, pod_namespace, pod_node, node_ip,
-                labels, vm_vmi, fixed_ip=None, annotations_bandwidth_str=None):
-    vm = VirtualMachineKM.get(pod_id)
-    if vm:
-        vm.pod_namespace = pod_namespace
-        if not vm.virtual_router:
-            self._link_vm_to_node(vm, pod_node, node_ip)
-        self._set_label_to_pod_cache(labels, vm)
-
-        # Update tags.
-        self._set_tags_on_pod_vmi(pod_id)
-
-        return vm 我们在创建pod的流程中发现，_set_tags_on_pod_vmi会将tag绑定到具体的资源中
-
-def _set_tags_on_pod_vmi(self, pod_id, old_lables=None):
-    vmi_obj_list = []
-    vm = VirtualMachineKM.get(pod_id)
-    if vm:
-        for vmi_id in list(vm.virtual_machine_interfaces):
-            vmi_obj_list.append(
-                self._vnc_lib.virtual_machine_interface_read(id=vmi_id))
-
-    for vmi_obj in vmi_obj_list:
-        labels = self._labels.get_labels_dict(pod_id)
-        self._vnc_lib.set_tags(vmi_obj, labels)
-        if old_lables:
-            diff_labels = {k:old_lables[k] for k in old_lables if k not in labels.keys()}
-            for k, v in diff_labels.items():
-                self._vnc_lib.unset_tag(vmi_obj, k)
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;代码中先从VirtualMachineKM中查询出vm对象，此时vm对象已经在上面的_set_label_to_pod_cache方法中将laables设置进去了；
-先从数据库中查询出对应的vmi列表，然后依次调用vnc的set_tags方法，将tag和vmi进行绑定&lt;/p&gt;
-
-&lt;p&gt;这样整个流程就完成了。创建sdn资源的时候，创建tag并绑定到资源中；创建networkpolicy时，管理绑定不同tag的资源的行为&lt;/p&gt;
-</description>
-        <pubDate>Tue, 28 Sep 2021 00:00:00 +0000</pubDate>
-        <link>http://0.0.0.0:4000/blog/2021/09/28/tf-cni-networkpolicy/</link>
-        <guid isPermaLink="true">http://0.0.0.0:4000/blog/2021/09/28/tf-cni-networkpolicy/</guid>
-        
-        <category>k8s</category>
-        
-        <category>tungstenfabric</category>
-        
-        <category>cni</category>
-        
-        <category>networkpolicy</category>
         
         
       </item>
