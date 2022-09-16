@@ -1,0 +1,362 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset
+      xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9
+            http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">
+<!-- created with Free Online Sitemap Generator www.xml-sitemaps.com -->
+
+
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>1.00</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/about/</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.80</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/archive/</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.80</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/2022/09/16/calico-bird/</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.80</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/2022/08/23/neuvector-dp/</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.80</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/2022/08/13/neuvector-policy/</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.80</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/2022/08/11/neuvector-process/</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.80</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/2022/08/10/neuvector-tcpdump/</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.80</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/2022/08/09/neuvector-introduce/</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.80</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/2022/08/09/k8s-deploy/</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.80</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/2022/04/15/istio-bookinfo/</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.80</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/2021/12/24/istio-integration-test/</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.80</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/2021/10/21/docker-package/</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.80</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/page2/</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.80</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/archive/?tag=kubernetes</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.80</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/archive/?tag=k8s</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.80</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/archive/?tag=cni</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.80</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/archive/?tag=neuvector</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.80</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/archive/?tag=istio</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.80</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/archive/?tag=tungstenfabric</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.80</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/2021/09/28/tf-cni-networkpolicy/</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.64</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/2021/09/26/istio-1/</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.64</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/2021/08/06/cri-oci/</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.64</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/2021/06/28/k8s-multus/</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.64</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/2021/05/24/k8s-kubeovn-vpcnatgateway/</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.64</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/2021/05/14/k8s-kuryr-neutron/</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.64</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/2021/04/06/k8s-go-mod/</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.64</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/2021/03/24/k8s-csi-cinder/</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.64</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/2021/03/04/k8s-gdb/</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.64</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/2021/01/27/tf-k8s-annotation/</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.64</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/2021/01/18/k8s-coredns/</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.64</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/2021/01/15/k8s-oidc-keycloak/</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.64</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/2021/01/15/k8s-webhook-keystone/</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.64</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/archive/?tag=calico</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.64</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/archive/?tag=bgp</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.64</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/archive/?tag=deep+packet+inspection</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.64</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/archive/?tag=dpi</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.64</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/archive/?tag=tc</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.64</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/archive/?tag=%E7%BD%91%E7%BB%9C%E7%AD%96%E7%95%A5</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.64</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/archive/?tag=%E8%BF%9B%E7%A8%8B%E7%AE%A1%E7%90%86</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.64</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/archive/?tag=tcpdump</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.64</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/archive/?tag=%E6%8A%93%E5%8C%85</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.64</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/archive/?tag=%E9%83%A8%E7%BD%B2</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.64</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/archive/?tag=kubeadm</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.64</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/archive/?tag=bookinfo</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.64</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/archive/?tag=integration-test</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.64</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/archive/?tag=docker</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.64</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/archive/?tag=docker-ce</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.64</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/page3/</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.64</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/archive/?tag=networkpolicy</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.51</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/archive/?tag=oci</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.51</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/archive/?tag=runc</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.51</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/archive/?tag=containerd</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.51</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/archive/?tag=multus</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.51</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/archive/?tag=kube-ovn</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.51</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/archive/?tag=vpc-nat-gateway</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.51</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/archive/?tag=neutron</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.51</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/archive/?tag=kuryr</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.51</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/archive/?tag=go+mod</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.51</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/archive/?tag=gerrit</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.51</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/archive/?tag=csi</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.51</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/archive/?tag=cinder</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.51</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/archive/?tag=golang</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.51</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/archive/?tag=gdb</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.51</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/archive/?tag=annotation</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.51</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/archive/?tag=coredns</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.51</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/archive/?tag=oidc</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.51</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/archive/?tag=keycloak</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.51</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/archive/?tag=webhook</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.51</priority>
+</url>
+<url>
+  <loc>https://smallcoderhujin.github.io/blog/archive/?tag=keystone</loc>
+  <lastmod>2022-09-16T08:43:22+00:00</lastmod>
+  <priority>0.51</priority>
+</url>
+
+
+</urlset>
