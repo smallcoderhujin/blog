@@ -1,0 +1,204 @@
+I"t<h2 id="背景">背景</h2>
+<p>当前社区支持多个cni插件，当前集群底层网络实现变化后存在切换CNI插件的需求。由于cni插件主要在pod网卡创建和删除流程中使用，切换CNI插件后，要求pod重建，服务和网络都会中断</p>
+
+<p>这里需要一种更加平滑的切换方式，在保证页面和网络不中断的情况下切换CNI</p>
+
+<h2 id="架构">架构</h2>
+
+<p><img src="/blog/img/multus1.png" alt="multus_arch" /></p>
+
+<p>上图可以看到，一个pod可以同时有多个网卡，其中eth0是默认网卡，也就是默认路由指向的网卡</p>
+
+<p>net0和net1是通过在pod的annotation中指定的网络创建的网卡</p>
+
+<p><img src="/blog/img/multus2.png" alt="multus_arch2" /></p>
+
+<p>这里通过创建pod来看multus-cni的实现方法：</p>
+
+<ul>
+  <li>multus-cni实际是一个CNI插件，实现的接口也是CmdAdd CmdCheck CmdDel，这里通过提供CRD：NetworkAttachmentDefinition来定义其他CNI插件的内容，格式见下文</li>
+  <li>在kubelet调用cni创建网卡时，multus-cni会通过查询pod annotation定义的key获取是否有指定使用的cni插件，并通过调用k8s api获取crd的具体数据</li>
+  <li>将指定的pod和crd中定义的cni数据进行处理，最终得到符合CNI规范的格式，这个配置实际是保存在内存中的</li>
+  <li>调用cni提供的AddNetwork方法，将内存中第三方的cni配置作为参数传递过去（默认网络在内存中也是一种CNI配置）</li>
+  <li>最终实现动态创建POD网卡</li>
+</ul>
+
+<p>annotations key：</p>
+
+<ul>
+  <li>k8s.v1.cni.cncf.io/resourceName：创建网络CRD时指定的资源名称，一般用来指定底层物理设备的名称，比如sriov场景</li>
+  <li>v1.multus-cni.io/default-network：配置pod的默认网络，只能配置一个。用来替换k8s集群中原来默认的网络</li>
+  <li>k8s.v1.cni.cncf.io/networks：配置pod的网络，支持配置多个</li>
+</ul>
+
+<p>注意：</p>
+
+<ul>
+  <li>这里的网络是指通过multus crd建出来的network-attachment-definition对象</li>
+  <li>指定网络时支持指定ip、mac、ifname、qos、portmap、gateway、device id</li>
+  <li>默认路由对应的网卡名称不支持指定</li>
+</ul>
+
+<h2 id="部署">部署</h2>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+</pre></td><td class="rouge-code"><pre>git clone https://github.com/k8snetworkplumbingwg/multus-cni.git
+cd multus-cni
+kubectl apply -f images/multus-daemonset.yml
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<h2 id="打包">打包</h2>
+<p>编译可执行文件</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+</pre></td><td class="rouge-code"><pre>cd multus-cni
+./build
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>打包镜像，使用分支：release-3.7</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+</pre></td><td class="rouge-code"><pre>cd multus-cni
+docker build --file ./Dockerfile -t harbor.huayun.org/huayun-kubernetes/multus-cni:dev .
+docker push harbor.huayun.org/huayun-kubernetes/multus-cni:dev
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<h2 id="功能验证">功能验证</h2>
+<p>创建macvlan NetworkAttachmentDefinition</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+</pre></td><td class="rouge-code"><pre>apiVersion: "k8s.cni.cncf.io/v1"
+kind: NetworkAttachmentDefinition
+metadata:
+  name: macvlan-conf
+spec:
+  config: '{
+      "cniVersion": "0.3.0",
+      "type": "macvlan",
+      "master": "ens192",
+      "mode": "bridge",
+      "ipam": {
+        "type": "host-local",
+        "subnet": "192.168.1.0/24",
+        "rangeStart": "192.168.1.200",
+        "rangeEnd": "192.168.1.216",
+        "routes": [
+          { "dst": "0.0.0.0/0" }
+        ],
+        "gateway": "192.168.1.1"
+      }
+    }'
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>创建pod并指定使用macvlan cni</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+</pre></td><td class="rouge-code"><pre>apiVersion: v1
+kind: Pod
+metadata:
+  name: samplepod
+  annotations:
+    k8s.v1.cni.cncf.io/networks: macvlan-conf
+spec:
+  containers:
+  - name: samplepod
+    command: ["/bin/ash", "-c", "trap : TERM INT; sleep infinity &amp; wait"]
+    image: alpine
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>查看pod中网卡创建情况</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+</pre></td><td class="rouge-code"><pre>[root@node1 multus]# kubectl get pods  -owide
+NAME        READY   STATUS    RESTARTS   AGE   IP            NODE    NOMINATED NODE   READINESS GATES
+busybox     1/1     Running   213        8d    10.244.1.12   node2   &lt;none&gt;           &lt;none&gt;
+samplepod   1/1     Running   0          8s    10.244.2.22   node3   &lt;none&gt;           &lt;none&gt;
+[root@node1 multus]# kubectl exec -it samplepod -- ip a 
+1: lo: &lt;LOOPBACK,UP,LOWER_UP&gt; mtu 65536 qdisc noqueue state UNKNOWN qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+2: tunl0@NONE: &lt;NOARP&gt; mtu 1480 qdisc noop state DOWN qlen 1000
+    link/ipip 0.0.0.0 brd 0.0.0.0
+4: eth0@if19: &lt;BROADCAST,MULTICAST,UP,LOWER_UP,M-DOWN&gt; mtu 1440 qdisc noqueue state UP 
+    link/ether a2:3e:de:3e:fd:d0 brd ff:ff:ff:ff:ff:ff
+    inet 10.244.2.22/32 scope global eth0
+       valid_lft forever preferred_lft forever
+5: net1@if14: &lt;BROADCAST,MULTICAST,UP,LOWER_UP,M-DOWN&gt; mtu 1500 qdisc noqueue state UNKNOWN 
+    link/ether 32:b2:70:77:50:df brd ff:ff:ff:ff:ff:ff
+    inet 192.168.1.201/24 brd 192.168.1.255 scope global net1
+       valid_lft forever preferred_lft forever
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<h2 id="总结">总结</h2>
+<p>优点</p>
+
+<ul>
+  <li>创建pod时支持指定多种cni</li>
+  <li>pod中存在多种cni的网卡，默认路由使用默认网络的</li>
+</ul>
+
+<p>缺点</p>
+
+<ul>
+  <li>不支持更新，pod如果已经创建，不支持动态创建其他cni的网卡
+    <blockquote>
+      <p>查看代码发现multus实际也是走的CNI的流程，实现CmdAdd和CmdDelete接口
+也就是说在pod创建完成后，CNI是不响应增加和删除网卡操作的，只响应创建和删除POD的操作</p>
+    </blockquote>
+  </li>
+</ul>
+:ET

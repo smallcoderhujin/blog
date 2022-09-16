@@ -16,7 +16,7 @@
     <meta property="og:type" content="website">
     <meta property="og:description" content="Stay hungry Stay foolish">
     
-    <meta property="og:image" content="http://0.0.0.0:4000/img/avatar-hux-ny.jpg">
+    <meta property="og:image" content="http://0.0.0.0:4000/blog/img/avatar-hux-ny.jpg">
     <meta property="og:url" content="http://0.0.0.0:4000/">
     <meta property="og:site_name" content="胡进的博客 | Hujin's Blog">
     
@@ -95,6 +95,10 @@
                         <li>
                             <a href="/blog/archive/">Archive</a>
                         </li>
+                        
+                        
+                        
+                        
                         
                         
                         
@@ -231,226 +235,252 @@
             ">
     			
 <div class="post-preview">
-    <a href="/blog/2021/04/06/k8s-go-mod/">
+    <a href="/blog/2022/09/16/calico-bird/">
         <h2 class="post-title">
-            GO MOD使用私有仓库
+            Calico BGP - Bird
         </h2>
         
         <h3 class="post-subtitle">
-            go mod gerrit
+            
         </h3>
         
         <div class="post-content-preview">
             
                 背景
+Calico支持多种网络模式，包括vxlan/ipip/bgp，其中vxlan和ipip属于overlay类型，在嵌套部署模式比较通用，但网络性能相对bgp会低一些。这主要是由于bgp模式下没有数据报文的封包和解包操作
 
-在常见的项目中使用go mod做包管理，在引用第三方包时这个包可能维护在内部私有仓库中，需要解决几个问题：
+本文会将calico中bgp相关的操作流程抽离，通过demo的方式来介绍calico中bgp网络的实现
 
-
-  引用第三方库
-  引用私有仓库时不使用代理
-  使用git方式获取代码
-
-
-替换引用的仓库地址
-这里直接修改代码中的引用工作量太大了，可以通过在go.mod中添加replace的方式：
+架构
+calico架构
 
 
-  github.com/gophercloud/gophercloud =&g...
+Calico作为一种常用的Kub...
             
         </div>
     </a>
     <p class="post-meta">
-        Posted by hujin on April 6, 2021
+        Posted by hujin on September 16, 2022
     </p>
 </div>
 <hr>
 
 <div class="post-preview">
-    <a href="/blog/2021/03/24/k8s-csi-cinder/">
+    <a href="/blog/2022/08/23/neuvector-dp/">
         <h2 class="post-title">
-            CSI之Cinder
+            Neuvector源码分析之 dp引流的实现
         </h2>
         
         <h3 class="post-subtitle">
-            k8s csi
+            
         </h3>
         
         <div class="post-content-preview">
             
                 背景
-由于openstack cinder提供丰富的后端存储服务，当k8s部署在openstack的虚拟机中时，使用cinder 的csi提供存储服务可以非常方便对接不同的后端存储
+在secvector中通过监听runtime事件来动态维护节点上容器基础信息，在界面支持策略配置、模式管理都对容器流量产生影响。用户从学习模式调整成保护模式时可以对容器流量进行阻断操作，那么agent
+中是如何实现阻断的？
+这里我们将核心流程抽离出来，通过demo的方式来介绍具体的实现细节
 
-要求
+原理
+默认形态
 
-  分别部署openstack和k8s集群
-  openstack cinder使用v3 api
-  openstack nova和cinder在keystone中的endpoint url对应的ip地...
+
+
+开始之前先看下默认情况下容器的网络形态（以calico为例）:
+
+  容...
             
         </div>
     </a>
     <p class="post-meta">
-        Posted by hujin on March 24, 2021
+        Posted by hujin on August 23, 2022
     </p>
 </div>
 <hr>
 
 <div class="post-preview">
-    <a href="/blog/2021/03/04/k8s-gdb/">
+    <a href="/blog/2022/08/13/neuvector-policy/">
         <h2 class="post-title">
-            Golang gdb
+            Neuvector源码分析之 网络策略
         </h2>
         
         <h3 class="post-subtitle">
-            coredns
+            
         </h3>
         
         <div class="post-content-preview">
             
-                获取源码并编译
+                架构图
+TODO
+
+            
+        </div>
+    </a>
+    <p class="post-meta">
+        Posted by hujin on August 13, 2022
+    </p>
+</div>
+<hr>
+
+<div class="post-preview">
+    <a href="/blog/2022/08/11/neuvector-process/">
+        <h2 class="post-title">
+            Neuvector源码分析之 进程管理
+        </h2>
+        
+        <h3 class="post-subtitle">
+            
+        </h3>
+        
+        <div class="post-content-preview">
+            
+                功能介绍
+
+
+进程管理是针对容器资源的进程进行管理，用户在界面可以先查询资源，在资源的进程列表中维护进程信息
+在agent中进程管理的实现实际就是kill，只是在kill之前根据探测到的资源进程信息和用户下发的规则对比，得到哪些进程需要kill
+
+通过进程管理，可以防止异常命令的执行，只要在容器中执行非正常命令，直接就被kill掉，有效保护容器安全
+
+源码
+
+接口：
+
+1
+r.PATCH("...
+            
+        </div>
+    </a>
+    <p class="post-meta">
+        Posted by hujin on August 11, 2022
+    </p>
+</div>
+<hr>
+
+<div class="post-preview">
+    <a href="/blog/2022/08/10/neuvector-tcpdump/">
+        <h2 class="post-title">
+            Neuvector源码分析之 网络抓包
+        </h2>
+        
+        <h3 class="post-subtitle">
+            
+        </h3>
+        
+        <div class="post-content-preview">
+            
+                功能介绍
+
+
+
+抓包功能是针对容器的功能，用户在界面选择某个容器点击抓包功能，可以控制抓包开始和结束，可以选择抓包时间；完成后可以下载对应的pcap格式的文件，
+在本地的wireshark中直接打开进行分析。底层实际还是通过进入容器的网络namespace，执行tcpdump命令来实现。
+
+说明下：hostnetwork的容器暂不支持抓包功能
+
+API接口：
 
 1
 2
 3
 4
 5
-git clone https://github.com/coredns/coredns.git
-cd coredns
-go build -gcflags "-N -l" coredns.go
+6
+7
+8...
+            
+        </div>
+    </a>
+    <p class="post-meta">
+        Posted by hujin on August 10, 2022
+    </p>
+</div>
+<hr>
 
-yum install -y gdb
+<div class="post-preview">
+    <a href="/blog/2022/08/09/neuvector-introduce/">
+        <h2 class="post-title">
+            Neuvector 初探
+        </h2>
+        
+        <h3 class="post-subtitle">
+            
+        </h3>
+        
+        <div class="post-content-preview">
+            
+                介绍
 
 
-debug
+
+NeuVector 是业界首个端到端的开源容器安全平台，唯一为容器化工作负载提供企业级零信任安全的解决方案。
+NeuVector 可以提供实时深入的容器网络可视化、东西向容器网络监控、主动隔离和保护、容器主机安全以及
+容器内部安全，容器管理平台无缝集成并且实现应用级容器安全的自动化，适用于各种云环境、跨云或者本地部署等容器生产环境。
+
+我们重点看neuvector的网络功能。 n...
+            
+        </div>
+    </a>
+    <p class="post-meta">
+        Posted by hujin on August 9, 2022
+    </p>
+</div>
+<hr>
+
+<div class="post-preview">
+    <a href="/blog/2022/08/09/k8s-deploy/">
+        <h2 class="post-title">
+            5分钟快速部署Kubernetes集群
+        </h2>
+        
+        <h3 class="post-subtitle">
+            
+        </h3>
+        
+        <div class="post-content-preview">
+            
+                环境信息
+
+
+  操作系统：centos7.6 4C8G
+  节点个数：1master+2node
+  内核版本：3.10.0-1127.el7.x86_64
+  网络信息：1管理 1业务
+
+
+准备（master+node）
+
+每个节点修改hostname
+
+1
+hostnamectl set-hostname nodex
+
+
+配置/etc/hosts
 
 1
 2
 3
-gdb coredns
-b coredns.go:11
-run
-
-
-参考
-
-
-  https...
+4
+cat /etc/h...
             
         </div>
     </a>
     <p class="post-meta">
-        Posted by hujin on March 4, 2021
+        Posted by hujin on August 9, 2022
     </p>
 </div>
 <hr>
 
 <div class="post-preview">
-    <a href="/blog/2021/01/27/tf-k8s-annotation/">
+    <a href="/blog/2022/04/15/istio-bookinfo/">
         <h2 class="post-title">
-            TungstenFabric Kubernetes Annotation
+            Istio Bookinfo
         </h2>
         
         <h3 class="post-subtitle">
-            annotation
-        </h3>
-        
-        <div class="post-content-preview">
             
-                Annotation整理
-
-
-  
-    
-      名称
-      值
-      说明
-    
-  
-  
-    
-      opencontrail.org/fip-pool
-      ”{‘domain’: ‘default-domain’, ‘project’: ‘ArcherAdmin’, ‘network’: ‘public1420’, ‘name’: ‘floa...
-            
-        </div>
-    </a>
-    <p class="post-meta">
-        Posted by hujin on January 27, 2021
-    </p>
-</div>
-<hr>
-
-<div class="post-preview">
-    <a href="/blog/2021/01/18/k8s-coredns/">
-        <h2 class="post-title">
-            Kuberntes CoreDNS
-        </h2>
-        
-        <h3 class="post-subtitle">
-            coredns
-        </h3>
-        
-        <div class="post-content-preview">
-            
-                架构
-
-
-搭建
-
-正常使用kubeadm等工具部署的集群中默认都已经部署有coredns，以下为手动部署的流程：
-
-  创建一个serviceaccount用来做鉴权用
-  创建clusterrole对象system:coredns
-  绑定serviceaccount和clusterrole
-  创建coredns的配置configmap，在后面创建deployment时引用。这里需要注意...
-            
-        </div>
-    </a>
-    <p class="post-meta">
-        Posted by hujin on January 18, 2021
-    </p>
-</div>
-<hr>
-
-<div class="post-preview">
-    <a href="/blog/2021/01/15/k8s-webhook-keystone/">
-        <h2 class="post-title">
-            Kuberntes Webhook Keystone
-        </h2>
-        
-        <h3 class="post-subtitle">
-            keystone
-        </h3>
-        
-        <div class="post-content-preview">
-            
-                背景
-k8s本身不提供用户和项目管理功能，需要依赖第三方组件来实现。
-由于k8s和openstack的融合需求，需要提供一种统一的用户鉴权机制，本次重点介绍k8s如何使用keystone进行鉴权。通过调用keystone获取token，并使用这个token调用k8s的接口获取资源信息。
-
-架构图
-
-
-主要流程：
-
-
-  客户端通过rest api调用openstack keystone获取t...
-            
-        </div>
-    </a>
-    <p class="post-meta">
-        Posted by hujin on January 15, 2021
-    </p>
-</div>
-<hr>
-
-<div class="post-preview">
-    <a href="/blog/2021/01/15/k8s-oidc-keycloak/">
-        <h2 class="post-title">
-            Kuberntes OIDC Keycloak
-        </h2>
-        
-        <h3 class="post-subtitle">
-            Keycloak
         </h3>
         
         <div class="post-content-preview">
@@ -458,21 +488,89 @@ k8s本身不提供用户和项目管理功能，需要依赖第三方组件来�
                 架构图
 
 
-OIDC是一种 OAuth2 认证方式， 被某些 OAuth2 提供者支持，例如 Azure 活动目录、Salesforce 和 Google。 协议对 OAuth2 的主要扩充体现在有一个附加字段会和访问令牌一起返回， 这一字段称作 ID Token（ID 令牌）。 ID 令牌是一种由服务器签名的 JSON Web 令牌（JWT）
+在k8s中通过deployment安装一些微服务并通过service暴露出来，包括
 
-
-  登录到你的身份服务（Identity ...
+  productpage: python编写，服务主界面，或者叫index页面，页面中会访问其他微服务
+  reviews： java编写，书籍评价微服务
+  details： ruby编写，书籍详情信息微服务
+  ratings： nodejs编写，数据推荐指数微服务，rating serv...
             
         </div>
     </a>
     <p class="post-meta">
-        Posted by hujin on January 15, 2021
+        Posted by hujin on April 15, 2022
+    </p>
+</div>
+<hr>
+
+<div class="post-preview">
+    <a href="/blog/2021/12/24/istio-integration-test/">
+        <h2 class="post-title">
+            Istio集成测试
+        </h2>
+        
+        <h3 class="post-subtitle">
+            
+        </h3>
+        
+        <div class="post-content-preview">
+            
+                简介
+istio集成测试使用go test，会自动读取源码目录下面名为 *_test.go 的文件，生成并运行测试用的可执行文件。istio集成测试脚本中根据case定义一般会先部署istio集群，再部署对应的echo instance，最后执行具体的case。
+
+准备
+修改master节点apiserver参数
+这里需要支持第三方token(third-party-token)，默认k8s...
+            
+        </div>
+    </a>
+    <p class="post-meta">
+        Posted by hujin on December 24, 2021
+    </p>
+</div>
+<hr>
+
+<div class="post-preview">
+    <a href="/blog/2021/10/21/docker-package/">
+        <h2 class="post-title">
+            DockerCE20.10版本打包流程
+        </h2>
+        
+        <h3 class="post-subtitle">
+            
+        </h3>
+        
+        <div class="post-content-preview">
+            
+                背景
+Docker-CE分支在v20.10版本之后将会停止更新，原先的docker-ce将拆分成docker/cli和moby/moby两个项目，其中docker/cli就是docker的客户端，也就是我们常用的docker命令行工具所属的项目；moby/moby项目就是原先docker engine的部分
+
+环境准备
+
+在编译docker源码之前，需要安装docker-ce
+
+1
+yum ...
+            
+        </div>
+    </a>
+    <p class="post-meta">
+        Posted by hujin on October 21, 2021
     </p>
 </div>
 <hr>
 
 
 <!-- Pager -->
+
+<ul class="pager">
+    
+    
+    <li class="next">
+        <a href="/blog/page2">Older Posts &rarr;</a>
+    </li>
+    
+</ul>
 
 
     		</div>
@@ -498,10 +596,35 @@ OIDC是一种 OAuth2 认证方式， 被某些 OAuth2 提供者支持，例如 A
         
         
         
-                <a data-sort="0003" 
+                <a data-sort="0018" 
                     href="/blog/archive/?tag=kubernetes"
                     title="kubernetes"
-                    rel="4">kubernetes</a>
+                    rel="5">kubernetes</a>
+        
+                <a data-sort="0016" 
+                    href="/blog/archive/?tag=k8s"
+                    title="k8s"
+                    rel="7">k8s</a>
+        
+                <a data-sort="0018" 
+                    href="/blog/archive/?tag=cni"
+                    title="cni"
+                    rel="5">cni</a>
+        
+                <a data-sort="0018" 
+                    href="/blog/archive/?tag=neuvector"
+                    title="neuvector"
+                    rel="5">neuvector</a>
+        
+                <a data-sort="0020" 
+                    href="/blog/archive/?tag=istio"
+                    title="istio"
+                    rel="3">istio</a>
+        
+                <a data-sort="0021" 
+                    href="/blog/archive/?tag=tungstenfabric"
+                    title="tungstenfabric"
+                    rel="2">tungstenfabric</a>
     </div>
 </section>
 
@@ -512,7 +635,7 @@ OIDC是一种 OAuth2 认证方式， 被某些 OAuth2 提供者支持，例如 A
   <h5><a href="/blog/about/">ABOUT ME</a></h5>
   <div class="short-about">
     
-    <img src="/img/avatar-hux-ny.jpg" />
+    <img src="/blog/img/avatar-hux-ny.jpg" />
     
     
     <p>For the next quantum leap<br>离开世界之前，一切都是过程</p>
@@ -584,7 +707,7 @@ OIDC是一种 OAuth2 认证方式， 被某些 OAuth2 提供者支持，例如 A
 </ul>
 
                 <p class="copyright text-muted">
-                    Copyright &copy; Hujin Blog 2021
+                    Copyright &copy; Hujin Blog 2022
                     <br>
                     Powered by <a href="http://hujin.github.com">Hujin Blog</a> |
                     <iframe style="margin-left: 2px; margin-bottom:-5px;" frameborder="0" scrolling="0" width="100px"

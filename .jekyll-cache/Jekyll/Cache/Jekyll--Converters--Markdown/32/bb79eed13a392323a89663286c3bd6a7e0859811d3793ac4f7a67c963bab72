@@ -1,0 +1,306 @@
+I"�!<h2 id="功能介绍">功能介绍</h2>
+
+<p><img src="/blog/img/neuvector_tcpdump.png" alt="neuvector_pcap" /></p>
+
+<p>抓包功能是针对容器的功能，用户在界面选择某个容器点击抓包功能，可以控制抓包开始和结束，可以选择抓包时间；完成后可以下载对应的pcap格式的文件，
+在本地的wireshark中直接打开进行分析。底层实际还是通过进入容器的网络namespace，执行tcpdump命令来实现。</p>
+
+<p>说明下：hostnetwork的容器暂不支持抓包功能</p>
+
+<p>API接口：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+</pre></td><td class="rouge-code"><pre>neuvector\controller\rest\rest.go:1517
+
+r.GET("/v1/sniffer", handlerSnifferList)
+r.GET("/v1/sniffer/:id", handlerSnifferShow)
+r.POST("/v1/sniffer", handlerSnifferStart)
+r.PATCH("/v1/sniffer/stop/:id", handlerSnifferStop)
+r.DELETE("/v1/sniffer/:id", handlerSnifferDelete)
+r.GET("/v1/sniffer/:id/pcap", handlerSnifferGetFile)
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<h2 id="源码分析">源码分析</h2>
+
+<p>这里我们重点看下创建，也就是handlerSnifferStart的代码流程：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+</pre></td><td class="rouge-code"><pre>func handlerSnifferStart(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+  ...
+  # 从request中获取对应的参数，这里是workloadid，也就是对应的pause容器的container id
+  query := restParseQuery(r)
+
+  # 获取容器id参数，并根据容器id获取对应的agentid
+  agentID, wlID, err := getAgentWorkloadFromFilter(query.filters, acc)
+  if err != nil {
+      restRespNotFoundLogAccessDenied(w, login, err)
+      return
+  }
+
+  // Check if we can config workload
+  wl, err := cacher.GetWorkloadBrief(wlID, "", acc)
+  if wl == nil {
+      restRespNotFoundLogAccessDenied(w, login, err)
+      return
+  } else if !acc.Authorize(&amp;share.CLUSSnifferDummy{WorkloadDomain: wl.Domain}, nil) {
+      restRespAccessDenied(w, login)
+      return
+  }
+  ...
+
+  args := proc.Sniffer
+  req := &amp;share.CLUSSnifferRequest{WorkloadID: wlID, Cmd: share.SnifferCmd_StartSniffer}
+  ...
+
+  res, err := rpc.SnifferCmd(agentID, req)
+  ...
+  restRespSuccess(w, r, &amp;resp, acc, login, &amp;proc, "Start sniffer")
+}
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<ul>
+  <li>代码会从request中获取需要抓包的容器id</li>
+  <li>getAgentWorkloadFromFilter中获取容器id并查询对应的agent id</li>
+  <li>GetWorkloadBrief 获取指定容器的详细信息，并校验容器是否允许抓包</li>
+  <li>SnifferCmd 通过grpc调用对应agent的抓包接口，这里会提前配置一些抓包的参数，包括文件名称、文件大小（默认2M）、抓包时间等等</li>
+</ul>
+
+<p>我们在agent中查看对应的调用接口SnifferCmd，文件位置：neuvector\agent\service.go:830</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+</pre></td><td class="rouge-code"><pre>func (rs *RPCService) SnifferCmd(ctx context.Context, req *share.CLUSSnifferRequest) (*share.CLUSSnifferResponse, error) {
+    if req.Cmd == share.SnifferCmd_StartSniffer {
+        id, err := startSniffer(req)
+        return &amp;share.CLUSSnifferResponse{ID: id}, err
+    } else if req.Cmd == share.SnifferCmd_StopSniffer {
+        return &amp;share.CLUSSnifferResponse{}, stopSniffer(req.ID)
+    } else if req.Cmd == share.SnifferCmd_RemoveSniffer {
+        return &amp;share.CLUSSnifferResponse{}, removeSniffer(req.ID)
+    }
+    return &amp;share.CLUSSnifferResponse{}, grpc.Errorf(codes.InvalidArgument, "Invalid sniffer command")
+}
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>继续查看对应的startSniffer方法：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+</pre></td><td class="rouge-code"><pre>func startSniffer(info *share.CLUSSnifferRequest) (string, error) {
+    var pid int
+
+    gInfoRLock()
+    c, ok := gInfo.activeContainers[info.WorkloadID]
+    ...
+
+    proc := &amp;procInfo{
+        workload:   info.WorkloadID,
+        fileNumber: uint(info.FileNumber),
+        duration:   uint(info.DurationInSecond),
+    }
+
+    key := generateSnifferID()
+
+    proc.fileName, proc.args = parseArgs(info, key[:share.SnifferIdAgentField])
+    _, err := startSnifferProc(key, proc, pid)
+    if err != nil {
+        return "", grpc.Errorf(codes.Internal, err.Error())
+    } else {
+        return key, nil
+    }
+}
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<ul>
+  <li>这里根据容器id或者内存中容器对象，这个对象实际是通过独立线程监听节点的runtime维护的信息</li>
+  <li>generateSnifferID 这个是根据agent id生成一个id作为文件名称的一部分</li>
+</ul>
+
+<p>生成tcpdump命令代码</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+</pre></td><td class="rouge-code"><pre>func parseArgs(info *share.CLUSSnifferRequest, keyname string) (string, []string) {
+    ...
+    filename = defaultPcapDir + keyname + "_"
+    filenumber = fmt.Sprintf("%d", info.FileNumber)
+    filesize = fmt.Sprintf("%d", info.FileSizeInMB)
+    ...
+
+    tcpdumpCmd := []string{"-i", "any", "-U", "-C"}
+    cmdStr = append(tcpdumpCmd, filesize, "-w", filename, "-W", filenumber)
+    ...
+    return filename, cmdStr
+}
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<ul>
+  <li>parseArgs用来生成完整的文件名称，并准备具体的tcpdump命令，完整的命令类似： tcpdump -i any -U -C 2 -w /var/neuvector/pcap/0a5bdf2c_0</li>
+</ul>
+
+<p>下面就是进入容器的network namespace然后执行tcpdump命令</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+</pre></td><td class="rouge-code"><pre>func startSnifferProc(key string, proc *procInfo, pid int) (string, error) {
+    ...
+
+    var script string
+    if proc.duration &gt; 0 {
+        script = fmt.Sprintf("timeout %d ", proc.duration)
+    }
+    script += "tcpdump " + strings.Join(proc.args, " ")
+    log.WithFields(log.Fields{"key": key, "cmd": script}).Debug()
+
+    proc.cmd = exec.Command(system.ExecNSTool, system.NSActRun, "-i", "-n", global.SYS.GetNetNamespacePath(pid))
+    proc.cmd.SysProcAttr = &amp;syscall.SysProcAttr{Setsid: true}
+    proc.cmd.Stderr = &amp;proc.errb
+    stdin, err := proc.cmd.StdinPipe()
+    if err != nil {
+        e := fmt.Errorf("Open nsrun stdin error")
+        log.WithFields(log.Fields{"error": err}).Error(e)
+        return "", e
+    }
+
+    err = proc.cmd.Start()
+    if err != nil {
+        e := fmt.Errorf("Failed to start sniffer")
+        log.WithFields(log.Fields{"error": err}).Error(e)
+        return "", e
+    }
+
+    pgid := proc.cmd.Process.Pid
+    global.SYS.AddToolProcess(pgid, pid, "sniffer", script)
+
+    io.WriteString(stdin, script)
+    stdin.Close()
+
+    ...
+    return status, err
+}
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<ul>
+  <li>这里就是通过nstool工具进入容器network namespace, 将tcpdump命令作为stdin在namespace中执行</li>
+  <li>完整的命令类似：echo “tcpdump -i any -U -C 2 -w /var/neuvector/pcap/xxx  -W 5” | ./nstools run -i -n /proc/2271/ns/net</li>
+  <li>nstools这个工具类似nsenter，为了安全工具内部会校验调用方必须是neuvector agent服务，所以一般情况下执行这个命令是会失败的</li>
+  <li>监听tcpdump进程状态并返回状态信息</li>
+</ul>
+
+<p>其他方法比如stop、下载抓包文件的调用路径是类似的</p>
+
+<p>nstools工具使用（移除父进程校验后）：
+<img src="/blog/img/neuvector_nstools.png" alt="neuvector_pcap" /></p>
+
+:ET
