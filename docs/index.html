@@ -234,6 +234,37 @@
             ">
     			
 <div class="post-preview">
+    <a href="/blog/2022/09/16/calico-bird/">
+        <h2 class="post-title">
+            Calico BGP - Bird
+        </h2>
+        
+        <h3 class="post-subtitle">
+            
+        </h3>
+        
+        <div class="post-content-preview">
+            
+                背景
+Calico支持多种网络模式，包括vxlan/ipip/bgp，其中vxlan和ipip属于overlay类型，在嵌套部署模式比较通用，但网络性能相对bgp会低一些。这主要是由于bgp模式下没有数据报文的封包和解包操作
+
+本文会将calico中bgp相关的操作流程抽离，通过demo的方式来介绍calico中bgp网络的实现
+
+架构
+calico架构
+
+
+Calico作为一种常用的Kub...
+            
+        </div>
+    </a>
+    <p class="post-meta">
+        Posted by hujin on September 16, 2022
+    </p>
+</div>
+<hr>
+
+<div class="post-preview">
     <a href="/blog/2022/08/23/neuvector-dp/">
         <h2 class="post-title">
             Neuvector源码分析之 dp引流的实现
@@ -287,31 +318,6 @@ TODO
     </a>
     <p class="post-meta">
         Posted by hujin on August 13, 2022
-    </p>
-</div>
-<hr>
-
-<div class="post-preview">
-    <a href="/blog/2022/08/12/neuvector-file/">
-        <h2 class="post-title">
-            Neuvector源码分析之 文件管理
-        </h2>
-        
-        <h3 class="post-subtitle">
-            
-        </h3>
-        
-        <div class="post-content-preview">
-            
-                架构图
-TODO
-
-
-            
-        </div>
-    </a>
-    <p class="post-meta">
-        Posted by hujin on August 12, 2022
     </p>
 </div>
 <hr>
@@ -599,15 +605,15 @@ yum ...
                     title="k8s"
                     rel="7">k8s</a>
         
-                <a data-sort="0017" 
-                    href="/blog/archive/?tag=neuvector"
-                    title="neuvector"
-                    rel="6">neuvector</a>
-        
                 <a data-sort="0018" 
                     href="/blog/archive/?tag=cni"
                     title="cni"
                     rel="5">cni</a>
+        
+                <a data-sort="0018" 
+                    href="/blog/archive/?tag=neuvector"
+                    title="neuvector"
+                    rel="5">neuvector</a>
         
                 <a data-sort="0020" 
                     href="/blog/archive/?tag=istio"

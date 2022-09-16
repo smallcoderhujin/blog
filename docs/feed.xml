@@ -5,9 +5,524 @@
     <description>Hujin，Openstack &amp; SDN &amp; Kubernetes Lover，Software Engineer，| 与你一起发现更大的世界</description>
     <link>http://0.0.0.0:4000/blog/</link>
     <atom:link href="http://0.0.0.0:4000/blog/feed.xml" rel="self" type="application/rss+xml" />
-    <pubDate>Tue, 23 Aug 2022 01:47:40 +0000</pubDate>
-    <lastBuildDate>Tue, 23 Aug 2022 01:47:40 +0000</lastBuildDate>
+    <pubDate>Fri, 16 Sep 2022 08:40:50 +0000</pubDate>
+    <lastBuildDate>Fri, 16 Sep 2022 08:40:50 +0000</lastBuildDate>
     <generator>Jekyll v4.2.2</generator>
+    
+      <item>
+        <title>Calico BGP - Bird</title>
+        <description>&lt;h2 id=&quot;背景&quot;&gt;背景&lt;/h2&gt;
+&lt;p&gt;Calico支持多种网络模式，包括vxlan/ipip/bgp，其中vxlan和ipip属于overlay类型，在嵌套部署模式比较通用，但网络性能相对bgp会低一些。这主要是由于bgp模式下没有数据报文的封包和解包操作&lt;/p&gt;
+
+&lt;p&gt;本文会将calico中bgp相关的操作流程抽离，通过demo的方式来介绍calico中bgp网络的实现&lt;/p&gt;
+
+&lt;h2 id=&quot;架构&quot;&gt;架构&lt;/h2&gt;
+&lt;p&gt;calico架构
+&lt;img src=&quot;/blog/img/calico.png&quot; alt=&quot;calico_bird&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;Calico作为一种常用的Kubernetes网络插件，使用BGP协议对各节点的容器网络进行路由交换。Calico中使用的软件BGP方案是Bird&lt;/p&gt;
+
+&lt;p&gt;BIRD（BIRD Internet Routing Daemon）是一款可运行在Linux和其他类Unix系统上的路由软件，它实现了多种路由协议，比如BGP、OSPF、RIP等。&lt;/p&gt;
+
+&lt;p&gt;BIRD会在内存中维护许多路由表，路由表根据不同的协议，通过与各种“其他事物”交换路由信息，来更新路由规则。这里说的“其他事物”可能是其他的路由表，也可能是外部的路由器，还可以是内核的某些API&lt;/p&gt;
+
+&lt;p&gt;demo架构&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/blog/img/calico_demo.png&quot; alt=&quot;calico_bird&quot; /&gt;&lt;/p&gt;
+
+&lt;h2 id=&quot;实现&quot;&gt;实现&lt;/h2&gt;
+&lt;h3 id=&quot;模拟calico-cni创建和配置网卡的操作&quot;&gt;模拟calico cni创建和配置网卡的操作&lt;/h3&gt;
+&lt;p&gt;node1节点&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;# 创建namespace和虚拟网卡
+ip netns add ns1
+ip link add tap1 type veth peer name nsvth netns ns1
+ip link set tap1 up
+ip netns exec ns1 ip link set lo up
+ip netns exec ns1 ip link set nsvth up
+
+
+# 配置路由和IP地址
+ip netns exec ns1 ip addr add 10.244.166.128/24 dev nsvth
+ip r add 10.244.166.128/32 dev tap1
+ip netns exec ns1 ip r add 169.254.1.1 dev nsvth
+ip netns exec ns1 ip r add default via 169.254.1.1 dev nsvth
+
+
+# 配置neigh
+ip link set address ee:ee:ee:ee:ee:ee dev tap1
+ip netns exec ns1 ip neigh add 169.254.1.1 dev nsvth lladdr ee:ee:ee:ee:ee:ee
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;node2节点&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;# 创建namespace和虚拟网卡
+ip netns add ns2
+ip link add tap1 type veth peer name nsvth netns ns2
+ip link set tap1 up
+ip netns exec ns2 ip link set lo up
+ip netns exec ns2 ip link set nsvth up
+
+
+# 配置路由和IP地址
+ip netns exec ns2 ip addr add 10.244.104.0/24 dev nsvth
+ip r add 10.244.104.0/32 dev tap1
+ip netns exec ns2 ip r add 169.254.1.1 dev nsvth
+ip netns exec ns2 ip r add default via 169.254.1.1 dev nsvth
+
+
+# 配置neigh
+ip link set address ee:ee:ee:ee:ee:ee dev tap1
+ip netns exec ns2 ip neigh add 169.254.1.1 dev nsvth lladdr ee:ee:ee:ee:ee:ee
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;每个节点启动bird
+启动一个容器并获取内部的bird二进制文件，镜像使用calico/node:v3.11.1&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;docker run --name calico-temp -d calico/node:v3.11.1 sleep 200
+docker cp calico-temp:/usr/bin/bird /usr/bin
+docker rm -f calico-temp
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;创建bird.cfg配置&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+55
+56
+57
+58
+59
+60
+61
+62
+63
+64
+65
+66
+67
+68
+69
+70
+71
+72
+73
+74
+75
+76
+77
+78
+79
+80
+81
+82
+83
+84
+85
+86
+87
+88
+89
+90
+91
+92
+93
+94
+95
+96
+97
+98
+99
+100
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;function apply_communities ()
+{
+}
+
+# Generated by confd
+include &quot;bird_aggr.cfg&quot;;
+include &quot;bird_ipam.cfg&quot;;
+
+router id 10.20.30.30;
+
+# Configure synchronization between routing tables and kernel.
+protocol kernel {
+  learn;             # Learn all alien routes from the kernel
+  persist;           # Don&apos;t remove routes on bird shutdown
+  scan time 2;       # Scan kernel routing table every 2 seconds
+  import all;
+  export filter calico_kernel_programming; # Default is export none
+  graceful restart;  # Turn on graceful restart to reduce potential flaps in
+                     # routes when reloading BIRD configuration.  With a full
+                     # automatic mesh, there is no way to prevent BGP from
+                     # flapping since multiple nodes update their BGP
+                     # configuration at the same time, GR is not guaranteed to
+                     # work correctly in this scenario.
+  merge paths on;    # Allow export multipath routes (ECMP)
+}
+
+# Watch interface up/down events.
+protocol device {
+  debug { states };
+  scan time 2;    # Scan interfaces every 2 seconds
+}
+
+protocol direct {
+  debug { states };
+  interface -&quot;cali*&quot;, -&quot;kube-ipvs*&quot;, &quot;*&quot;; # Exclude cali* and kube-ipvs* but
+                                          # include everything else.  In
+                                          # IPVS-mode, kube-proxy creates a
+                                          # kube-ipvs0 interface. We exclude
+                                          # kube-ipvs0 because this interface
+                                          # gets an address for every in use
+                                          # cluster IP. We use static routes
+                                          # for when we legitimately want to
+                                          # export cluster IPs.
+}
+
+
+# Template for all BGP clients
+template bgp bgp_template {
+  debug { states };
+  description &quot;Connection to BGP peer&quot;;
+  local as 64512;
+  multihop;
+  gateway recursive; # This should be the default, but just in case.
+  import all;        # Import all routes, since we don&apos;t know what the upstream
+                     # topology is and therefore have to trust the ToR/RR.
+  export filter calico_export_to_bgp_peers;  # Only want to export routes for workloads.
+  add paths on;
+  graceful restart;  # See comment in kernel section about graceful restart.
+  connect delay time 2;
+  connect retry time 5;
+  error wait time 5,30;
+}
+
+# ------------- Node-to-node mesh -------------
+
+
+
+
+
+# For peer /host/node1/ip_addr_v4
+# Skipping ourselves (10.20.30.30)
+
+
+
+
+# For peer /host/node2/ip_addr_v4
+protocol bgp Mesh_10_20_30_31 from bgp_template {
+  neighbor 10.20.30.31 as 64512;
+  source address 10.20.30.30;  # The local address we use for the TCP connection
+  passive on; # Mesh is unidirectional, peer will connect to us.
+}
+
+
+
+# For peer /host/node3/ip_addr_v4
+#protocol bgp Mesh_10_20_30_32 from bgp_template {
+#  neighbor 10.20.30.32 as 64512;
+#  source address 10.20.30.30;  # The local address we use for the TCP connection
+#  passive on; # Mesh is unidirectional, peer will connect to us.
+#}
+
+
+
+# ------------- Global peers -------------
+# No global peers configured.
+
+
+# ------------- Node-specific peers -------------
+
+# No node-specific peers configured.
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;创建bird_ipam.cfg配置&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;# Generated by confd
+filter calico_export_to_bgp_peers {
+  # filter code terminates when it calls `accept;` or `reject;`, call apply_communities() before calico_aggr()
+  apply_communities();
+  calico_aggr();
+
+  if ( net ~ 10.244.0.0/16 ) then {
+    accept;
+  }
+  reject;
+}
+
+
+filter calico_kernel_programming {
+
+  if ( net ~ 10.244.0.0/16 ) then {
+    krt_tunnel = &quot;&quot;;
+    accept;
+  }
+
+  accept;
+}
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;创建bird_aggr.cfg配置&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;# Generated by confd
+
+protocol static {
+   # IP blocks for this host.
+   route 10.244.166.128/26 blackhole;
+}
+
+
+# Aggregation of routes on this host; export the block, nothing beneath it.
+function calico_aggr ()
+{
+      # Block 10.244.166.128/26 is confirmed
+      if ( net = 10.244.166.128/26 ) then { accept; }
+      if ( net ~ 10.244.166.128/26 ) then { reject; }
+}
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;运行bird进程&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;bird -R -s ./bird.ctl -d -c ./bird.cfg
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;此时在node1/node2节点会发现分别多了一条到对方的路由规则&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;[root@node1 bird]# ip r
+default via 179.20.23.1 dev ens160 proto static metric 100 
+10.20.30.0/24 dev ens192 proto kernel scope link src 10.20.30.30 metric 101 
+10.244.104.0/26 via 10.20.30.31 dev ens192 proto bird 
+10.244.166.128 dev tap1 scope link 
+blackhole 10.244.166.128/26 proto bird 
+172.17.0.0/16 dev docker0 proto kernel scope link src 172.17.0.1 linkdown 
+179.20.23.0/24 dev ens160 proto kernel scope link src 179.20.23.30 metric 100
+
+[root@node2 ~]# ip r
+default via 179.20.23.1 dev ens160 proto static metric 100 
+10.20.30.0/24 dev ens192 proto kernel scope link src 10.20.30.31 metric 101 
+10.244.104.0 dev tap1 scope link 
+blackhole 10.244.104.0/26 proto bird 
+10.244.104.1 dev cali6fa4fc0f157 scope link 
+10.244.104.2 dev calif2ac964c43c scope link 
+10.244.166.128/26 via 10.20.30.30 dev ens192 proto bird 
+172.17.0.0/16 dev docker0 proto kernel scope link src 172.17.0.1 linkdown 
+179.20.23.0/24 dev ens160 proto kernel scope link src 179.20.23.31 metric 100
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;从node1的ns1中ping node2的ns1 ip&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;[root@node1 bird]# ip netns exec ns ip a 
+1: lo: &amp;lt;LOOPBACK,UP,LOWER_UP&amp;gt; mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+    inet6 ::1/128 scope host 
+       valid_lft forever preferred_lft forever
+2: nsvth@if9: &amp;lt;BROADCAST,MULTICAST,UP,LOWER_UP&amp;gt; mtu 1500 qdisc noqueue state UP group default qlen 1000
+    link/ether 2e:be:65:26:b3:0d brd ff:ff:ff:ff:ff:ff link-netnsid 0
+    inet 10.244.166.128/24 scope global nsvth
+       valid_lft forever preferred_lft forever
+    inet6 fe80::2cbe:65ff:fe26:b30d/64 scope link 
+       valid_lft forever preferred_lft forever
+
+[root@node1 bird]# ip netns exec ns ping 10.244.104.0
+PING 10.244.104.0 (10.244.104.0) 56(84) bytes of data.
+64 bytes from 10.244.104.0: icmp_seq=1 ttl=62 time=0.299 ms
+64 bytes from 10.244.104.0: icmp_seq=2 ttl=62 time=0.356 ms
+64 bytes from 10.244.104.0: icmp_seq=3 ttl=62 time=0.314 ms
+^C
+--- 10.244.104.0 ping statistics ---
+3 packets transmitted, 3 received, 0% packet loss, time 2033ms
+rtt min/avg/max/mdev = 0.299/0.323/0.356/0.024 ms
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h2 id=&quot;参考&quot;&gt;参考&lt;/h2&gt;
+&lt;ul&gt;
+  &lt;li&gt;bird手册：The BIRD Internet Routing Daemon Project (network.cz)&lt;/li&gt;
+&lt;/ul&gt;
+
+</description>
+        <pubDate>Fri, 16 Sep 2022 00:00:00 +0000</pubDate>
+        <link>http://0.0.0.0:4000/blog/2022/09/16/calico-bird/</link>
+        <guid isPermaLink="true">http://0.0.0.0:4000/blog/2022/09/16/calico-bird/</guid>
+        
+        <category>calico</category>
+        
+        <category>bgp</category>
+        
+        
+      </item>
     
       <item>
         <title>Neuvector源码分析之 dp引流的实现</title>
@@ -415,23 +930,6 @@ cfg_mac()
         <category>neuvector</category>
         
         <category>网络策略</category>
-        
-        
-      </item>
-    
-      <item>
-        <title>Neuvector源码分析之 文件管理</title>
-        <description>&lt;h2 id=&quot;架构图&quot;&gt;架构图&lt;/h2&gt;
-&lt;p&gt;TODO&lt;/p&gt;
-
-</description>
-        <pubDate>Fri, 12 Aug 2022 00:00:00 +0000</pubDate>
-        <link>http://0.0.0.0:4000/blog/2022/08/12/neuvector-file/</link>
-        <guid isPermaLink="true">http://0.0.0.0:4000/blog/2022/08/12/neuvector-file/</guid>
-        
-        <category>neuvector</category>
-        
-        <category>文件管理</category>
         
         
       </item>

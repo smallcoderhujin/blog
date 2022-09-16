@@ -1,0 +1,3 @@
+I"<h2 id="背景">背景</h2>
+<p>Calico支持多种网络模式，包括vxlan/ipip/bgp，其中vxlan和ipip属于overlay类型，在嵌套部署模式比较通用，但网络性能相对bgp会低一些。这主要是由于bgp模式下没有数据报文的封包和解包操作</p>
+:ET
