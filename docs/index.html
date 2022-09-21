@@ -52,7 +52,6 @@
 
     <!-- ga & ba script hoook -->
     <script></script>
-    <meta name="google-site-verification" content="raVGYhZptmndHxgvQigEpECymNwgIdUoOW3TPUwVPbA" />
 </head>
 
 
@@ -235,6 +234,30 @@
             ">
     			
 <div class="post-preview">
+    <a href="/blog/2022/09/21/neuvector-bench/">
+        <h2 class="post-title">
+            Neuvector源码分析之 合规性检测
+        </h2>
+        
+        <h3 class="post-subtitle">
+            
+        </h3>
+        
+        <div class="post-content-preview">
+            
+                背景
+Neuvector安全基线支持 CIS Benchmark 标准，可对容器、镜像、Register、主机、kubernetes 进行安全标准检查，多维度展现容器资产的基线合规情况并帮助建立容器运行环境下的最佳基线配置，减少攻击面
+NeuVector 的合规性审核包括 CIS 基线测试、自定义检查、机密审核以及 PCI、GDPR 和其他法规的行业标准模板扫描。本文将通过源码的方式分析合规...
+            
+        </div>
+    </a>
+    <p class="post-meta">
+        Posted by hujin on September 21, 2022
+    </p>
+</div>
+<hr>
+
+<div class="post-preview">
     <a href="/blog/2022/09/16/calico-bird/">
         <h2 class="post-title">
             Calico BGP - Bird
@@ -295,65 +318,6 @@ Calico作为一种常用的Kub...
     </a>
     <p class="post-meta">
         Posted by hujin on August 23, 2022
-    </p>
-</div>
-<hr>
-
-<div class="post-preview">
-    <a href="/blog/2022/08/13/neuvector-policy/">
-        <h2 class="post-title">
-            Neuvector源码分析之 网络策略
-        </h2>
-        
-        <h3 class="post-subtitle">
-            
-        </h3>
-        
-        <div class="post-content-preview">
-            
-                架构图
-TODO
-
-            
-        </div>
-    </a>
-    <p class="post-meta">
-        Posted by hujin on August 13, 2022
-    </p>
-</div>
-<hr>
-
-<div class="post-preview">
-    <a href="/blog/2022/08/11/neuvector-process/">
-        <h2 class="post-title">
-            Neuvector源码分析之 进程管理
-        </h2>
-        
-        <h3 class="post-subtitle">
-            
-        </h3>
-        
-        <div class="post-content-preview">
-            
-                功能介绍
-
-
-进程管理是针对容器资源的进程进行管理，用户在界面可以先查询资源，在资源的进程列表中维护进程信息
-在agent中进程管理的实现实际就是kill，只是在kill之前根据探测到的资源进程信息和用户下发的规则对比，得到哪些进程需要kill
-
-通过进程管理，可以防止异常命令的执行，只要在容器中执行非正常命令，直接就被kill掉，有效保护容器安全
-
-源码
-
-接口：
-
-1
-r.PATCH("...
-            
-        </div>
-    </a>
-    <p class="post-meta">
-        Posted by hujin on August 11, 2022
     </p>
 </div>
 <hr>
@@ -560,6 +524,39 @@ yum ...
 </div>
 <hr>
 
+<div class="post-preview">
+    <a href="/blog/2021/09/28/tf-cni-networkpolicy/">
+        <h2 class="post-title">
+            Tungstenfabric CNI源码 -- NetworkPolicy
+        </h2>
+        
+        <h3 class="post-subtitle">
+            
+        </h3>
+        
+        <div class="post-content-preview">
+            
+                背景
+tungstenfabric cni通过watch kubernetes apiserver中指定的资源，并在sdn中创建对应的网络设备来实现对应功能。本文重点介绍cni针对networkpolicy的处理，根据源码逐步分析。
+
+架构&amp;流程图
+
+
+
+源码解析
+
+在process方法中会处理networkpolicy的创建、更新和删除。这里我们先看下创建和更新
+
+创建和更新方法中...
+            
+        </div>
+    </a>
+    <p class="post-meta">
+        Posted by hujin on September 28, 2021
+    </p>
+</div>
+<hr>
+
 
 <!-- Pager -->
 
@@ -596,17 +593,17 @@ yum ...
         
         
         
-                <a data-sort="0018" 
+                <a data-sort="0017" 
                     href="/blog/archive/?tag=kubernetes"
                     title="kubernetes"
                     rel="5">kubernetes</a>
         
-                <a data-sort="0016" 
+                <a data-sort="0015" 
                     href="/blog/archive/?tag=k8s"
                     title="k8s"
                     rel="7">k8s</a>
         
-                <a data-sort="0018" 
+                <a data-sort="0017" 
                     href="/blog/archive/?tag=cni"
                     title="cni"
                     rel="5">cni</a>
@@ -614,14 +611,14 @@ yum ...
                 <a data-sort="0018" 
                     href="/blog/archive/?tag=neuvector"
                     title="neuvector"
-                    rel="5">neuvector</a>
+                    rel="4">neuvector</a>
         
-                <a data-sort="0020" 
+                <a data-sort="0019" 
                     href="/blog/archive/?tag=istio"
                     title="istio"
                     rel="3">istio</a>
         
-                <a data-sort="0021" 
+                <a data-sort="0020" 
                     href="/blog/archive/?tag=tungstenfabric"
                     title="tungstenfabric"
                     rel="2">tungstenfabric</a>
