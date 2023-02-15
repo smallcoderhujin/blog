@@ -708,7 +708,9 @@ bench2REST - GetComplianceMeta方法会将合规项添加法规对应的tag标�
 
 <h2 id="总结">总结</h2>
 <p>从上面的代码分析，我们看到neuvector支持对host/container/kubernetes平台的合规性检测，同时支持一些常见的法规，可以输出非常清晰的格式化结果并提供下载；
-但我们也可以发现一些不足的地方，包括不支持其他runtime、不支持国内的法规等问题</p>
+但我们也可以发现一些不足的地方，包括不支持其他runtime、不支持国内的法规等问题。
+neuvector实际通过集成一个叫kubernetes-cis-benchmark的项目来实现基线扫描功能，此项目目前基本不维护了，导致支持的k8s版本一直停留在v1.18,且扫描出来的问题有些是不对的。
+建议还是使用kube-bench来扫描，或者neuvector可以将kube-bench集成进来</p>
 
 
                 <hr style="visibility: hidden;">
@@ -721,6 +723,13 @@ bench2REST - GetComplianceMeta方法会将合规项添加法规对应的tag标�
                         </a>
                     </li>
                     
+                    
+                    <li class="next">
+                        <a href="/blog/2023/02/15/kata-network/" data-toggle="tooltip" data-placement="top" title="Kata容器网络实现">
+                        Next<br>
+                        <span>Kata容器网络实现</span>
+                        </a>
+                    </li>
                     
                 </ul>
                 <hr style="visibility: hidden;">
@@ -769,32 +778,32 @@ bench2REST - GetComplianceMeta方法会将合规项添加法规对应的tag标�
         
         
         
-                <a data-sort="0017" 
+                <a data-sort="0018" 
                     href="/blog/archive/?tag=kubernetes"
                     title="kubernetes"
                     rel="5">kubernetes</a>
         
-                <a data-sort="0015" 
+                <a data-sort="0016" 
                     href="/blog/archive/?tag=k8s"
                     title="k8s"
                     rel="7">k8s</a>
         
-                <a data-sort="0017" 
+                <a data-sort="0018" 
                     href="/blog/archive/?tag=cni"
                     title="cni"
                     rel="5">cni</a>
         
-                <a data-sort="0018" 
+                <a data-sort="0019" 
                     href="/blog/archive/?tag=neuvector"
                     title="neuvector"
                     rel="4">neuvector</a>
         
-                <a data-sort="0019" 
+                <a data-sort="0020" 
                     href="/blog/archive/?tag=istio"
                     title="istio"
                     rel="3">istio</a>
         
-                <a data-sort="0020" 
+                <a data-sort="0021" 
                     href="/blog/archive/?tag=tungstenfabric"
                     title="tungstenfabric"
                     rel="2">tungstenfabric</a>
@@ -886,7 +895,7 @@ bench2REST - GetComplianceMeta方法会将合规项添加法规对应的tag标�
 </ul>
 
                 <p class="copyright text-muted">
-                    Copyright &copy; Hujin Blog 2022
+                    Copyright &copy; Hujin Blog 2023
                     <br>
                     Powered by <a href="http://hujin.github.com">Hujin Blog</a> |
                     <iframe style="margin-left: 2px; margin-bottom:-5px;" frameborder="0" scrolling="0" width="100px"
