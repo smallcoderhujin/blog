@@ -234,9 +234,9 @@
             ">
     			
 <div class="post-preview">
-    <a href="/blog/2023/02/15/kata-network/">
+    <a href="/blog/2023/02/27/calico-route/">
         <h2 class="post-title">
-            Kata容器网络实现
+            Calico单节点网络实现
         </h2>
         
         <h3 class="post-subtitle">
@@ -246,23 +246,23 @@
         <div class="post-content-preview">
             
                 背景
-最近看到安全容器相关的文章，想着看看kata的网络实现
-
-架构图
-
-在k8s中配置使用containerd作为runtime-endpoint实现，在containerd中配置runtime支持runc和kata
+最近有跟同事讨论calico的网络实现的话题，说calico 设计很巧妙，把 2-3层都给处理成了3层，想看看是如何实现的
 
 实现
+查看官方文档，发现有几个解释，通过这几个解释我们实际看看Calico中如何实现将2-3层流量都处理成3层的
 
+问题一： 为什么容器中有一条到169.254.1.1的路由规则
 
-
-  默认情况下，containerd容器在创建sandbox的时候，创建对应的netns出来
-  在创建容器时，cni负责创建和配置容器网卡，也就是在对应的ne...
+1
+2
+3
+4
+Why does my container have a rou...
             
         </div>
     </a>
     <p class="post-meta">
-        Posted by hujin on February 15, 2023
+        Posted by hujin on February 27, 2023
     </p>
 </div>
 <hr>
@@ -335,7 +335,7 @@ Calico作为一种常用的Kub...
         <div class="post-content-preview">
             
                 背景
-在neuvector中通过监听runtime事件来动态维护节点上容器基础信息，在界面支持策略配置、模式管理都对容器流量产生影响。用户从学习模式调整成保护模式时可以对容器流量进行阻断操作，那么agent
+在secvector中通过监听runtime事件来动态维护节点上容器基础信息，在界面支持策略配置、模式管理都对容器流量产生影响。用户从学习模式调整成保护模式时可以对容器流量进行阻断操作，那么agent
 中是如何实现阻断的？
 这里我们将核心流程抽离出来，通过demo的方式来介绍具体的实现细节
 
@@ -618,6 +618,11 @@ yum ...
                     href="/blog/archive/?tag=istio"
                     title="istio"
                     rel="3">istio</a>
+        
+                <a data-sort="0021" 
+                    href="/blog/archive/?tag=calico"
+                    title="calico"
+                    rel="2">calico</a>
         
                 <a data-sort="0021" 
                     href="/blog/archive/?tag=tungstenfabric"
