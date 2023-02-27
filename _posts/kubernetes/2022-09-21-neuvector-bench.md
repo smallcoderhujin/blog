@@ -258,4 +258,6 @@ bench2REST - GetComplianceMeta方法会将合规项添加法规对应的tag标�
 
 ## 总结
 从上面的代码分析，我们看到neuvector支持对host/container/kubernetes平台的合规性检测，同时支持一些常见的法规，可以输出非常清晰的格式化结果并提供下载；
-但我们也可以发现一些不足的地方，包括不支持其他runtime、不支持国内的法规等问题
+但我们也可以发现一些不足的地方，包括不支持其他runtime、不支持国内的法规等问题。
+neuvector实际通过集成一个叫kubernetes-cis-benchmark的项目来实现基线扫描功能，此项目目前基本不维护了，导致支持的k8s版本一直停留在v1.18,且扫描出来的问题有些是不对的。
+建议还是使用kube-bench来扫描，或者neuvector可以将kube-bench集成进来
