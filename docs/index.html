@@ -268,6 +268,40 @@ Why does my container have a rou...
 <hr>
 
 <div class="post-preview">
+    <a href="/blog/2023/02/15/kata-network/">
+        <h2 class="post-title">
+            Kata容器网络实现
+        </h2>
+        
+        <h3 class="post-subtitle">
+            
+        </h3>
+        
+        <div class="post-content-preview">
+            
+                背景
+最近看到安全容器相关的文章，想着看看kata的网络实现
+
+架构图
+
+在k8s中配置使用containerd作为runtime-endpoint实现，在containerd中配置runtime支持runc和kata
+
+实现
+
+
+
+  默认情况下，containerd容器在创建sandbox的时候，创建对应的netns出来
+  在创建容器时，cni负责创建和配置容器网卡，也就是在对应的ne...
+            
+        </div>
+    </a>
+    <p class="post-meta">
+        Posted by hujin on February 15, 2023
+    </p>
+</div>
+<hr>
+
+<div class="post-preview">
     <a href="/blog/2022/09/21/neuvector-bench/">
         <h2 class="post-title">
             Neuvector源码分析之 合规性检测
@@ -335,7 +369,7 @@ Calico作为一种常用的Kub...
         <div class="post-content-preview">
             
                 背景
-在secvector中通过监听runtime事件来动态维护节点上容器基础信息，在界面支持策略配置、模式管理都对容器流量产生影响。用户从学习模式调整成保护模式时可以对容器流量进行阻断操作，那么agent
+在neuvector中通过监听runtime事件来动态维护节点上容器基础信息，在界面支持策略配置、模式管理都对容器流量产生影响。用户从学习模式调整成保护模式时可以对容器流量进行阻断操作，那么agent
 中是如何实现阻断的？
 这里我们将核心流程抽离出来，通过demo的方式来介绍具体的实现细节
 
@@ -528,36 +562,6 @@ istio集成测试使用go test，会自动读取源码目录下面名为 *_test.
 </div>
 <hr>
 
-<div class="post-preview">
-    <a href="/blog/2021/10/21/docker-package/">
-        <h2 class="post-title">
-            DockerCE20.10版本打包流程
-        </h2>
-        
-        <h3 class="post-subtitle">
-            
-        </h3>
-        
-        <div class="post-content-preview">
-            
-                背景
-Docker-CE分支在v20.10版本之后将会停止更新，原先的docker-ce将拆分成docker/cli和moby/moby两个项目，其中docker/cli就是docker的客户端，也就是我们常用的docker命令行工具所属的项目；moby/moby项目就是原先docker engine的部分
-
-环境准备
-
-在编译docker源码之前，需要安装docker-ce
-
-1
-yum ...
-            
-        </div>
-    </a>
-    <p class="post-meta">
-        Posted by hujin on October 21, 2021
-    </p>
-</div>
-<hr>
-
 
 <!-- Pager -->
 
@@ -594,37 +598,37 @@ yum ...
         
         
         
-                <a data-sort="0018" 
+                <a data-sort="0019" 
                     href="/blog/archive/?tag=kubernetes"
                     title="kubernetes"
                     rel="5">kubernetes</a>
         
-                <a data-sort="0016" 
+                <a data-sort="0017" 
                     href="/blog/archive/?tag=k8s"
                     title="k8s"
                     rel="7">k8s</a>
         
-                <a data-sort="0018" 
+                <a data-sort="0019" 
                     href="/blog/archive/?tag=cni"
                     title="cni"
                     rel="5">cni</a>
         
-                <a data-sort="0019" 
+                <a data-sort="0020" 
                     href="/blog/archive/?tag=neuvector"
                     title="neuvector"
                     rel="4">neuvector</a>
         
-                <a data-sort="0020" 
+                <a data-sort="0021" 
                     href="/blog/archive/?tag=istio"
                     title="istio"
                     rel="3">istio</a>
         
-                <a data-sort="0021" 
+                <a data-sort="0022" 
                     href="/blog/archive/?tag=calico"
                     title="calico"
                     rel="2">calico</a>
         
-                <a data-sort="0021" 
+                <a data-sort="0022" 
                     href="/blog/archive/?tag=tungstenfabric"
                     title="tungstenfabric"
                     rel="2">tungstenfabric</a>

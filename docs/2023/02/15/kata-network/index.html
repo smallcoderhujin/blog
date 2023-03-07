@@ -11,35 +11,37 @@
     <meta name="theme-color" content="#000000">
     
     <!-- Open Graph -->
-    <meta property="og:title" content="Neuvector源码分析之 dp引流的实现 - 胡进的博客 | Hujin's Blog">
+    <meta property="og:title" content="Kata容器网络实现 - 胡进的博客 | Hujin's Blog">
     
     <meta property="og:type" content="article">
     <meta property="og:description" content="背景
-在neuvector中通过监听runtime事件来动态维护节点上容器基础信息，在界面支持策略配置、模式管理都对容器流量产生影响。用户从学习模式调整成保护模式时可以对容器流量进行阻断操作，那么agent
-中是如何实现阻断的？
-这里我们将核心流程抽离出来，通过demo的方式来介绍具体的实现细节
-">
+最近看到安全容器相关的文章，想着看看kata的网络实现
+
+架构图
+
+在k8s中配置使用containerd作为runtime-endpoint实现，在containerd中配置runtime支持runc和kata
+
+实现
+
+
+
+  默认情况下，containerd容器在创建sandbox的时候，创建对应的netns出来
+  在创建容器时，cni负责创建和配置容器网卡，也就是在对应的ne...">
     
-    <meta property="article:published_time" content="2022-08-23T00:00:00Z">
+    <meta property="article:published_time" content="2023-02-15T00:00:00Z">
     
     
     <meta property="article:author" content="hujin">
     
     
-    <meta property="article:tag" content="neuvector">
-    
-    <meta property="article:tag" content="deep packet inspection">
-    
-    <meta property="article:tag" content="dpi">
-    
-    <meta property="article:tag" content="tc">
+    <meta property="article:tag" content="kata">
     
     
     <meta property="og:image" content="http://0.0.0.0:4000/blog/img/avatar-hux-ny.jpg">
-    <meta property="og:url" content="http://0.0.0.0:4000/2022/08/23/neuvector-dp/">
+    <meta property="og:url" content="http://0.0.0.0:4000/2023/02/15/kata-network/">
     <meta property="og:site_name" content="胡进的博客 | Hujin's Blog">
     
-    <title>Neuvector源码分析之 dp引流的实现 - 胡进的博客 | Hujin's Blog</title>
+    <title>Kata容器网络实现 - 胡进的博客 | Hujin's Blog</title>
 
     <!-- Web App Manifest -->
     <link rel="manifest" href="/blog/pwa/manifest.json">
@@ -48,7 +50,7 @@
     <link rel="shortcut icon" href="/blog/img/favicon.ico">
     
     <!-- Canonical URL -->
-    <link rel="canonical" href="http://0.0.0.0:4000/blog/2022/08/23/neuvector-dp/">
+    <link rel="canonical" href="http://0.0.0.0:4000/blog/2023/02/15/kata-network/">
 
     <!-- Bootstrap Core CSS -->
     <link rel="stylesheet" href="/blog/css/bootstrap.min.css">
@@ -241,19 +243,13 @@
                 <div class="post-heading">
                     <div class="tags">
                         
-                        <a class="tag" href="/blog/archive/?tag=neuvector" title="neuvector">neuvector</a>
-                        
-                        <a class="tag" href="/blog/archive/?tag=deep+packet+inspection" title="deep packet inspection">deep packet inspection</a>
-                        
-                        <a class="tag" href="/blog/archive/?tag=dpi" title="dpi">dpi</a>
-                        
-                        <a class="tag" href="/blog/archive/?tag=tc" title="tc">tc</a>
+                        <a class="tag" href="/blog/archive/?tag=kata" title="kata">kata</a>
                         
                     </div>
-                    <h1>Neuvector源码分析之 dp引流的实现</h1>
+                    <h1>Kata容器网络实现</h1>
                     
                     <h2 class="subheading"></h2>
-                    <span class="meta">Posted by hujin on August 23, 2022</span>
+                    <span class="meta">Posted by hujin on February 15, 2023</span>
                 </div>
             </div>
         </div>
@@ -280,50 +276,86 @@
                 
 
 				<h2 id="背景">背景</h2>
-<p>在neuvector中通过监听runtime事件来动态维护节点上容器基础信息，在界面支持策略配置、模式管理都对容器流量产生影响。用户从学习模式调整成保护模式时可以对容器流量进行阻断操作，那么agent
-中是如何实现阻断的？
-这里我们将核心流程抽离出来，通过demo的方式来介绍具体的实现细节</p>
+<p>最近看到安全容器相关的文章，想着看看kata的网络实现</p>
 
-<h2 id="原理">原理</h2>
-<h3 id="默认形态">默认形态</h3>
+<h2 id="架构图">架构图</h2>
+<p><img src="/blog/img/kata1.png" alt="kata调用流程" />
+在k8s中配置使用containerd作为runtime-endpoint实现，在containerd中配置runtime支持runc和kata</p>
 
-<p><img src="/blog/img/neuvector_dp1.png" alt="neuvector_pcap" /></p>
+<h2 id="实现">实现</h2>
+<p><img src="/blog/img/kata2.png" alt="kata网络" /></p>
 
-<p>开始之前先看下默认情况下容器的网络形态（以calico为例）:</p>
 <ul>
-  <li>容器网卡使用veth设备，一端在容器内部，一端在host上</li>
-  <li>在host上通过路由规则的方式将流量引到host上的veth设备，最终到达容器内部</li>
+  <li>默认情况下，containerd容器在创建sandbox的时候，创建对应的netns出来</li>
+  <li>在创建容器时，cni负责创建和配置容器网卡，也就是在对应的netns中创建和配置容器网卡</li>
+  <li>在创建kata容器时，kata-runtime会在容器中创建一个qemu虚拟机，使用tap0_kata网卡作为虚拟机的虚拟网卡</li>
+  <li>这里kata-runtime支持多种方式将流量从容器原本的veth设备mirror到虚拟机的tap设备上</li>
+  <li>支持的mirror方式有: macvtap none和tcfilter，默认使用tcfilter</li>
 </ul>
 
-<h3 id="引流形态">引流形态</h3>
+<h2 id="源码">源码</h2>
 
-<p><img src="/blog/img/neuvector_dp2.png" alt="neuvector_pcap" /></p>
-
-<p>引流形态下流量会优先经过agent容器，根据策略规则过滤后转发到具体的容器内部。本次我们需要从host上直接ping container-ns中的网卡ip 10.10.10.88,</p>
-
-<p>首先创建两个network namespace</p>
-<ul>
-  <li>ns1：引流实现位置</li>
-  <li>ns2：模拟普通容器的network namespace</li>
-</ul>
-
-<p>命令</p>
+<p>containerd代码：创建netns</p>
 
 <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
 2
-</pre></td><td class="rouge-code"><pre>ip netns add agent-ns
-ip netns add container-ns
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+</pre></td><td class="rouge-code"><pre>// RunPodSandbox creates and starts a pod-level sandbox. Runtimes should ensure
+// the sandbox is in ready state.
+func (c *criService) RunPodSandbox(ctx context.Context, r *runtime.RunPodSandboxRequest) (_ *runtime.RunPodSandboxResponse, retErr error) {
+    config := r.GetConfig()
+    log.G(ctx).Debugf("Sandbox config %+v", config)
+    ...
+    if _, err := c.client.SandboxStore().Create(ctx, sandboxInfo); err != nil {
+	    return nil, fmt.Errorf("failed to save sandbox metadata: %w", err)
+    }
+    ...
+    if podNetwork {
+        netStart := time.Now()
+        // If it is not in host network namespace then create a namespace and set the sandbox
+        // handle. NetNSPath in sandbox metadata and NetNS is non empty only for non host network
+        // namespaces. If the pod is in host network namespace then both are empty and should not
+        // be used.
+        var netnsMountDir = "/var/run/netns"
+        if c.config.NetNSMountsUnderStateDir {
+            netnsMountDir = filepath.Join(c.config.StateDir, "netns")
+        }
+        sandbox.NetNS, err = netns.NewNetNS(netnsMountDir)
+        if err != nil {
+            return nil, fmt.Errorf("failed to create network namespace for sandbox %q: %w", id, err)
+        }
+        // Update network namespace in the store, which is used to generate the container's spec
+        sandbox.NetNSPath = sandbox.NetNS.GetPath()
+       ...
 </pre></td></tr></tbody></table></code></pre></div></div>
 
-<p>在host上创建三组veth</p>
+<p>kata-runtime代码：创建qemu虚拟机并attach网卡</p>
 
-<ul>
-  <li>vex：流量入口</li>
-  <li>vin：跨agent-ns和container-ns，在agent中将流量转发到这个设备就可以到达容器内部</li>
-  <li>vbr：监控设备，也是dp工作的设备</li>
-</ul>
-
-<p>命令：</p>
+<p>可以看到在创建完虚拟机后执行了AddEndpoints操作，也就是attach了网卡</p>
 
 <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
 2
@@ -355,39 +387,67 @@ ip netns add container-ns
 28
 29
 30
-</pre></td><td class="rouge-code"><pre># 创建veth
-ip link add vex type veth peer name vex-peer
-ip link add vin type veth peer name vin-peer
-ip link add vbr type veth peer name vth
- 
-# 将vex放入agent-ns
-ip link set vex netns agent-ns
-ip netns exec agent-ns ip link set vex up
- 
-# 将vin放入agent-ns
-ip link set vin netns agent-ns
-ip netns exec agent-ns ip link set vin up
- 
-# 将vin-peer放入container-ns
-ip link set vin-peer netns container-ns
- 
-# 在container-ns修改网卡名称为eth0
-ip netns exec container-ns ip link set vin-peer name eth0
-ip addr add 10.10.10.88/24 dev eth0
-ip netns exec container-ns ip link set eth0 up
- 
-# 将vbr和vth都放入agent-ns
-ip link set vbr netns agent-ns
-ip link set vth netns agent-ns
-ip netns exec agent-ns ip link set vbr up
-ip netns exec agent-ns ip link set vth up
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+</pre></td><td class="rouge-code"><pre>// startVM starts the VM.
+func (s *Sandbox) startVM(ctx context.Context, prestartHookFunc func(context.Context) error) (err error) {
+    span, ctx := katatrace.Trace(ctx, s.Logger(), "startVM", sandboxTracingTags, map[string]string{"sandbox_id": s.id})
+    defer span.End()
 
-# 配置host上的vex-peer
-ip addr add 10.10.10.66/24 dev vex-peer
-ip link set vex-peer up
+    s.Logger().Info("Starting VM")
+
+    ...
+
+    if err := s.network.Run(ctx, func() error {
+        if s.factory != nil {
+            vm, err := s.factory.GetVM(ctx, VMConfig{
+                HypervisorType:   s.config.HypervisorType,
+                HypervisorConfig: s.config.HypervisorConfig,
+                AgentConfig:      s.config.AgentConfig,
+            })
+            if err != nil {
+                return err
+            }
+
+            return vm.assignSandbox(s)
+        }
+
+        return s.hypervisor.StartVM(ctx, VmStartTimeout)
+    }); err != nil {
+        return err
+    }
+
+    ...
+
+    // 1. Do not scan the netns if we want no network for the vmm.
+    // 2. In case of vm factory, scan the netns to hotplug interfaces after vm is started.
+    // 3. In case of prestartHookFunc, network config might have been changed. We need to
+    //    rescan and handle the change.
+    if !s.config.NetworkConfig.DisableNewNetwork &amp;&amp; (s.factory != nil || prestartHookFunc != nil) {
+        if _, err := s.network.AddEndpoints(ctx, s, nil, true); err != nil {
+            return err
+        }
+    }
+
+    s.Logger().Info("VM started")
+
+    ...
 </pre></td></tr></tbody></table></code></pre></div></div>
 
-<p>tc引流</p>
+<p>kata-runtime代码：attach网卡流程</p>
+
+<p>会在指定的network namespace中执行addSingleEndpoint方法</p>
 
 <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
 2
@@ -406,89 +466,56 @@ ip link set vex-peer up
 15
 16
 17
-</pre></td><td class="rouge-code"><pre># 创建qdisc
-tc qdisc add dev vin ingress
-tc qdisc add dev vex ingress
-tc qdisc add dev vbr ingress
+18
+19
+20
+21
+22
+23
+24
+</pre></td><td class="rouge-code"><pre>// Add adds all needed interfaces inside the network namespace.
+func (n *LinuxNetwork) AddEndpoints(ctx context.Context, s *Sandbox, endpointsInfo []NetworkInfo, hotplug bool) ([]Endpoint, error) {
+    span, ctx := n.trace(ctx, "AddEndpoints")
+    katatrace.AddTags(span, "type", n.interworkingModel.GetModel())
+    defer span.End()
 
-# 创建filter
-tc filter add dev vex pref 10001 parent ffff: protocol ip u32 match u8 0 1 at -14 match u16 0x1a27 0xffff at -14 match u32 0xf3873a27 0xffffffff at -12 action pedit munge offset -14 u16 set 0x4e65 munge offset -12 u32 set 0x755600b4 pipe action mirred egress mirror dev vbr
- 
-tc filter add dev vex pref 10002 parent ffff: protocol all u32 match u8 0 0 action mirred egress mirror dev vin
- 
-tc filter add dev vbr pref 5 parent ffff: protocol all u32 match u16 0x4e65 0xffff at -14 match u32 0x755600b4 0xffffffff at -12 action pedit munge offset -14 u16 set 0x1a27 munge offset -12 u32 set 0xf3873a27 pipe action mirred egress mirror dev vin
- 
-tc filter add dev vin pref 10002 parent ffff: protocol all u32 match u8 0 0 action mirred egress mirror dev vex
- 
-tc filter add dev vin pref 10001 parent ffff: protocol ip u32 match u8 0 1 at -14 match u32 0x1a27f387 0xffffffff at -8 match u16 0x3a27 0xffff at -4 action pedit munge offset -8 u32 set 0x4e657556 munge offset -4 u16 set 0x00b4 pipe action mirred egress mirror dev vbr
- 
-tc filter add dev vbr pref 172 parent ffff: protocol all u32 match u32 0x4e657556 0xffffffff at -8 match u16 0x00b4 0xffff at -4 action pedit munge offset -8 u32 set 0x1a27f387 munge offset -4 u16 set 0x3a27 pipe action mirred egress mirror dev vex
+    if endpointsInfo == nil {
+        if err := n.addAllEndpoints(ctx, s, hotplug); err != nil {
+            return nil, err
+        }
+    } else {
+        for _, ep := range endpointsInfo {
+            if err := doNetNS(n.netNSPath, func(_ ns.NetNS) error {
+                if _, err := n.addSingleEndpoint(ctx, s, ep, hotplug); err != nil {
+                    n.eps = nil
+                    return err
+                }
+
+                return nil
+            }); err != nil {
+                return nil, err
+            }
+        }
+    }
 </pre></td></tr></tbody></table></code></pre></div></div>
 
-<p>此时我们从host上ping 10.10.10.88，同时在agent-ns的vex和vbr抓包会看到数据包</p>
-
-<ul>
-  <li>这里从抓包结果会看到目标mac变了，这个是通过tc完成的</li>
-  <li>但是在vin上是抓不到包的（可以抓到广播包），因为dp没有开始工作</li>
-</ul>
-
-<p>抓包结果：</p>
-
-<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-</pre></td><td class="rouge-code"><pre>sh-4.2# tcpdump -enpli vex
-tcpdump: verbose output suppressed, use -v or -vv for full protocol decode
-listening on vex, link-type EN10MB (Ethernet), capture size 262144 bytes
-17:31:40.761531 06:82:9c:02:54:91 &gt; 1a:27:f3:87:3a:27, ethertype IPv4 (0x0800), length 98: 10.10.10.66 &gt; 10.10.10.88: ICMP echo request, id 32052, seq 214, length 64
-17:31:41.761533 06:82:9c:02:54:91 &gt; 1a:27:f3:87:3a:27, ethertype IPv4 (0x0800), length 98: 10.10.10.66 &gt; 10.10.10.88: ICMP echo request, id 32052, seq 215, length 64
-17:31:42.761516 06:82:9c:02:54:91 &gt; 1a:27:f3:87:3a:27, ethertype IPv4 (0x0800), length 98: 10.10.10.66 &gt; 10.10.10.88: ICMP echo request, id 32052, seq 216, length 64
-^C
-3 packets captured
-3 packets received by filter
-0 packets dropped by kernel
-sh-4.2# tcpdump -enpli vbr
-tcpdump: verbose output suppressed, use -v or -vv for full protocol decode
-listening on vbr, link-type EN10MB (Ethernet), capture size 262144 bytes
-17:31:45.761528 06:82:9c:02:54:91 &gt; 4e:65:75:56:00:b4, ethertype IPv4 (0x0800), length 98: 10.10.10.66 &gt; 10.10.10.88: ICMP echo request, id 32052, seq 219, length 64
-17:31:46.761515 06:82:9c:02:54:91 &gt; 4e:65:75:56:00:b4, ethertype IPv4 (0x0800), length 98: 10.10.10.66 &gt; 10.10.10.88: ICMP echo request, id 32052, seq 220, length 64
-17:31:47.761531 06:82:9c:02:54:91 &gt; 4e:65:75:56:00:b4, ethertype IPv4 (0x0800), length 98: 10.10.10.66 &gt; 10.10.10.88: ICMP echo request, id 32052, seq 221, length 64
-</pre></td></tr></tbody></table></code></pre></div></div>
-
-<p>运行dp</p>
-
-<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
-</pre></td><td class="rouge-code"><pre>ip netns exec agent-ns dp -n 1
-</pre></td></tr></tbody></table></code></pre></div></div>
+<p>addSingleEndpoint</p>
 
 <blockquote>
-  <p>这里需要重新编译dp，对dp做一些改造，保证可以在host运行，主要是mmap那部分逻辑</p>
+  <p>支持热挂载网卡</p>
 </blockquote>
 
-<p>调用dp接口</p>
+<blockquote>
+  <p>支持多种网卡类型，这里默认使用tuntap</p>
+</blockquote>
 
-<p>分别调用dp接口：</p>
-<ul>
-  <li>ctrl_add_srvc_port： 配置引流设备名称等参数</li>
-  <li>ctrl_cfg_internal_net：配置当前节点设备ip和类型</li>
-  <li>ctrl_add_mac：在引流设备中添加需要引流的mac</li>
-  <li>ctrl_cfg_mac：配置mac参数</li>
-</ul>
+<blockquote>
+  <p>网卡支持限速</p>
+</blockquote>
 
-<p>调用脚本</p>
+<blockquote>
+  <p>支持多网卡（看到有单独的attach_interface接口）</p>
+</blockquote>
 
 <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
 2
@@ -541,137 +568,389 @@ listening on vbr, link-type EN10MB (Ethernet), capture size 262144 bytes
 49
 50
 51
-52
-53
-54
-55
-56
-57
-58
-59
-60
-61
-62
-63
-64
-65
-66
-67
-68
-69
-70
-71
-72
-73
-74
-75
-76
-77
-</pre></td><td class="rouge-code"><pre>import socket
-import json
- 
-DP_SERVER_PATH = '/tmp/dp_listen.sock'
-SOCK = None
+</pre></td><td class="rouge-code"><pre>func (n *LinuxNetwork) addSingleEndpoint(ctx context.Context, s *Sandbox, netInfo NetworkInfo, hotplug bool) (Endpoint, error) {
+    ...
+        if socketPath != "" {
+            networkLogger().WithField("interface", netInfo.Iface.Name).Info("VhostUser network interface found")
+            endpoint, err = createVhostUserEndpoint(netInfo, socketPath)
+        } else if netInfo.Iface.Type == "macvlan" {
+            networkLogger().Infof("macvlan interface found")
+            endpoint, err = createMacvlanNetworkEndpoint(idx, netInfo.Iface.Name, n.interworkingModel)
+        } else if netInfo.Iface.Type == "macvtap" {
+            networkLogger().Infof("macvtap interface found")
+            endpoint, err = createMacvtapNetworkEndpoint(netInfo)
+        } else if netInfo.Iface.Type == "tap" {
+            networkLogger().Info("tap interface found")
+            endpoint, err = createTapNetworkEndpoint(idx, netInfo.Iface.Name)
+        } else if netInfo.Iface.Type == "tuntap" {
+            if netInfo.Link != nil {
+                switch netInfo.Link.(*netlink.Tuntap).Mode {
+                case 0:
+                    // mount /sys/class/net to get links
+                    return nil, fmt.Errorf("Network device mode not determined correctly. Mount sysfs in caller")
+                case 1:
+                    return nil, fmt.Errorf("tun networking device not yet supported")
+                case 2:
+                    networkLogger().Info("tuntap tap interface found")
+                    endpoint, err = createTuntapNetworkEndpoint(idx, netInfo.Iface.Name, netInfo.Iface.HardwareAddr, n.interworkingModel)
+                default:
+                    return nil, fmt.Errorf("tuntap network %v mode unsupported", netInfo.Link.(*netlink.Tuntap).Mode)
+                }
+            }
+        } else if netInfo.Iface.Type == "veth" {
+            networkLogger().Info("veth interface found")
+            endpoint, err = createVethNetworkEndpoint(idx, netInfo.Iface.Name, n.interworkingModel)
+        } else if netInfo.Iface.Type == "ipvlan" {
+            networkLogger().Info("ipvlan interface found")
+            endpoint, err = createIPVlanNetworkEndpoint(idx, netInfo.Iface.Name)
+        } else {
+            return nil, fmt.Errorf("Unsupported network interface: %s", netInfo.Iface.Type)
+        }
+    }
+    ...
+    networkLogger().WithField("endpoint-type", endpoint.Type()).WithField("hotplug", hotplug).Info("Attaching endpoint")
+    if hotplug {
+        if err := endpoint.HotAttach(ctx, s.hypervisor); err != nil {
+            return nil, err
+        }
+    } else {
+        if err := endpoint.Attach(ctx, s); err != nil {
+            return nil, err
+        }
+    }
+    ...
+</pre></td></tr></tbody></table></code></pre></div></div>
 
-def connect_dp():
-    global SOCK
-    if SOCK:
-        return SOCK
-    socket_family = socket.AF_UNIX
-    socket_type = socket.SOCK_DGRAM
- 
-    sock = socket.socket(socket_family, socket_type)
-    sock.connect(DP_SERVER_PATH)
-    SOCK = sock
-    print("dp connected")
-    return sock
- 
- 
-def send_msg(msg):
-    sock = connect_dp()
-    sock.sendall(json.dumps(msg).encode())
- 
-    # data = sock.recv(1024)
-    # print("receive data:", data)
-    print('send msg: %s success' % msg)
- 
- 
-def add_srvc_port():
-    data = {
-        "iface": "vth",
-        "jumboframe": False
+<p>kata-runtime代码：引流实现</p>
+
+<p>创建网卡, 这里第一张网卡名称是tap0_kata，虚拟机内部是eth0</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+</pre></td><td class="rouge-code"><pre>func createTuntapNetworkEndpoint(idx int, ifName string, hwName net.HardwareAddr, internetworkingModel NetInterworkingModel) (*TuntapEndpoint, error) {
+    ...
+
+    netPair, err := createNetworkInterfacePair(idx, ifName, internetworkingModel)
+    if err != nil {
+        return nil, err
     }
-    send_msg({'ctrl_add_srvc_port': data})
- 
- 
-def add_internal_net():
-    data = {
-        "flag": 3,
-        "subnet_addr": [
-            {"ip": "172.17.0.0", "mask": "255.255.0.0"},
-            {"ip": "179.20.23.0", "mask": "255.255.255.0"},
-            {"ip": "10.10.10.0", "mask": "255.255.255.0"},
-            {"ip": "172.20.166.0", "mask": "255.255.255.0"},
-            {"ip": "10.10.10.66", "mask": "255.255.255.0", "iptype": "devip"},
-            {"ip": "10.10.10.88", "mask": "255.255.255.0", "iptype": "devip"},
- 
-        ]
+
+    endpoint := &amp;TuntapEndpoint{
+        NetPair: netPair,
+        TuntapInterface: TuntapInterface{
+            Name: fmt.Sprintf("eth%d", idx),
+            TAPIface: NetworkInterface{
+                Name:     fmt.Sprintf("tap%d_kata", idx),
+                HardAddr: fmt.Sprintf("%s", hwName), //nolint:gosimple
+            },
+        },
+        EndpointType: TuntapEndpointType,
     }
-    send_msg({'ctrl_cfg_internal_net': data})
- 
- 
-def add_mac():
-    data = {
-        "iface": "vth",
-        "mac": "1a:27:f3:87:3a:27",
-        "ucmac": "4e:65:75:56:00:b4",
-        "bcmac": "ff:ff:ff:00:00:b4",
-        "oldmac": "",
-        "pmac": "",
-        "pips": None,
+    ...
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>在attach方法中会调用xConnectVMNetwork，这里面会实现容器网络的引流</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+</pre></td><td class="rouge-code"><pre>// Attach for tun/tap endpoint adds the tap interface to the hypervisor.
+func (endpoint *TuntapEndpoint) Attach(ctx context.Context, s *Sandbox) error {
+    span, ctx := tuntapTrace(ctx, "Attach", endpoint)
+    defer span.End()
+
+    h := s.hypervisor
+    if err := xConnectVMNetwork(ctx, endpoint, h); err != nil {
+        networkLogger().WithError(err).Error("Error bridging virtual endpoint")
+        return err
     }
-    send_msg({'ctrl_add_mac': data})
- 
- 
-def cfg_mac():
-    data = {
-        "tap": False,
-        "macs": ["1a:27:f3:87:3a:27"],
+
+    return h.AddDevice(ctx, endpoint, NetDev)
+}
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>引流驱动有macvtap 和tcfilter，其中默认使用tcfilter</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+</pre></td><td class="rouge-code"><pre>func setupTCFiltering(ctx context.Context, endpoint Endpoint, queues int, disableVhostNet bool) error {
+    ...
+    if err := addQdiscIngress(tapAttrs.Index); err != nil {
+        return err
     }
-    send_msg({'ctrl_cfg_mac': data})
+
+    if err := addQdiscIngress(attrs.Index); err != nil {
+        return err
+    }
+
+    if err := addRedirectTCFilter(attrs.Index, tapAttrs.Index); err != nil {
+        return err
+    }
+
+    if err := addRedirectTCFilter(tapAttrs.Index, attrs.Index); err != nil {
+        return err
+    }
+...
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<h2 id="demo">demo</h2>
+
+<p>kata部署可以参考网上的文章，这里通过创建一个kata容器，查看容器内的流量转发</p>
+
+<p>创建kata容器</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+</pre></td><td class="rouge-code"><pre>[root@node1 kata]# cat nginx-kata.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-nginx-kata
+spec:
+  selector:
+    matchLabels:
+      run: my-nginx
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        run: my-nginx
+    spec:
+      runtimeClassName: kata
+      containers:
+      - name: my-nginx
+        image: httpd:alpine
+        ports:
+        - containerPort: 80
+      - name: my-redis
+        image: redis
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>查看容器</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+</pre></td><td class="rouge-code"><pre>[root@node1 kata]# kubectl get pods -owide
+NAME                             READY   STATUS    RESTARTS   AGE   IP               NODE    NOMINATED NODE   READINESS GATES
+my-nginx-kata-8675cd7c89-wzgr2   2/2     Running   0          45s   10.244.166.150   node1   &lt;none&gt;           &lt;none&gt;
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>查看网络命名空间</p>
+
+<blockquote>
+  <p>看到在netns中有两张网卡，eth0和tap0_kata</p>
+</blockquote>
+
+<blockquote>
+  <p>eth0网卡是veth类型，类似普通容器的网卡</p>
+</blockquote>
+
+<blockquote>
+  <p>tap0_kata网卡是tap类型，启动qemu虚拟机时使用的虚拟网卡</p>
+</blockquote>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+</pre></td><td class="rouge-code"><pre>[root@node1 kata]# ip netns exec cni-d27eff58-b9c9-a258-3a1e-a34528d9796f ip a
+1: lo: &lt;LOOPBACK,UP,LOWER_UP&gt; mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+    inet6 ::1/128 scope host
+       valid_lft forever preferred_lft forever
+2: tunl0@NONE: &lt;NOARP&gt; mtu 1480 qdisc noop state DOWN group default qlen 1000
+    link/ipip 0.0.0.0 brd 0.0.0.0
+4: eth0@if29: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 1430 qdisc noqueue state UP group default qlen 1000
+    link/ether fe:68:1c:e3:47:da brd ff:ff:ff:ff:ff:ff link-netnsid 0
+    inet 10.244.166.150/32 brd 10.244.166.150 scope global eth0
+       valid_lft forever preferred_lft forever
+    inet6 fe80::fc68:1cff:fee3:47da/64 scope link
+       valid_lft forever preferred_lft forever
+5: tap0_kata: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 1430 qdisc mq state UNKNOWN group default qlen 1000
+    link/ether 76:c7:1b:ab:30:64 brd ff:ff:ff:ff:ff:ff
+    inet6 fe80::74c7:1bff:feab:3064/64 scope link
+       valid_lft forever preferred_lft forever
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>tc引流规则</p>
+
+<blockquote>
+  <p>对于eth0网卡的入口流量通过tc规则mirror到tap0_kata网卡上</p>
+</blockquote>
+
+<blockquote>
+  <p>对于tap0_kata的入口流量通过tc规则mirror到eth0网卡上</p>
+</blockquote>
+
+<blockquote>
+  <p>这样一个双向的流量通道就建立了</p>
+</blockquote>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+</pre></td><td class="rouge-code"><pre>[root@node1 kata]# ip netns exec cni-d27eff58-b9c9-a258-3a1e-a34528d9796f tc -s qdisc show dev eth0
+qdisc noqueue 0: root refcnt 2
+ Sent 0 bytes 0 pkt (dropped 0, overlimits 0 requeues 0)
+ backlog 0b 0p requeues 0
+qdisc ingress ffff: parent ffff:fff1 ----------------
+ Sent 480 bytes 5 pkt (dropped 0, overlimits 0 requeues 0)
+ backlog 0b 0p requeues 0
  
-add_internal_net()
-add_srvc_port()
-add_mac()
-cfg_mac()
+[root@node1 kata]# ip netns exec cni-d27eff58-b9c9-a258-3a1e-a34528d9796f tc -s filter show dev eth0 ingress
+filter protocol all pref 49152 u32
+filter protocol all pref 49152 u32 fh 800: ht divisor 1
+filter protocol all pref 49152 u32 fh 800::800 order 2048 key ht 800 bkt 0 terminal flowid ??? not_in_hw  (rule hit 5 success 5)
+  match 00000000/00000000 at 0 (success 5 )
+        action order 1: mirred (Egress Redirect to device tap0_kata) stolen
+        index 1 ref 1 bind 1 installed 439 sec used 437 sec
+        Action statistics:
+        Sent 480 bytes 5 pkt (dropped 0, overlimits 0 requeues 0)
+        backlog 0b 0p requeues 0
+ 
+[root@node1 kata]# ip netns exec cni-d27eff58-b9c9-a258-3a1e-a34528d9796f tc -s filter show dev tap0_kata ingress
+filter protocol all pref 49152 u32
+filter protocol all pref 49152 u32 fh 800: ht divisor 1
+filter protocol all pref 49152 u32 fh 800::800 order 2048 key ht 800 bkt 0 terminal flowid ??? not_in_hw  (rule hit 12 success 12)
+  match 00000000/00000000 at 0 (success 12 )
+        action order 1: mirred (Egress Redirect to device eth0) stolen
+        index 2 ref 1 bind 1 installed 451 sec used 165 sec
+        Action statistics:
+        Sent 768 bytes 12 pkt (dropped 0, overlimits 0 requeues 0)
+        backlog 0b 0p requeues 0
 </pre></td></tr></tbody></table></code></pre></div></div>
 
 <h2 id="总结">总结</h2>
-
 <ul>
-  <li>可以看到neuvector的引流方式和容器使用的cni无关</li>
-  <li>引流的准备操作实际是agent执行的，dp只是对经过vth的数据包根据策略规则进行过滤，并转发</li>
-  <li>后期可以探索这种使用方式是否可以应用到虚拟机状态下</li>
+  <li>从上面的代码分析，大致了解了kata的流量路径，类似在一个普通容器基础上启动了一个qemu进程</li>
+  <li>通过tc mirror机制，将容器veth网卡流量镜像到tap网卡（通过macvtap子接口方式也类似）</li>
 </ul>
-
-<p>这里只是调用dp接口，dp内部实现将在后面详细分析</p>
 
 
                 <hr style="visibility: hidden;">
                 <ul class="pager">
                     
                     <li class="previous">
-                        <a href="/blog/2022/08/10/neuvector-tcpdump/" data-toggle="tooltip" data-placement="top" title="Neuvector源码分析之 网络抓包">
+                        <a href="/blog/2022/09/21/neuvector-bench/" data-toggle="tooltip" data-placement="top" title="Neuvector源码分析之 合规性检测">
                         Previous<br>
-                        <span>Neuvector源码分析之 网络抓包</span>
+                        <span>Neuvector源码分析之 合规性检测</span>
                         </a>
                     </li>
                     
                     
                     <li class="next">
-                        <a href="/blog/2022/09/16/calico-bird/" data-toggle="tooltip" data-placement="top" title="Calico BGP - Bird">
+                        <a href="/blog/2023/02/27/calico-route/" data-toggle="tooltip" data-placement="top" title="Calico单节点网络实现">
                         Next<br>
-                        <span>Calico BGP - Bird</span>
+                        <span>Calico单节点网络实现</span>
                         </a>
                     </li>
                     
