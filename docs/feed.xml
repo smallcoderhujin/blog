@@ -5,8 +5,8 @@
     <description>Hujin，Openstack &amp; SDN &amp; Kubernetes Lover，Software Engineer，| 与你一起发现更大的世界</description>
     <link>http://0.0.0.0:4000/blog/</link>
     <atom:link href="http://0.0.0.0:4000/blog/feed.xml" rel="self" type="application/rss+xml" />
-    <pubDate>Tue, 14 Mar 2023 05:16:23 +0000</pubDate>
-    <lastBuildDate>Tue, 14 Mar 2023 05:16:23 +0000</lastBuildDate>
+    <pubDate>Tue, 14 Mar 2023 05:25:57 +0000</pubDate>
+    <lastBuildDate>Tue, 14 Mar 2023 05:25:57 +0000</lastBuildDate>
     <generator>Jekyll v4.2.2</generator>
     
       <item>
@@ -43,19 +43,12 @@
 &lt;ul&gt;
   &lt;li&gt;获取group对象，获取group中profile和rule两组数据&lt;/li&gt;
   &lt;li&gt;profile是文件规则，rule是文件规则中应用规则&lt;/li&gt;
-  &lt;li&gt;
-    &lt;p&gt;将新增数据和已有数据合并，然后保存到数据库&lt;/p&gt;
+  &lt;li&gt;将新增数据和已有数据合并，然后保存到数据库&lt;/li&gt;
+&lt;/ul&gt;
 
-    &lt;p&gt;func handlerFileMonitorConfig(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-      …
-      // Check if we can config the profile. Only need authorize group
-      grp, err := cacher.GetGroupBrief(group, false, acc)
-      if err != nil {
-          restRespNotFoundLogAccessDenied(w, login, err)
-          return
-      }&lt;/p&gt;
+&lt;p&gt;handlerFileMonitorConfig：&lt;/p&gt;
 
-    &lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
 2
 3
 4
@@ -157,116 +150,132 @@
 100
 101
 102
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;  if grp.Kind != share.GroupKindContainer {
-      // &quot;nodes&quot; : share.GroupKindNode
-      log.WithFields(log.Fields{&quot;group&quot;: group, &quot;kind&quot;: grp.Kind}).Error(&quot;Get profile failed!&quot;)
-      restRespError(w, http.StatusBadRequest, api.RESTErrObjectNotFound)
-      return
-  }
+103
+104
+105
+106
+107
+108
+109
+110
+111
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;func handlerFileMonitorConfig(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+    ...
+    // Check if we can config the profile. Only need authorize group
+    grp, err := cacher.GetGroupBrief(group, false, acc)
+    if err != nil {
+        restRespNotFoundLogAccessDenied(w, login, err)
+        return
+    }
 
-  var profChanged bool
-  profConf, profRev := clusHelper.GetFileMonitorProfile(group)
-  ruleConf, ruleRev := clusHelper.GetFileAccessRule(group)
+    if grp.Kind != share.GroupKindContainer {
+        // &quot;nodes&quot; : share.GroupKindNode
+        log.WithFields(log.Fields{&quot;group&quot;: group, &quot;kind&quot;: grp.Kind}).Error(&quot;Get profile failed!&quot;)
+        restRespError(w, http.StatusBadRequest, api.RESTErrObjectNotFound)
+        return
+    }
 
-  ...
-  // validate add
-  if config.AddFilters != nil {
-      for _, filter := range config.AddFilters {
-          path := filter.Filter
-          filter.Filter = filepath.Clean(filter.Filter)
-          if filter.Filter == &quot;.&quot; || filter.Filter == &quot;/&quot; {
-              restRespErrorMessage(w, http.StatusBadRequest, api.RESTErrInvalidRequest,
-                  fmt.Sprintf(&quot;Unsupported filter: %s[%s]&quot;, path, filter.Filter))
-              return
-          }
+    var profChanged bool
+    profConf, profRev := clusHelper.GetFileMonitorProfile(group)
+    ruleConf, ruleRev := clusHelper.GetFileAccessRule(group)
 
-          // append the &quot;/&quot; back
-          if path[len(path)-1:] == &quot;/&quot; {
-              filter.Filter += &quot;/&quot;
-          }
+    ...
+    // validate add
+    if config.AddFilters != nil {
+        for _, filter := range config.AddFilters {
+            path := filter.Filter
+            filter.Filter = filepath.Clean(filter.Filter)
+            if filter.Filter == &quot;.&quot; || filter.Filter == &quot;/&quot; {
+                restRespErrorMessage(w, http.StatusBadRequest, api.RESTErrInvalidRequest,
+                    fmt.Sprintf(&quot;Unsupported filter: %s[%s]&quot;, path, filter.Filter))
+                return
+            }
 
-          base, regex, ok := parseFileFilter(filter.Filter)
-          if !ok {
-              restRespErrorMessage(w, http.StatusBadRequest, api.RESTErrInvalidRequest,
-                  fmt.Sprintf(&quot;Unsupported filter: %s&quot;, filter.Filter))
-              return
-          }
+            // append the &quot;/&quot; back
+            if path[len(path)-1:] == &quot;/&quot; {
+                filter.Filter += &quot;/&quot;
+            }
 
-          for i, cfilter := range profConf.Filters {
-              if cfilter.Filter == filter.Filter {
-                  // conflict, delete predefined
-                  if !cfilter.CustomerAdd {
-                      profConf.Filters = append(profConf.Filters[:i], profConf.Filters[i+1:]...)
-                      // replace the rule below
-                      idx := utils.FilterIndexKey(cfilter.Path, cfilter.Regex)
-                      delete(ruleConf.Filters, idx)
-                      break
-                  } else {
-                      restRespErrorMessage(w, http.StatusBadRequest, api.RESTErrInvalidRequest,
-                          fmt.Sprintf(&quot;duplicate filter: %s&quot;, filter.Filter))
-                      return
-                  }
-              }
-          }
-          flt := share.CLUSFileMonitorFilter{
-              Filter:      filter.Filter,
-              Path:        base,
-              Regex:       regex,
-              Recursive:   filter.Recursive,
-              CustomerAdd: true,
-          }
-          if fileAccessOptionSet.Contains(filter.Behavior) {
-              flt.Behavior = filter.Behavior
-          } else {
-              restRespErrorMessage(w, http.StatusBadRequest, api.RESTErrInvalidRequest, &quot;Invalid File access option&quot;)
-              return
-          }
+            base, regex, ok := parseFileFilter(filter.Filter)
+            if !ok {
+                restRespErrorMessage(w, http.StatusBadRequest, api.RESTErrInvalidRequest,
+                    fmt.Sprintf(&quot;Unsupported filter: %s&quot;, filter.Filter))
+                return
+            }
 
-          profConf.Filters = append(profConf.Filters, flt)
-          // add rule
-          idx := utils.FilterIndexKey(flt.Path, flt.Regex)
-          capps := make([]string, len(filter.Apps))
-          for j, app := range filter.Apps {
-              capps[j] = app
-          }
-          frule := &amp;amp;share.CLUSFileAccessFilterRule{
-              Apps:        capps,
-              CreatedAt:   tm,
-              UpdatedAt:   tm,
-              Behavior:    flt.Behavior,
-              CustomerAdd: true,
-          }
-          ruleConf.Filters[idx] = frule
-          profChanged = true
-      }
-  }
+            for i, cfilter := range profConf.Filters {
+                if cfilter.Filter == filter.Filter {
+                    // conflict, delete predefined
+                    if !cfilter.CustomerAdd {
+                        profConf.Filters = append(profConf.Filters[:i], profConf.Filters[i+1:]...)
+                        // replace the rule below
+                        idx := utils.FilterIndexKey(cfilter.Path, cfilter.Regex)
+                        delete(ruleConf.Filters, idx)
+                        break
+                    } else {
+                        restRespErrorMessage(w, http.StatusBadRequest, api.RESTErrInvalidRequest,
+                            fmt.Sprintf(&quot;duplicate filter: %s&quot;, filter.Filter))
+                        return
+                    }
+                }
+            }
+            flt := share.CLUSFileMonitorFilter{
+                Filter:      filter.Filter,
+                Path:        base,
+                Regex:       regex,
+                Recursive:   filter.Recursive,
+                CustomerAdd: true,
+            }
+            if fileAccessOptionSet.Contains(filter.Behavior) {
+                flt.Behavior = filter.Behavior
+            } else {
+                restRespErrorMessage(w, http.StatusBadRequest, api.RESTErrInvalidRequest, &quot;Invalid File access option&quot;)
+                return
+            }
 
-  ...
+            profConf.Filters = append(profConf.Filters, flt)
+            // add rule
+            idx := utils.FilterIndexKey(flt.Path, flt.Regex)
+            capps := make([]string, len(filter.Apps))
+            for j, app := range filter.Apps {
+                capps[j] = app
+            }
+            frule := &amp;amp;share.CLUSFileAccessFilterRule{
+                Apps:        capps,
+                CreatedAt:   tm,
+                UpdatedAt:   tm,
+                Behavior:    flt.Behavior,
+                CustomerAdd: true,
+            }
+            ruleConf.Filters[idx] = frule
+            profChanged = true
+        }
+    }
 
-  if profChanged {
-      // Write to cluster
-      if err := clusHelper.PutFileMonitorProfile(group, profConf, profRev); err != nil {
-          log.WithFields(log.Fields{&quot;error&quot;: err}).Error(&quot;Write cluster fail&quot;)
-          restRespError(w, http.StatusInternalServerError, api.RESTErrFailWriteCluster)
-          return
-      }
-  }
-  // Write access rule
-  if err := clusHelper.PutFileAccessRule(group, ruleConf, ruleRev); err != nil {
-      log.WithFields(log.Fields{&quot;error&quot;: err}).Error(&quot;Write cluster fail&quot;)
-      restRespError(w, http.StatusInternalServerError, api.RESTErrFailWriteCluster)
-      return
-  }
+    ...
 
-  ...
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;    &lt;/div&gt;
-  &lt;/li&gt;
-&lt;/ul&gt;
+    if profChanged {
+        // Write to cluster
+        if err := clusHelper.PutFileMonitorProfile(group, profConf, profRev); err != nil {
+            log.WithFields(log.Fields{&quot;error&quot;: err}).Error(&quot;Write cluster fail&quot;)
+            restRespError(w, http.StatusInternalServerError, api.RESTErrFailWriteCluster)
+            return
+        }
+    }
+    // Write access rule
+    if err := clusHelper.PutFileAccessRule(group, ruleConf, ruleRev); err != nil {
+        log.WithFields(log.Fields{&quot;error&quot;: err}).Error(&quot;Write cluster fail&quot;)
+        restRespError(w, http.StatusInternalServerError, api.RESTErrFailWriteCluster)
+        return
+    }
+
+    ...
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
 
 &lt;p&gt;看看数据怎么保存的，这里有个小坑：&lt;/p&gt;
 &lt;ul&gt;
   &lt;li&gt;默认数据保存在/object/config/file_monitor/&lt;group-name&gt;下面&lt;/group-name&gt;&lt;/li&gt;
-  &lt;li&gt;在保存数据前还有一个DuplicateNetworkKey操作，会将数据保存一份到/node/&lt;node-id&gt;/common/profile/file/&lt;group-name&gt;下面&lt;/group-name&gt;&lt;/node-id&gt;&lt;/li&gt;
+  &lt;li&gt;在保存数据前还有一个DuplicateNetworkKey操作，会将数据保存一份到/node/[node-id]/common/profile/file/&lt;group-name&gt;下面&lt;/group-name&gt;&lt;/li&gt;
   &lt;li&gt;后面那个保存位置的数据会被每个enforcer watch&lt;/li&gt;
 &lt;/ul&gt;
 
@@ -349,7 +358,6 @@ func systemConfigFileMonitor(nType cluster.ClusterNotifyType, key string, value 
 &lt;h3 id=&quot;文件规则和监控组容器关联&quot;&gt;文件规则和监控组、容器关联&lt;/h3&gt;
 
 &lt;p&gt;用户规则创建后保存到数据库，enforcer watch到数据变化会更新本地内存数据&lt;/p&gt;
-
 &lt;ul&gt;
   &lt;li&gt;对比内存数据，不一致则更新&lt;/li&gt;
   &lt;li&gt;targets是当前group中容器id列表&lt;/li&gt;
@@ -415,7 +423,6 @@ func systemConfigFileMonitor(nType cluster.ClusterNotifyType, key string, value 
 &lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
 
 &lt;p&gt;看到这里有点好奇，group和容器是怎么关联上的，也就是上面代码中grpCache.members在哪里维护的：&lt;/p&gt;
-
 &lt;ul&gt;
   &lt;li&gt;在enforcer中监听runtime事件时，会监听容器的创建事件，对应的回调函数有个groupWorkloadJoin&lt;/li&gt;
   &lt;li&gt;在groupWorkloadJoin中根据workload的learnedGroupName获取对应的系统组，然后加入&lt;/li&gt;
@@ -529,7 +536,6 @@ func groupWorkloadJoin(id string, param interface{}) {
 &lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
 
 &lt;p&gt;在applyFileGroupProfile中涉及三个主要流程：&lt;/p&gt;
-
 &lt;ul&gt;
   &lt;li&gt;calculateFileGroupProfile： 根据用户创建的文件规则筛选出所有相关file，根据监控组模式设置file的mask属性&lt;/li&gt;
   &lt;li&gt;更新容器matchRules：将计算到的file/access规则添加到workload对象中（纯数据转换处理逻辑）&lt;/li&gt;
@@ -690,7 +696,6 @@ getFileMonitorProfile会加载数据库中的数据，如果内存不存在指�
 &lt;p&gt;SetMode：内存中创建rootFd对象，需要注意一点如果监控组是保护模式会设置permControl为true，这个在后面处理文件事件会用到&lt;/p&gt;
 
 &lt;p&gt;addCoreFile&lt;/p&gt;
-
 &lt;ul&gt;
   &lt;li&gt;向fanotify注册需要关注的文件列表，以及设置文件mask，以addFile为例&lt;/li&gt;
   &lt;li&gt;这里如果监控path是包管理路径会额外再调用inotify来监控&lt;/li&gt;
@@ -751,7 +756,6 @@ func (w *FileWatch) addFile(finfo *osutil.FileInfoExt) {
 &lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
 
 &lt;p&gt;fanotify的addFile&lt;/p&gt;
-
 &lt;ul&gt;
   &lt;li&gt;path形如：/host/proc/17490/root/usr/bin，解析到容器的pid和操作的文件路径&lt;/li&gt;
   &lt;li&gt;fn.roots[rootPid]得到容器的root fd&lt;/li&gt;
@@ -848,7 +852,6 @@ func (w *FileWatch) addFile(finfo *osutil.FileInfoExt) {
 &lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
 
 &lt;p&gt;fa.StartMonitor真正将文件规则应用到fanotify&lt;/p&gt;
-
 &lt;ul&gt;
   &lt;li&gt;这里的Mark是调用fanotify，给出需要监控的文件路径、文件事件、权限&lt;/li&gt;
   &lt;li&gt;addHostNetworkFilesCopiedFiles是将hostnetwork的容器中一些通用的文件（/etc/hosts /etc/resolv.conf）进行监控&lt;/li&gt;
@@ -904,7 +907,6 @@ func (w *FileWatch) addFile(finfo *osutil.FileInfoExt) {
 &lt;p&gt;&lt;img src=&quot;/blog/img/neuvector_file3.png&quot; alt=&quot;neuvector file&quot; /&gt;&lt;/p&gt;
 
 &lt;p&gt;上面直接调用fn.fa.Mark去告诉fanotify需要关注的文件，但是这个对象哪里来的？&lt;/p&gt;
-
 &lt;ul&gt;
   &lt;li&gt;NewFaNotify: 初始化fanotify&lt;/li&gt;
   &lt;li&gt;NewInotify: 初始化inotify&lt;/li&gt;
@@ -977,7 +979,6 @@ func (w *FileWatch) addFile(finfo *osutil.FileInfoExt) {
 &lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
 
 &lt;p&gt;文件事件处理：&lt;/p&gt;
-
 &lt;ul&gt;
   &lt;li&gt;在获取到文件事件后，获取事件中进程pid、容器的root fd、文件mask&lt;/li&gt;
   &lt;li&gt;这里如果文件fmask是FAN_OPEN_PERM，则perm是1。前面提过如果监控组是保护模式，则会设置对应文件的mask是FAN_OPEN_PERM&lt;/li&gt;
@@ -1122,7 +1123,6 @@ func (w *FileWatch) addFile(finfo *osutil.FileInfoExt) {
 &lt;p&gt;&lt;img src=&quot;/blog/img/neuvector_file6.png&quot; alt=&quot;neuvector file&quot; /&gt;&lt;/p&gt;
 
 &lt;p&gt;前面看了文件事件处理流程，但是我们忽略了一个细节&lt;/p&gt;
-
 &lt;ul&gt;
   &lt;li&gt;这里有个change参数，用来判断文件是否被修改&lt;/li&gt;
   &lt;li&gt;当fmask是FAN_CLOSE_WRITE表示文件被修改&lt;/li&gt;
@@ -1228,8 +1228,7 @@ func (w *FileWatch) addFile(finfo *osutil.FileInfoExt) {
 }
 &lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
 
-&lt;p&gt;这里在enforcer启动时创建了两个定时任务，分别用来处理事件和学习规则用&lt;/p&gt;
-
+&lt;p&gt;这里在enforcer启动时创建了两个定时任务，分别用来处理事件和学习规则用:&lt;/p&gt;
 &lt;ul&gt;
   &lt;li&gt;HandleWatchedFiles会根据路径类型（文件还是目录）调用对应的处理方法&lt;/li&gt;
   &lt;li&gt;reportLearningRules:后面细讲&lt;/li&gt;
@@ -1307,8 +1306,7 @@ func (w *FileWatch) addFile(finfo *osutil.FileInfoExt) {
 }
 &lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
 
-&lt;p&gt;这里我们看看文件事件处理逻辑&lt;/p&gt;
-
+&lt;p&gt;这里我们看看文件事件处理逻辑:&lt;/p&gt;
 &lt;ul&gt;
   &lt;li&gt;如果用户删除文件规则后，会更新enforcer内存数据，也就是将fileinfo删除，这里的info就是nil了，也就需要让fanotify知道不再需要关注这些文件了，执行RemoveMonitorFile方法&lt;/li&gt;
   &lt;li&gt;这里的event是文件操作类型参数，不为空时调用learnFromEvents&lt;/li&gt;
