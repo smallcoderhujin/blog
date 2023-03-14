@@ -44,6 +44,7 @@ tags:
 - profile是文件规则，rule是文件规则中应用规则
 - 将新增数据和已有数据合并，然后保存到数据库
 
+handlerFileMonitorConfig：
 
     func handlerFileMonitorConfig(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
         ...
@@ -159,7 +160,7 @@ tags:
 
 看看数据怎么保存的，这里有个小坑：
 - 默认数据保存在/object/config/file_monitor/<group-name>下面
-- 在保存数据前还有一个DuplicateNetworkKey操作，会将数据保存一份到/node/<node-id>/common/profile/file/<group-name>下面
+- 在保存数据前还有一个DuplicateNetworkKey操作，会将数据保存一份到/node/[node-id]/common/profile/file/<group-name>下面
 - 后面那个保存位置的数据会被每个enforcer watch
 
 PutFileMonitorProfile:
@@ -207,7 +208,6 @@ PutFileMonitorProfile:
 ### 文件规则和监控组、容器关联
 
 用户规则创建后保存到数据库，enforcer watch到数据变化会更新本地内存数据
-
 - 对比内存数据，不一致则更新
 - targets是当前group中容器id列表
 - 可以看到grpNotifyFile是当前节点所有容器id的集合
@@ -243,7 +243,6 @@ updateGroupProfileCache:
     }
 
 看到这里有点好奇，group和容器是怎么关联上的，也就是上面代码中grpCache.members在哪里维护的：
-
 - 在enforcer中监听runtime事件时，会监听容器的创建事件，对应的回调函数有个groupWorkloadJoin
 - 在groupWorkloadJoin中根据workload的learnedGroupName获取对应的系统组，然后加入
 - 用户自定义组根据Criteria和domain来识别是否包含此workload
@@ -307,7 +306,6 @@ enforcer中创建了一个定时任务，每隔5s执行一次，遍历所有容�
     }
 
 在applyFileGroupProfile中涉及三个主要流程：
-
 - calculateFileGroupProfile： 根据用户创建的文件规则筛选出所有相关file，根据监控组模式设置file的mask属性
 - 更新容器matchRules：将计算到的file/access规则添加到workload对象中（纯数据转换处理逻辑）
 - StartWatch：将file添加到fanotify中
@@ -398,7 +396,6 @@ getCoreFile: 会根据用户下发的文件规则（path可能带*）会获取�
 SetMode：内存中创建rootFd对象，需要注意一点如果监控组是保护模式会设置permControl为true，这个在后面处理文件事件会用到
 
 addCoreFile
-
 - 向fanotify注册需要关注的文件列表，以及设置文件mask，以addFile为例
 - 这里如果监控path是包管理路径会额外再调用inotify来监控
 
@@ -431,7 +428,6 @@ addCoreFile&addFile:
     }
 
 fanotify的addFile
-
 - path形如：/host/proc/17490/root/usr/bin，解析到容器的pid和操作的文件路径
 - fn.roots[rootPid]得到容器的root fd
 - 这里注意mask的取值逻辑：userAdded/protect基本都符合可以忽略，permControl表示监控组是保护模式，configPerm正常是true，可以理解成监控组保护模式下默认给文件设置mask是FAN_OPEN_PERM，其他情况都是FAN_OPEN，这个需要结合后面fanotify事件的处理流程一起看
@@ -483,7 +479,6 @@ addFile
     ...
 
 fa.StartMonitor真正将文件规则应用到fanotify
-
 - 这里的Mark是调用fanotify，给出需要监控的文件路径、文件事件、权限
 - addHostNetworkFilesCopiedFiles是将hostnetwork的容器中一些通用的文件（/etc/hosts /etc/resolv.conf）进行监控
 
@@ -519,7 +514,6 @@ StartMonitor:
 ![neuvector file](/blog/img/neuvector_file3.png)
 
 上面直接调用fn.fa.Mark去告诉fanotify需要关注的文件，但是这个对象哪里来的？
-
 - NewFaNotify: 初始化fanotify
 - NewInotify: 初始化inotify
 - MonitorFileEvents：监听来自fanotify和inotify的文件事件并处理
@@ -559,7 +553,6 @@ NewFileWatcher:
         ...
 
 文件事件处理：
-
 - 在获取到文件事件后，获取事件中进程pid、容器的root fd、文件mask
 - 这里如果文件fmask是FAN_OPEN_PERM，则perm是1。前面提过如果监控组是保护模式，则会设置对应文件的mask是FAN_OPEN_PERM
 - resp：用来给fanotify回复的结果，计算方式见下文的流程图
@@ -646,7 +639,6 @@ calculateResponse:
 ![neuvector file](/blog/img/neuvector_file6.png)
 
 前面看了文件事件处理流程，但是我们忽略了一个细节
-
 - 这里有个change参数，用来判断文件是否被修改
 - 当fmask是FAN_CLOSE_WRITE表示文件被修改
 - 当文件规则是学习模式，或者保护模式下修改了文件 事件都需要report
@@ -705,8 +697,7 @@ handleEvents:
     }
 
 
-这里在enforcer启动时创建了两个定时任务，分别用来处理事件和学习规则用
-
+这里在enforcer启动时创建了两个定时任务，分别用来处理事件和学习规则用:
 - HandleWatchedFiles会根据路径类型（文件还是目录）调用对应的处理方法
 - reportLearningRules:后面细讲
 
@@ -748,8 +739,7 @@ HandleWatchedFiles:
     }
 
 
-这里我们看看文件事件处理逻辑
-
+这里我们看看文件事件处理逻辑:
 - 如果用户删除文件规则后，会更新enforcer内存数据，也就是将fileinfo删除，这里的info就是nil了，也就需要让fanotify知道不再需要关注这些文件了，执行RemoveMonitorFile方法
 - 这里的event是文件操作类型参数，不为空时调用learnFromEvents
 
