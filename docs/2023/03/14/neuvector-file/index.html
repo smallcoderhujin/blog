@@ -1,0 +1,2388 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="google-site-verification" content="xBT4GhYoi5qRD5tr338pgPM5OWHHIDR6mNg1a3euekI" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="description" content="Hujin，Openstack & SDN & Kubernetes Lover，Software Engineer，| 与你一起发现更大的世界">
+    <meta name="keywords"  content="Openstack, Kubernetes, Neutron， SDN， Tungsten Fabric">
+    <meta name="theme-color" content="#000000">
+    
+    <!-- Open Graph -->
+    <meta property="og:title" content="Neuvector源码分析之 文件管理 - 胡进的博客 | Hujin's Blog">
+    
+    <meta property="og:type" content="article">
+    <meta property="og:description" content="背景
+
+进程规则、文件规则、网络规则、dlp、waf都是在监控组下的功能。本次我们通过源码的方式来深入了解文件规则是如何实现的。
+文件规则支持用户自定义关注的文件、目录，设置规则的学习或者保护模式，相应的如果容器访问到了指定的文件，且文件规则设置保护模式，则对文件的写会产生告警。
+
+架构图
+
+
+
+我们从几个维度来看neuvector的文件管理功能：
+
+
+  页面/接口用户下发的文件规则如何让...">
+    
+    <meta property="article:published_time" content="2023-03-14T00:00:00Z">
+    
+    
+    <meta property="article:author" content="hujin">
+    
+    
+    <meta property="article:tag" content="neuvector">
+    
+    <meta property="article:tag" content="文件管理">
+    
+    <meta property="article:tag" content="fanotify">
+    
+    <meta property="article:tag" content="inotify">
+    
+    
+    <meta property="og:image" content="http://0.0.0.0:4000/blog/img/avatar-hux-ny.jpg">
+    <meta property="og:url" content="http://0.0.0.0:4000/2023/03/14/neuvector-file/">
+    <meta property="og:site_name" content="胡进的博客 | Hujin's Blog">
+    
+    <title>Neuvector源码分析之 文件管理 - 胡进的博客 | Hujin's Blog</title>
+
+    <!-- Web App Manifest -->
+    <link rel="manifest" href="/blog/pwa/manifest.json">
+
+    <!-- Favicon -->
+    <link rel="shortcut icon" href="/blog/img/favicon.ico">
+    
+    <!-- Canonical URL -->
+    <link rel="canonical" href="http://0.0.0.0:4000/blog/2023/03/14/neuvector-file/">
+
+    <!-- Bootstrap Core CSS -->
+    <link rel="stylesheet" href="/blog/css/bootstrap.min.css">
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="/blog/css/hux-blog.min.css">
+
+    <!-- Custom Fonts -->
+    <!-- <link href="http://maxcdn.bootstrapcdn.com/font-awesome/4.3.0/css/font-awesome.min.css" rel="stylesheet" type="text/css"> -->
+    <!-- Hujin change font-awesome CDN to qiniu -->
+    <link href="//cdnjs.cloudflare.com/ajax/libs/font-awesome/4.6.3/css/font-awesome.min.css" rel="stylesheet" type="text/css">
+
+
+    <!-- HTML5 Shim and Respond.js IE8 support of HTML5 elements and media queries -->
+    <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
+    <!--[if lt IE 9]>
+        <script src="https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"></script>
+        <script src="https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"></script>
+    <![endif]-->
+
+    <!-- ga & ba script hoook -->
+    <script></script>
+</head>
+
+
+<!-- hack iOS CSS :active style -->
+<body ontouchstart="">
+
+    <!-- Navigation -->
+
+<nav class="navbar navbar-default navbar-custom navbar-fixed-top invert">
+    
+        <div class="container-fluid">
+            <!-- Brand and toggle get grouped for better mobile display -->
+            <div class="navbar-header page-scroll">
+                <button type="button" class="navbar-toggle">
+                    <span class="sr-only">Toggle navigation</span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </button>
+                <a class="navbar-brand" href="/blog/">Hujin Blog</a>
+            </div>
+
+            <!-- Collect the nav links, forms, and other content for toggling -->
+            <div id="huxblog_navbar">
+                <div class="navbar-collapse">
+                    <ul class="nav navbar-nav navbar-right">
+                        <li>
+                            <a href="/blog/">Home</a>
+                        </li>
+                        
+                        
+                        
+                        
+                        <li>
+                            <a href="/blog/about/">About</a>
+                        </li>
+                        
+                        
+                        
+                        <li>
+                            <a href="/blog/archive/">Archive</a>
+                        </li>
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        <li class="search-icon">
+                            <a href="javascript:void(0)">
+                                <i class="fa fa-search"></i>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            <!-- /.navbar-collapse -->
+        </div>
+        <!-- /.container -->
+    </nav>
+
+    <script>
+        // Drop Bootstarp low-performance Navbar
+        // Use customize navbar with high-quality material design animation
+        // in high-perf jank-free CSS3 implementation
+        var $body = document.body;
+        var $toggle = document.querySelector('.navbar-toggle');
+        var $navbar = document.querySelector('#huxblog_navbar');
+        var $collapse = document.querySelector('.navbar-collapse');
+
+        var __HuxNav__ = {
+            close: function () {
+                $navbar.className = " ";
+                // wait until animation end.
+                setTimeout(function () {
+                    // prevent frequently toggle
+                    if ($navbar.className.indexOf('in') < 0) {
+                        $collapse.style.height = "0px"
+                    }
+                }, 400)
+            },
+            open: function () {
+                $collapse.style.height = "auto"
+                $navbar.className += " in";
+            }
+        }
+
+        // Bind Event
+        $toggle.addEventListener('click', function (e) {
+            if ($navbar.className.indexOf('in') > 0) {
+                __HuxNav__.close()
+            } else {
+                __HuxNav__.open()
+            }
+        })
+
+        /**
+         * Since Fastclick is used to delegate 'touchstart' globally
+         * to hack 300ms delay in iOS by performing a fake 'click',
+         * Using 'e.stopPropagation' to stop 'touchstart' event from 
+         * $toggle/$collapse will break global delegation.
+         * 
+         * Instead, we use a 'e.target' filter to prevent handler
+         * added to document close HuxNav.  
+         *
+         * Also, we use 'click' instead of 'touchstart' as compromise
+         */
+        document.addEventListener('click', function (e) {
+            if (e.target == $toggle) return;
+            if (e.target.className == 'icon-bar') return;
+            __HuxNav__.close();
+        })
+    </script>
+    <!-- Search -->
+<div class="search-page">
+  <div class="search-icon-close-container">
+    <span class="search-icon-close">
+      <i class="fa fa-chevron-down"></i>
+    </span>
+  </div>
+  <div class="search-main container">
+    <div class="row">
+      <div class="col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1">
+        <form></form>
+        <input type="text" id="search-input" placeholder="$ grep...">
+        </form>
+        <div id="search-results" class="mini-post-list"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+    <!-- Image to hack wechat -->
+<!-- <img src="/img/icon_wechat.png" width="0" height="0"> -->
+<!-- <img src="/blog/img/home-bg.jpg" width="0" height="0"> -->
+
+<!-- Post Header -->
+
+
+
+<style type="text/css">
+    header.intro-header{
+        position: relative;
+        background-image: url('/blog/img/home-bg.jpg');
+        background: ;
+    }
+
+    
+</style>
+
+<header class="intro-header style-text" >
+
+    <div class="header-mask"></div>
+    
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1">
+                <div class="post-heading">
+                    <div class="tags">
+                        
+                        <a class="tag" href="/blog/archive/?tag=neuvector" title="neuvector">neuvector</a>
+                        
+                        <a class="tag" href="/blog/archive/?tag=%E6%96%87%E4%BB%B6%E7%AE%A1%E7%90%86" title="文件管理">文件管理</a>
+                        
+                        <a class="tag" href="/blog/archive/?tag=fanotify" title="fanotify">fanotify</a>
+                        
+                        <a class="tag" href="/blog/archive/?tag=inotify" title="inotify">inotify</a>
+                        
+                    </div>
+                    <h1>Neuvector源码分析之 文件管理</h1>
+                    
+                    <h2 class="subheading"></h2>
+                    <span class="meta">Posted by hujin on March 14, 2023</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</header>
+
+
+
+
+
+
+<!-- Post Content -->
+<article>
+    <div class="container">
+        <div class="row">
+
+    <!-- Post Container -->
+            <div class="
+                col-lg-8 col-lg-offset-2
+                col-md-10 col-md-offset-1
+                post-container">
+
+                <!-- Multi-Lingual -->
+                
+
+				<h2 id="背景">背景</h2>
+
+<p>进程规则、文件规则、网络规则、dlp、waf都是在监控组下的功能。本次我们通过源码的方式来深入了解文件规则是如何实现的。
+文件规则支持用户自定义关注的文件、目录，设置规则的学习或者保护模式，相应的如果容器访问到了指定的文件，且文件规则设置保护模式，则对文件的写会产生告警。</p>
+
+<h2 id="架构图">架构图</h2>
+
+<p><img src="/blog/img/neuvector_file0.png" alt="neuvector file" /></p>
+
+<p>我们从几个维度来看neuvector的文件管理功能：</p>
+
+<ul>
+  <li>页面/接口用户下发的文件规则如何让每个节点的Agent服务感知的</li>
+  <li>文件规则如何和容器关联起来的，Agent中是如何处理的</li>
+  <li>对文件执行读写操作后Agent如何感知</li>
+  <li>fanotify/inotify怎么处理文件的操作的</li>
+  <li>文件管理怎么体现学习模式下学习</li>
+  <li>文件操作告警信息怎么采集的，告警的规则是什么</li>
+</ul>
+
+<p>下面我们带着这几个问题，来看看源码，我们先看第一个问题。</p>
+
+<h2 id="源码">源码</h2>
+
+<h3 id="下发的文件规则如何到达每个节点的agent服务">下发的文件规则如何到达每个节点的Agent服务</h3>
+<p><img src="/blog/img/neuvector_file1.png" alt="neuvector file" /></p>
+
+<p>我们先看看界面新增文件规则的流程：</p>
+
+<ul>
+  <li>获取group对象，获取group中profile和rule两组数据</li>
+  <li>profile是文件规则，rule是文件规则中应用规则</li>
+  <li>
+    <p>将新增数据和已有数据合并，然后保存到数据库</p>
+
+    <p>func handlerFileMonitorConfig(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+      …
+      // Check if we can config the profile. Only need authorize group
+      grp, err := cacher.GetGroupBrief(group, false, acc)
+      if err != nil {
+          restRespNotFoundLogAccessDenied(w, login, err)
+          return
+      }</p>
+
+    <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+55
+56
+57
+58
+59
+60
+61
+62
+63
+64
+65
+66
+67
+68
+69
+70
+71
+72
+73
+74
+75
+76
+77
+78
+79
+80
+81
+82
+83
+84
+85
+86
+87
+88
+89
+90
+91
+92
+93
+94
+95
+96
+97
+98
+99
+100
+101
+102
+</pre></td><td class="rouge-code"><pre>  if grp.Kind != share.GroupKindContainer {
+      // "nodes" : share.GroupKindNode
+      log.WithFields(log.Fields{"group": group, "kind": grp.Kind}).Error("Get profile failed!")
+      restRespError(w, http.StatusBadRequest, api.RESTErrObjectNotFound)
+      return
+  }
+
+  var profChanged bool
+  profConf, profRev := clusHelper.GetFileMonitorProfile(group)
+  ruleConf, ruleRev := clusHelper.GetFileAccessRule(group)
+
+  ...
+  // validate add
+  if config.AddFilters != nil {
+      for _, filter := range config.AddFilters {
+          path := filter.Filter
+          filter.Filter = filepath.Clean(filter.Filter)
+          if filter.Filter == "." || filter.Filter == "/" {
+              restRespErrorMessage(w, http.StatusBadRequest, api.RESTErrInvalidRequest,
+                  fmt.Sprintf("Unsupported filter: %s[%s]", path, filter.Filter))
+              return
+          }
+
+          // append the "/" back
+          if path[len(path)-1:] == "/" {
+              filter.Filter += "/"
+          }
+
+          base, regex, ok := parseFileFilter(filter.Filter)
+          if !ok {
+              restRespErrorMessage(w, http.StatusBadRequest, api.RESTErrInvalidRequest,
+                  fmt.Sprintf("Unsupported filter: %s", filter.Filter))
+              return
+          }
+
+          for i, cfilter := range profConf.Filters {
+              if cfilter.Filter == filter.Filter {
+                  // conflict, delete predefined
+                  if !cfilter.CustomerAdd {
+                      profConf.Filters = append(profConf.Filters[:i], profConf.Filters[i+1:]...)
+                      // replace the rule below
+                      idx := utils.FilterIndexKey(cfilter.Path, cfilter.Regex)
+                      delete(ruleConf.Filters, idx)
+                      break
+                  } else {
+                      restRespErrorMessage(w, http.StatusBadRequest, api.RESTErrInvalidRequest,
+                          fmt.Sprintf("duplicate filter: %s", filter.Filter))
+                      return
+                  }
+              }
+          }
+          flt := share.CLUSFileMonitorFilter{
+              Filter:      filter.Filter,
+              Path:        base,
+              Regex:       regex,
+              Recursive:   filter.Recursive,
+              CustomerAdd: true,
+          }
+          if fileAccessOptionSet.Contains(filter.Behavior) {
+              flt.Behavior = filter.Behavior
+          } else {
+              restRespErrorMessage(w, http.StatusBadRequest, api.RESTErrInvalidRequest, "Invalid File access option")
+              return
+          }
+
+          profConf.Filters = append(profConf.Filters, flt)
+          // add rule
+          idx := utils.FilterIndexKey(flt.Path, flt.Regex)
+          capps := make([]string, len(filter.Apps))
+          for j, app := range filter.Apps {
+              capps[j] = app
+          }
+          frule := &amp;share.CLUSFileAccessFilterRule{
+              Apps:        capps,
+              CreatedAt:   tm,
+              UpdatedAt:   tm,
+              Behavior:    flt.Behavior,
+              CustomerAdd: true,
+          }
+          ruleConf.Filters[idx] = frule
+          profChanged = true
+      }
+  }
+
+  ...
+
+  if profChanged {
+      // Write to cluster
+      if err := clusHelper.PutFileMonitorProfile(group, profConf, profRev); err != nil {
+          log.WithFields(log.Fields{"error": err}).Error("Write cluster fail")
+          restRespError(w, http.StatusInternalServerError, api.RESTErrFailWriteCluster)
+          return
+      }
+  }
+  // Write access rule
+  if err := clusHelper.PutFileAccessRule(group, ruleConf, ruleRev); err != nil {
+      log.WithFields(log.Fields{"error": err}).Error("Write cluster fail")
+      restRespError(w, http.StatusInternalServerError, api.RESTErrFailWriteCluster)
+      return
+  }
+
+  ...
+</pre></td></tr></tbody></table></code></pre></div>    </div>
+  </li>
+</ul>
+
+<p>看看数据怎么保存的，这里有个小坑：</p>
+<ul>
+  <li>默认数据保存在/object/config/file_monitor/<group-name>下面</group-name></li>
+  <li>在保存数据前还有一个DuplicateNetworkKey操作，会将数据保存一份到/node/<node-id>/common/profile/file/<group-name>下面</group-name></node-id></li>
+  <li>后面那个保存位置的数据会被每个enforcer watch</li>
+</ul>
+
+<p>PutFileMonitorProfile:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+</pre></td><td class="rouge-code"><pre>func (m clusterHelper) PutFileMonitorProfile(name string, conf *share.CLUSFileMonitorProfile, rev uint64) error {
+    key := share.CLUSFileMonitorKey(name)
+    value, _ := json.Marshal(conf)
+    m.DuplicateNetworkKey(key, value)
+    return cluster.PutRev(key, value, rev)
+}
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>上面看了controller中数据保存流程，下面来看看enforcer中数据watch流程</p>
+
+<p>和其他功能类似，肯定有个地方在watch这个数据变化，然后执行一些操作,这里先看file_monitor部分的逻辑（access_rule是类似的）</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+</pre></td><td class="rouge-code"><pre>func profileDerivedProc(nType cluster.ClusterNotifyType, key string, value []byte) {
+    which := share.CLUSNetworkKey2Subject(key)
+    value, _ = utils.UnzipDataIfValid(value)
+    // log.WithFields(log.Fields{"key": key}).Debug("GRP:")
+    switch which {
+    case share.ProfileGroup:                     // group
+        systemConfigGroup(nType, key, value)
+    case share.ProfileProcess:                   // process
+        profileConfigGroup(nType, key, value)
+    case share.ProfileFileMonitor:               // file
+        systemConfigFileMonitor(nType, key, value)  
+    case share.ProfileFileAccess:                // fileAccess
+        systemConfigFileAccessRule(nType, key, value)
+    case share.ProfileScript:                    // script, 这个在数据库里没找到
+        systemConfigScript(nType, key, value)
+    default:
+        log.WithFields(log.Fields{"derived": which}).Debug("Miss handler")
+    }
+}
+
+func systemConfigFileMonitor(nType cluster.ClusterNotifyType, key string, value []byte) {
+  switch nType {
+  case cluster.ClusterNotifyAdd, cluster.ClusterNotifyModify:
+      ...
+      updateGroupProfileCache(nType, name, profile)   // 这里重点看下这个函数
+  case cluster.ClusterNotifyDelete: // required no group member that means no belonged containers, either
+  }   }
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<h3 id="文件规则和监控组容器关联">文件规则和监控组、容器关联</h3>
+
+<p>用户规则创建后保存到数据库，enforcer watch到数据变化会更新本地内存数据</p>
+
+<ul>
+  <li>对比内存数据，不一致则更新</li>
+  <li>targets是当前group中容器id列表</li>
+  <li>可以看到grpNotifyFile是当前节点所有容器id的集合</li>
+</ul>
+
+<p>updateGroupProfileCache:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+</pre></td><td class="rouge-code"><pre>func updateGroupProfileCache(nType cluster.ClusterNotifyType, name string, obj interface{}) bool {
+    ...
+    targets := utils.NewSet()
+    switch obj.(type) {
+    ...
+    case share.CLUSFileMonitorProfile:
+        file := obj.(share.CLUSFileMonitorProfile)
+        if file.Mode != grpCache.file.Mode || len(grpCache.file.Filters) == 0 || reflect.DeepEqual(file.Filters, grpCache.file.Filters) == false {
+            for i, _ := range file.Filters {
+                file.Filters[i].DerivedGroup = name // late filled-up to save kv storages
+            }
+            grpCache.file = &amp;file
+            targets = grpCache.members.Clone()
+            if targets.Cardinality() &gt; 0 {
+                fileUpdated = true
+            }
+        }
+    ...
+
+    if fileUpdated {
+        grpNotifyFile = grpNotifyFile.Union(targets)
+    }
+
+    targets.Clear()
+    targets = nil
+    return true
+}
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>看到这里有点好奇，group和容器是怎么关联上的，也就是上面代码中grpCache.members在哪里维护的：</p>
+
+<ul>
+  <li>在enforcer中监听runtime事件时，会监听容器的创建事件，对应的回调函数有个groupWorkloadJoin</li>
+  <li>在groupWorkloadJoin中根据workload的learnedGroupName获取对应的系统组，然后加入</li>
+  <li>用户自定义组根据Criteria和domain来识别是否包含此workload</li>
+</ul>
+
+<p>registerEventHandlers&amp;groupWorkloadJoin:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+</pre></td><td class="rouge-code"><pre>func registerEventHandlers() {
+    ...
+    evhdls.Register(EV_WORKLOAD_START, []eventHandlerFunc{
+        groupWorkloadJoin,
+        scanWorkloadAdd,
+    })
+    ...
+
+
+func groupWorkloadJoin(id string, param interface{}) {
+    ...
+    if cache, ok := groupCacheMap[wlc.learnedGroupName]; !ok || isDummyGroupCache(cache) {
+        ...
+    } else {
+        if !cache.members.Contains(wl.ID) {
+            wlc.groups.Add(wlc.learnedGroupName)
+            cache.members.Add(wl.ID)
+            memberUpdated = true
+            log.WithFields(log.Fields{"group": wlc.learnedGroupName}).Debug("Join group")
+        }
+    }
+
+    // Join user defined group
+    for _, cache := range groupCacheMap {
+        if cache.group.CfgType == share.Learned {
+            continue
+        }
+
+        if share.IsGroupMember(cache.group, wlc.workload) {
+            if !cache.members.Contains(wl.ID) {
+                wlc.groups.Add(cache.group.Name)
+                cache.members.Add(wl.ID)
+                memberUpdated = true
+                log.WithFields(log.Fields{"group": cache.group.Name}).Debug("Join group")
+            }
+    ...
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>到这里我们可以看到内存中的数据一直在实时更新，监控组和容器的关系也建立好了，文件规则也更新到了指定组对象了，如何使用这些数据呢，我们继续往下看</p>
+
+<h3 id="定时更新fanotify关注的容器文件">定时更新fanotify关注的容器文件</h3>
+
+<p><img src="/blog/img/neuvector_file2.png" alt="neuvector file" /></p>
+
+<p>enforcer中创建了一个定时任务，每隔5s执行一次，遍历所有容器，将内存中的文件规则应用到的fanotify中</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+</pre></td><td class="rouge-code"><pre>func fileMemberChanges(members utils.Set) {
+    log.WithFields(log.Fields{"count": members.Cardinality()}).Debug("GRP:")
+    for cid := range members.Iter() {
+        ...
+        c, ok := gInfo.activeContainers[id]
+        gInfoRUnlock()
+        if ok {
+            applyFileGroupProfile(c)
+        } ...
+}
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>在applyFileGroupProfile中涉及三个主要流程：</p>
+
+<ul>
+  <li>calculateFileGroupProfile： 根据用户创建的文件规则筛选出所有相关file，根据监控组模式设置file的mask属性</li>
+  <li>更新容器matchRules：将计算到的file/access规则添加到workload对象中（纯数据转换处理逻辑）</li>
+  <li>StartWatch：将file添加到fanotify中</li>
+</ul>
+
+<p>calculateFileGroupProfile就是获取内存中group的file和access规则，
+getFileMonitorProfile会加载数据库中的数据，如果内存不存在指定的group信息时</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+</pre></td><td class="rouge-code"><pre>func calculateFileGroupProfile(id, svc string) (*share.CLUSFileMonitorProfile, *share.CLUSFileAccessRule, bool) {
+    log.WithFields(log.Fields{"id": id, "svc": svc}).Debug("GRP: ")
+
+    file := &amp;share.CLUSFileMonitorProfile{
+        Filters:    make([]share.CLUSFileMonitorFilter, 0),
+        FiltersCRD: make([]share.CLUSFileMonitorFilter, 0),
+    }
+    ...
+    for _, grpCache := range grpProfileCacheMap {
+        if grpCache.members.Contains(id) {
+            file.Filters = append(file.Filters, grpCache.file.Filters...)
+            file.FiltersCRD = append(file.FiltersCRD, grpCache.file.FiltersCRD...)
+            mergeFileAccessProfile(access, grpCache.access)
+        }
+    }
+    grpCacheLock.Unlock()
+
+    // log.WithFields(log.Fields{"filter": file.Filters}).Debug("GRP:")
+    ok, svc_file := getFileMonitorProfile(svc)
+    if !ok {
+        log.WithFields(log.Fields{"id": id, "svc": svc}).Debug("GRP: no file profile")
+        return nil, nil, false
+    }
+
+    // basic information
+    file.Group = svc_file.Group
+    file.Mode = svc_file.Mode
+
+    // merge regular files
+    file.Filters = append(file.Filters, svc_file.Filters...)
+    file.Filters = mergeFileMonitorProfile(file.Filters)
+    ...
+    return file, access, true
+}
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>我们重点看下StartWatch方法</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+</pre></td><td class="rouge-code"><pre>func (w *FileWatch) StartWatch(id string, rootPid int, conf *FsmonConfig, capBlock, bNeuvectorSvc bool) {
+    ...
+    dirs, files := w.getCoreFile(id, rootPid, conf.Profile)
+
+    w.fanotifier.SetMode(rootPid, access, perm, capBlock, bNeuvectorSvc)
+
+    w.addCoreFile(id, dirs, files)
+
+    w.fanotifier.StartMonitor(rootPid)
+    ...
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>getCoreFile: 会根据用户下发的文件规则（path可能带*）会获取所有相关的目录和文件路径</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+</pre></td><td class="rouge-code"><pre>func (w *FileWatch) getCoreFile(cid string, pid int, profile *share.CLUSFileMonitorProfile) (map[string]*osutil.FileInfoExt, []*osutil.FileInfoExt) {
+    dirList := make(map[string]*osutil.FileInfoExt)
+    singleFiles := make([]*osutil.FileInfoExt, 0)
+
+    // get files and dirs from all filters
+    for _, filter := range profile.Filters {
+        flt := &amp;filterRegex{path: filterIndexKey(filter)}
+        flt.regex, _ = regexp.Compile(fmt.Sprintf("^%s$", flt.path))
+        bBlockAccess := filter.Behavior == share.FileAccessBehaviorBlock
+        bUserAdded := filter.CustomerAdd
+        if strings.Contains(filter.Path, "*") {
+            subDirs := w.getSubDirList(pid, filter.Path, cid)
+            for _, sub := range subDirs {
+                singles := w.getDirAndFileList(pid, sub, filter.Regex, cid, flt, filter.Recursive, bBlockAccess, bUserAdded, dirList)
+                singleFiles = append(singleFiles, singles...)
+            }
+        } else {
+            singles := w.getDirAndFileList(pid, filter.Path, filter.Regex, cid, flt, filter.Recursive, bBlockAccess, bUserAdded, dirList)
+            singleFiles = append(singleFiles, singles...)
+        }
+    }
+
+    ...
+    return dirList, singleFiles
+}
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>SetMode：内存中创建rootFd对象，需要注意一点如果监控组是保护模式会设置permControl为true，这个在后面处理文件事件会用到</p>
+
+<p>addCoreFile</p>
+
+<ul>
+  <li>向fanotify注册需要关注的文件列表，以及设置文件mask，以addFile为例</li>
+  <li>这里如果监控path是包管理路径会额外再调用inotify来监控</li>
+</ul>
+
+<p>addCoreFile&amp;addFile:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+</pre></td><td class="rouge-code"><pre>func (w *FileWatch) addCoreFile(cid string, dirList map[string]*osutil.FileInfoExt, singleFiles []*osutil.FileInfoExt) {
+    // add files
+    for _, finfo := range singleFiles {
+        // need to move the cross link files to dirs
+        di, ok := dirList[filepath.Dir(finfo.Path)]
+        if ok &amp;&amp; !isRunTimeAddedFile(finfo.Path) {
+            finfo.Filter = di.Filter
+            di.Children = append(di.Children, finfo)
+        } else {
+            finfo.ContainerId = cid
+            w.addFile(finfo)
+        }
+    }
+
+    // add directories
+    ...
+} 
+
+
+func (w *FileWatch) addFile(finfo *osutil.FileInfoExt) {
+    w.fanotifier.AddMonitorFile(finfo.Path, finfo.Filter, finfo.Protect, finfo.UserAdded, w.cbNotify, finfo)
+    if _, path := global.SYS.ParseContainerFilePath(finfo.Path); packageFile.Contains(path) {
+        w.inotifier.AddMonitorFile(finfo.Path, w.cbNotify, finfo)
+    }
+}
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>fanotify的addFile</p>
+
+<ul>
+  <li>path形如：/host/proc/17490/root/usr/bin，解析到容器的pid和操作的文件路径</li>
+  <li>fn.roots[rootPid]得到容器的root fd</li>
+  <li>这里注意mask的取值逻辑：userAdded/protect基本都符合可以忽略，permControl表示监控组是保护模式，configPerm正常是true，可以理解成监控组保护模式下默认给文件设置mask是FAN_OPEN_PERM，其他情况都是FAN_OPEN，这个需要结合后面fanotify事件的处理流程一起看</li>
+  <li>这样就将所有需要监听的文件权限、路径、容器id等所有相关的元数据都处理好了，后面就是实际应用到fanotify中了</li>
+</ul>
+
+<p>addFile</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+</pre></td><td class="rouge-code"><pre>func (fn *FaNotify) addFile(path string, filter interface{}, protect, isDir, userAdded bool, files map[string]interface{}, cb NotifyCallback, params interface{}) bool {
+    ...
+    rootPid, rPath, err := ParseMonitorPath(path)
+    ...
+    r, ok := fn.roots[rootPid]
+    ...
+
+    var mask uint64 = faMarkMask
+    if userAdded || protect { // user-defined or protected: including access control
+        if r.permControl { // protect mode
+            if fn.configPerm { // system-wise : access control is available
+                mask |= FAN_OPEN_PERM
+            } else {
+                mask |= FAN_OPEN
+            }
+        } else {
+            mask |= FAN_OPEN
+        }
+    }
+
+    var file *IFile
+    if isDir {
+        ...
+
+    } else {
+        if _, ok = r.paths[rPath]; ok {
+            return false
+        }
+        file = &amp;IFile{
+            path:    path,
+            mask:    mask,
+            params:  params,
+            cb:      cb,
+            filter:  filter.(*filterRegex),
+            protect: protect,         // access control
+            learnt:  r.accessMonitor, // discover mode
+            userAdd: userAdded,
+        }
+
+        r.paths[rPath] = file
+    }
+...
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>fa.StartMonitor真正将文件规则应用到fanotify</p>
+
+<ul>
+  <li>这里的Mark是调用fanotify，给出需要监控的文件路径、文件事件、权限</li>
+  <li>addHostNetworkFilesCopiedFiles是将hostnetwork的容器中一些通用的文件（/etc/hosts /etc/resolv.conf）进行监控</li>
+</ul>
+
+<p>StartMonitor:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+</pre></td><td class="rouge-code"><pre>func (fn *FaNotify) StartMonitor(rootPid int) bool {
+    ...
+    r, ok := fn.roots[rootPid]
+    ...
+
+    ppath := fmt.Sprintf(procRootMountPoint, rootPid)
+    for dir, mask := range r.dirMonitorMap {
+        path := ppath + dir
+        if err := fn.fa.Mark(faMarkAddFlags, mask, unix.AT_FDCWD, path); err != nil {
+            log.WithFields(log.Fields{"path": path, "error": err}).Error("FMON:")
+        } else {
+            mLog.WithFields(log.Fields{"path": path, "mask": fmt.Sprintf("0x%08x", mask)}).Debug("FMON:")
+        }
+    }
+
+    //
+    fn.addHostNetworkFilesCopiedFiles(r)
+    return ok
+}
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>到这里已经将用户下发的文件规则，关联到group，关联到具体的容器（workload）中，同时也将用户规则进行重计算，得到一个完整的文件集合，
+将需要关注（监控）的文件以及事件等细节都告诉了fanotify和inotify，下面就看看实际watch到文件事件后如何处理了</p>
+
+<h3 id="文件操作的感知">文件操作的感知</h3>
+
+<p><img src="/blog/img/neuvector_file3.png" alt="neuvector file" /></p>
+
+<p>上面直接调用fn.fa.Mark去告诉fanotify需要关注的文件，但是这个对象哪里来的？</p>
+
+<ul>
+  <li>NewFaNotify: 初始化fanotify</li>
+  <li>NewInotify: 初始化inotify</li>
+  <li>MonitorFileEvents：监听来自fanotify和inotify的文件事件并处理</li>
+  <li>fw.loop：这个后面我们讲</li>
+</ul>
+
+<p>NewFileWatcher:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+</pre></td><td class="rouge-code"><pre>func NewFileWatcher(config *FileMonitorConfig) (*FileWatch, error) {
+    ...
+
+    n, err := NewFaNotify(config.EndChan, config.PidLookup, global.SYS)
+    if err != nil {
+        log.WithFields(log.Fields{"error": err}).Error("Open fanotify fail")
+        return nil, err
+    }
+    ni, err := NewInotify()
+    if err != nil {
+        log.WithFields(log.Fields{"error": err}).Error("Open inotify fail")
+        return nil, err
+    }
+
+    go n.MonitorFileEvents()
+    go ni.MonitorFileEvents()
+
+    fw := &amp;FileWatch{
+        aufs:       config.IsAufs,
+        fanotifier: n,
+        inotifier:  ni,
+        fileEvents: make(map[string]*fileMod),
+        groups:     make(map[int]*groupInfo),
+        sendrpt:    config.SendReport,
+        sendRule:   config.SendAccessRule,
+        estRuleSrc: config.EstRule,
+        walkerTask: config.WalkerTask,
+    }
+    go fw.loop()
+    ...
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>文件事件处理：</p>
+
+<ul>
+  <li>在获取到文件事件后，获取事件中进程pid、容器的root fd、文件mask</li>
+  <li>这里如果文件fmask是FAN_OPEN_PERM，则perm是1。前面提过如果监控组是保护模式，则会设置对应文件的mask是FAN_OPEN_PERM</li>
+  <li>resp：用来给fanotify回复的结果，计算方式见下文的流程图</li>
+</ul>
+
+<p>handleEvents:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+</pre></td><td class="rouge-code"><pre>func (fn *FaNotify) handleEvents() error {
+    for {
+        ev, err := fn.fa.GetEvent()
+        ...
+        pid := int(ev.Pid)
+        fd := int(ev.File.Fd())
+        fmask := uint64(ev.Mask)
+        perm := (fmask &amp; (FAN_OPEN_PERM | FAN_ACCESS_PERM)) &gt; 0
+        ...
+        resp, mask, ifile, pInfo := fn.calculateResponse(pid, fd, fmask, perm)
+        if perm {
+            fn.fa.Response(ev, resp)
+        }
+        ev.File.Close()
+        ...
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p><img src="/blog/img/neuvector_file4.png" alt="neuvector file" /></p>
+
+<ul>
+  <li>resp的值默认是true</li>
+  <li>如果文件规则是保护模式，且操作进程不在允许的应用中，则resp是false</li>
+  <li>将fmask转换成mask（一个操作会有多个事件，只有第一个事件中fmask是设置过的）</li>
+</ul>
+
+<p>calculateResponse:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+</pre></td><td class="rouge-code"><pre>func (fn *FaNotify) calculateResponse(pid, fd int, fmask uint64, perm bool) (bool, uint32, *IFile, *ProcInfo) {
+    ...
+
+    ifile, _, mask := fn.lookupFile(r, linkPath, pInfo)
+    if ifile == nil {
+        return true, mask, nil, nil
+    }
+
+    // log.WithFields(log.Fields{"protect": ifile.protect, "perm": perm, "path": linkPath, "ifile": ifile, "evMask": fmt.Sprintf("0x%08x", fmask)}).Debug("FMON:")
+
+    // permition decision
+    resp := true
+    if ifile.protect { // always verify app for block-access
+        resp = fn.lookupRule(r, ifile, pInfo, linkPath)
+        // log.WithFields(log.Fields{"resp": resp}).Debug("FMON:")
+    }
+
+    if (fmask &amp; FAN_MODIFY) &gt; 0 {
+        mask |= syscall.IN_MODIFY
+        log.WithFields(log.Fields{"path": linkPath}).Info("FMON: modified")
+    } else if (fmask &amp; FAN_CLOSE_WRITE) &gt; 0 {
+        mask |= syscall.IN_CLOSE_WRITE
+        log.WithFields(log.Fields{"path": linkPath}).Info("FMON: cls_wr")
+    } else {
+        mask |= syscall.IN_ACCESS
+            log.WithFields(log.Fields{"path": linkPath}).Info("FMON: read")
+        if fn.isFileException(false, linkPath, pInfo, mask) {
+            resp = true
+            mask &amp;^= syscall.IN_ACCESS
+        }
+    }
+
+    if perm &amp;&amp; !resp {
+        pInfo.Deny = true
+        log.WithFields(log.Fields{"path": linkPath, "app": pInfo.Path}).Debug("FMON: denied")
+    }
+    return resp, mask, ifile, pInfo
+}
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>综合看一下</p>
+
+<p><img src="/blog/img/neuvector_file5.png" alt="neuvector file" /></p>
+
+<ul>
+  <li>只有监控组是保护模式的时候perm才是true</li>
+  <li>perm是true的时候才会给fanotify发送response，其他时候都不会发送</li>
+  <li>只有文件规则是保护模式的时候resp才是false，其他时候都是true</li>
+  <li>换句话说：只有监控组是保护模式且文件规则是保护模式的时候fanotify才会阻断文件操作，其他都是允许</li>
+</ul>
+
+<h3 id="规则学习--告警信息上报">规则学习 &amp; 告警信息上报</h3>
+
+<p><img src="/blog/img/neuvector_file6.png" alt="neuvector file" /></p>
+
+<p>前面看了文件事件处理流程，但是我们忽略了一个细节</p>
+
+<ul>
+  <li>这里有个change参数，用来判断文件是否被修改</li>
+  <li>当fmask是FAN_CLOSE_WRITE表示文件被修改</li>
+  <li>当文件规则是学习模式，或者保护模式下修改了文件 事件都需要report</li>
+  <li>文件被修改或者需要上报都需要调用回调函数</li>
+</ul>
+
+<p>handleEvents:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+</pre></td><td class="rouge-code"><pre>func (fn *FaNotify) handleEvents() error {
+    for {
+        ev, err := fn.fa.GetEvent()
+        ...
+        change := (fmask &amp; FAN_CLOSE_WRITE) &gt; 0
+        // log.WithFields(log.Fields{"ifile": ifile, "pInfo": pInfo, "Resp": resp, "Change": change, "Perm": perm}).Debug("FMON:")
+
+        var bReporting bool
+        if ifile.learnt { // discover mode
+            bReporting = ifile.userAdd // learn app for customer-added entry
+        } else { // monitor or protect mode
+            allowRead := resp &amp;&amp; !change
+            bReporting = (allowRead == false) // allowed app by block_access
+        }
+
+        if bReporting || change { // report changed file
+            ifile.cb(ifile.path, mask, ifile.params, pInfo)
+        }
+    }
+    return nil
+}
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>回调函数： 只是将事件更新或者保存到内存中，那事件在哪里处理的呢？</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+</pre></td><td class="rouge-code"><pre>func (w *FileWatch) cbNotify(filePath string, mask uint32, params interface{}, pInfo *ProcInfo) {
+    //ignore the container remove event. they are too many
+    if (mask&amp;syscall.IN_IGNORED) != 0 || (mask&amp;syscall.IN_UNMOUNT) != 0 {
+        w.inotifier.RemoveMonitorFile(filePath)
+        return
+    }
+
+    w.mux.Lock()
+    defer w.mux.Unlock()
+    if fm, ok := w.fileEvents[filePath]; ok {
+        fm.mask |= mask
+        fm.delay = 0
+        fm.pInfo = append(fm.pInfo, pInfo)
+    } else {
+        pi := make([]*ProcInfo, 1)
+        pi[0] = pInfo
+        w.fileEvents[filePath] = &amp;fileMod{
+            mask:  mask,
+            delay: 0,
+            finfo: params.(*osutil.FileInfoExt),
+            pInfo: pi,
+        }
+    }
+}
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>这里在enforcer启动时创建了两个定时任务，分别用来处理事件和学习规则用</p>
+
+<ul>
+  <li>HandleWatchedFiles会根据路径类型（文件还是目录）调用对应的处理方法</li>
+  <li>reportLearningRules:后面细讲</li>
+</ul>
+
+<p>HandleWatchedFiles:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+</pre></td><td class="rouge-code"><pre>func (w *FileWatch) HandleWatchedFiles() {
+    events := make(map[string]*fileMod)
+    w.mux.Lock()
+    for filePath, fmod := range w.fileEvents {
+        events[filePath] = fmod
+        delete(w.fileEvents, filePath)
+    }
+    w.mux.Unlock()
+
+    for fullPath, fmod := range events {
+        pid, path := global.SYS.ParseContainerFilePath(fullPath)
+        //to avoid false alarm of /etc/hosts and /etc/resolv.conf, check whether the container is still exist
+        //these two files has attribute changed when the container leave
+        //this maybe miss some events file changed right before container leave. But for these kind of event,
+        //it is not useful if the container already leave
+        //	log.WithFields(log.Fields{"pid": pid, "path": path, "pInfo": fmod.pInfo[0], "fInfo": fmod.finfo}).Debug("FMON:")
+        //	if fmod.pInfo != nil {
+        //		log.WithFields(log.Fields{"pInfo": fmod.pInfo[0]}).Debug("FMON:")
+        //	}
+        rootPath := global.SYS.ContainerProcFilePath(pid, "")
+        if _, err := os.Stat(rootPath); err == nil &amp;&amp; path != "" {
+            var event uint32
+            info, _ := os.Lstat(fullPath)
+            if fmod.finfo.FileMode.IsDir() {
+                event = w.handleDirEvents(fmod, info, fullPath, path, pid)
+            } else {
+                event = w.handleFileEvents(fmod, info, fullPath, pid)
+            }
+            if event != 0 {
+                w.learnFromEvents(pid, fmod, path, event)
+            }
+        }
+    }
+}
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>这里我们看看文件事件处理逻辑</p>
+
+<ul>
+  <li>如果用户删除文件规则后，会更新enforcer内存数据，也就是将fileinfo删除，这里的info就是nil了，也就需要让fanotify知道不再需要关注这些文件了，执行RemoveMonitorFile方法</li>
+  <li>这里的event是文件操作类型参数，不为空时调用learnFromEvents</li>
+</ul>
+
+<p>handleFileEvents:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+</pre></td><td class="rouge-code"><pre>func (w *FileWatch) handleFileEvents(fmod *fileMod, info os.FileInfo, fullPath string, pid int) uint32 {
+    var event uint32
+    if info != nil {
+        if info.Mode() != fmod.finfo.FileMode {
+            //attribute is changed
+            event = fileEventAttr
+            fmod.finfo.FileMode = info.Mode()
+        }
+        // check the hash existing and match
+        // skip directory new file event, report later
+        hash, err := osutil.GetFileHash(fullPath)
+        if err != nil &amp;&amp; !osutil.HashZero(fmod.finfo.Hash) ||
+            err == nil &amp;&amp; hash != fmod.finfo.Hash ||
+            fmod.finfo.Size != info.Size() {
+            event |= fileEventModified
+            fmod.finfo.Hash = hash
+        } else if (fmod.mask &amp; syscall.IN_ACCESS) &gt; 0 {
+            event |= fileEventAccessed
+        }
+        if (fmod.finfo.FileMode &amp; os.ModeSymlink) != 0 {
+            //handle symlink
+            rpath, err := osutil.GetContainerRealFilePath(pid, fullPath)
+            if err == nil &amp;&amp; fmod.finfo.Link != rpath {
+                event |= fileEventSymModified
+            }
+        }
+        if (fmod.mask &amp; inodeChangeMask) &gt; 0 {
+            w.removeFile(fullPath)
+            w.addFile(fmod.finfo)
+        }
+    } else {
+        //file is removed
+        event = fileEventRemoved
+        w.fanotifier.RemoveMonitorFile(fullPath)
+    }
+    return event
+}
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>规则学习：</p>
+<ul>
+  <li>如果监控组是学习模式，且进程访问的文件path匹配到文件规则，会将进程path保存到监控组的learnRules中（这个数据后面还有一个定时任务来处理）</li>
+  <li>通过最后的判断条件可以看出：非文件访问或者非学习模式下才发告警</li>
+</ul>
+
+<p>learnFromEvents:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+</pre></td><td class="rouge-code"><pre>func (w *FileWatch) learnFromEvents(rootPid int, fmod *fileMod, path string, event uint32) {
+    ...
+    grp, ok := w.groups[rootPid]
+    mode := grp.mode
+    if mode == share.PolicyModeLearn {
+        flt := fmod.finfo.Filter.(*filterRegex)
+        if applyRules, ok := grp.applyRules[flt.path]; ok {
+            learnRules, ok := grp.learnRules[flt.path]
+            if !ok {
+                learnRules = utils.NewSet()
+            }
+            for _, pf := range fmod.pInfo {
+                // only use the process name/path as profile
+                if pf != nil &amp;&amp; pf.Path != "" {
+                    if !applyRules.Contains(pf.Path) &amp;&amp; !learnRules.Contains(pf.Path) {
+                        learnRules.Add(pf.Path)
+                        log.WithFields(log.Fields{"rule": pf.Path, "filter": flt}).Debug("FMON:")
+                    }
+                }
+            }
+            // for inotify, cannot learn
+            if learnRules.Cardinality() &gt; 0 {
+                grp.learnRules[flt.path] = learnRules
+            }
+        } else {
+            log.WithFields(log.Fields{"path": path}).Debug("FMON: no access rules")
+        }
+    }
+    w.mux.Unlock()
+
+    if event != fileEventAccessed ||
+        (mode == share.PolicyModeEnforce || mode == share.PolicyModeEvaluate) {
+        w.sendMsg(fmod.finfo.ContainerId, path, event, fmod.pInfo, mode)
+    }
+}
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<h3 id="规则学习">规则学习</h3>
+<p>这里有个注意点，学习模式下文件管理和进程管理工作模式有点区别：</p>
+<ul>
+  <li>进程管理会自动学习新的进程规则，并添加到数据库</li>
+  <li>文件管理的规则必须手动创建，只会自动学习应用并添加到对应的规则中（规则允许的应用属性）</li>
+</ul>
+
+<p>在enforcer中还有一个定时任务，用来处理内存中学习到的文件应用数据</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+</pre></td><td class="rouge-code"><pre>func (w *FileWatch) reportLearningRules() {
+    learnRules := make([]*share.CLUSFileAccessRuleReq, 0)
+    w.mux.Lock()
+    for _, grp := range w.groups {
+        if len(grp.learnRules) &gt; 0 {
+            for flt, rule := range grp.learnRules {
+                for itr := range rule.Iter() {
+                    prf := itr.(string)
+                    rl := &amp;share.CLUSFileAccessRuleReq{
+                        GroupName: grp.profile.Group,
+                        Filter:    flt,
+                        Path:      prf,
+                    }
+                    learnRules = append(learnRules, rl)
+                }
+            }
+            grp.learnRules = make(map[string]utils.Set)
+        }
+    }
+    w.mux.Unlock()
+    if len(learnRules) &gt; 0 {
+        w.sendRule(learnRules)
+    }
+}
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>可以看到通过grpc调用ReportFileAccessRule将学习到的应用发送给controller</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+</pre></td><td class="rouge-code"><pre>func sendLearnedFileAccessRule(rules []*share.CLUSFileAccessRuleReq) error {
+    log.WithFields(log.Fields{"rules": len(rules)}).Debug("")
+    client, err := getControllerServiceClient()
+    if err != nil {
+        log.WithFields(log.Fields{"error": err}).Error("Failed to find ctrl client")
+        return fmt.Errorf("Fail to find controller client")
+    }
+
+    ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
+    defer cancel()
+
+    ruleArray := &amp;share.CLUSFileAccessRuleArray{
+        Rules: rules,
+    }
+
+    _, err = client.ReportFileAccessRule(ctx, ruleArray)
+    if err != nil {
+        log.WithFields(log.Fields{"error": err}).Debug("Fail to report file rule to controller")
+        return fmt.Errorf("Fail to report file rule to controller")
+    }
+    return nil
+}
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>在controller中有个定时任务来处理学习到的文件规则，有兴趣的可以再看下代码，最终就是调用PutFileAccessRule保存到数据库</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+</pre></td><td class="rouge-code"><pre>func FileReportBkgSvc() {
+    for {
+        if len(chanFileRules) &gt; 0 {
+            if kv.IsImporting() {
+                for i := 0; i &lt; len(chanFileRules); i++ {
+                    &lt;-chanFileRules
+                }
+            } else {
+                if lock, _ := clusHelper.AcquireLock(share.CLUSLockPolicyKey, policyClusterLockWait); lock != nil {
+                    for i := 0; i &lt; len(chanFileRules) &amp;&amp; i &lt; 16; i++ {
+                        rules := &lt;-chanFileRules
+                        updateFileMonitorProfile(rules)
+                    }
+                    clusHelper.ReleaseLock(lock)
+                }
+            }
+        } else {
+            time.Sleep(time.Millisecond * 100) // yield
+        }
+    }
+}
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<h2 id="总结">总结</h2>
+
+<p>我们从几位维度去看待文件管理这个功能，了解了文件规则如何下发到enforcer，enforcer如何监控当前节点所有容器的文件操作，文件事件如何处理，
+文件学习如何实现。最终呈现在我们面前的文件管理是这样的：</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>对象</th>
+      <th>模式</th>
+      <th> </th>
+      <th> </th>
+      <th> </th>
+      <th> </th>
+      <th> </th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>监控组</td>
+      <td>学习</td>
+      <td>学习</td>
+      <td>告警</td>
+      <td>告警</td>
+      <td>保护</td>
+      <td>保护</td>
+    </tr>
+    <tr>
+      <td>文件规则</td>
+      <td>告警</td>
+      <td>保护</td>
+      <td>告警</td>
+      <td>保护</td>
+      <td>告警</td>
+      <td>保护</td>
+    </tr>
+    <tr>
+      <td>读告警</td>
+      <td>否</td>
+      <td>否</td>
+      <td>否</td>
+      <td>否</td>
+      <td>否</td>
+      <td>否</td>
+    </tr>
+    <tr>
+      <td>写告警</td>
+      <td>是</td>
+      <td>是</td>
+      <td>是</td>
+      <td>是</td>
+      <td>是</td>
+      <td>否</td>
+    </tr>
+    <tr>
+      <td>阻断&amp;告警</td>
+      <td>否</td>
+      <td>否</td>
+      <td>否</td>
+      <td>否</td>
+      <td>否</td>
+      <td>是</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>进程管理和文件管理的代码流程基本一致，可以参考来看</p>
+
+<p>以上是代码逻辑以及一些个人理解，有问题的地方可以及时微信联系我更正</p>
+
+
+                <hr style="visibility: hidden;">
+                <ul class="pager">
+                    
+                    <li class="previous">
+                        <a href="/blog/2023/02/27/calico-route/" data-toggle="tooltip" data-placement="top" title="Calico单节点网络实现">
+                        Previous<br>
+                        <span>Calico单节点网络实现</span>
+                        </a>
+                    </li>
+                    
+                    
+                </ul>
+                <hr style="visibility: hidden;">
+
+                
+
+                
+            </div>  
+
+    <!-- Side Catalog Container -->
+        
+            <div class="
+                col-lg-2 col-lg-offset-0
+                visible-lg-block
+                sidebar-container
+                catalog-container">
+                <div class="side-catalog">
+                    <hr class="hidden-sm hidden-xs">
+                    <h5>
+                        <a class="catalog-toggle" href="#">CATALOG</a>
+                    </h5>
+                    <ul class="catalog-body"></ul>
+                </div>
+            </div>
+        
+
+    <!-- Sidebar Container -->
+            <div class="
+                col-lg-8 col-lg-offset-2
+                col-md-10 col-md-offset-1
+                sidebar-container">
+
+                <!-- Featured Tags -->
+                
+
+
+<section>
+    
+        <hr class="hidden-sm hidden-xs">
+    
+    <h5><a href="/blog/archive/">FEATURED TAGS</a></h5>
+    <div class="tags">
+        
+        
+        
+        
+        
+        
+                <a data-sort="0020" 
+                    href="/blog/archive/?tag=kubernetes"
+                    title="kubernetes"
+                    rel="5">kubernetes</a>
+        
+                <a data-sort="0018" 
+                    href="/blog/archive/?tag=k8s"
+                    title="k8s"
+                    rel="7">k8s</a>
+        
+                <a data-sort="0020" 
+                    href="/blog/archive/?tag=cni"
+                    title="cni"
+                    rel="5">cni</a>
+        
+                <a data-sort="0020" 
+                    href="/blog/archive/?tag=neuvector"
+                    title="neuvector"
+                    rel="5">neuvector</a>
+        
+                <a data-sort="0022" 
+                    href="/blog/archive/?tag=istio"
+                    title="istio"
+                    rel="3">istio</a>
+        
+                <a data-sort="0023" 
+                    href="/blog/archive/?tag=calico"
+                    title="calico"
+                    rel="2">calico</a>
+        
+                <a data-sort="0023" 
+                    href="/blog/archive/?tag=tungstenfabric"
+                    title="tungstenfabric"
+                    rel="2">tungstenfabric</a>
+    </div>
+</section>
+
+
+                <!-- Friends Blog -->
+                <!---->
+            </div>
+        </div>
+    </div>
+</article>
+
+<!-- add support for mathjax by voleking-->
+
+
+
+
+
+
+
+
+
+<!-- async load function -->
+<script>
+    function async(u, c) {
+      var d = document, t = 'script',
+          o = d.createElement(t),
+          s = d.getElementsByTagName(t)[0];
+      o.src = u;
+      if (c) { o.addEventListener('load', function (e) { c(null, e); }, false); }
+      s.parentNode.insertBefore(o, s);
+    }
+</script>
+<!-- anchor-js, Doc:http://bryanbraun.github.io/anchorjs/ -->
+<script>
+    async("//cdnjs.cloudflare.com/ajax/libs/anchor-js/1.1.1/anchor.min.js",function(){
+        anchors.options = {
+          visible: 'hover',
+          placement: 'right',
+          // icon: '#'
+        };
+        anchors.add().remove('.intro-header h1').remove('.subheading').remove('.sidebar-container h5');
+    })
+</script>
+<style>
+    /* place left on bigger screen */
+    @media all and (min-width: 800px) {
+        .anchorjs-link{
+            position: absolute;
+            left: -0.75em;
+            font-size: 1.1em;
+            margin-top : -0.1em;
+        }
+    }
+</style>
+
+
+
+    <!-- Footer -->
+<footer>
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1">
+                <!-- SNS Link -->
+                
+
+
+<ul class="list-inline text-center">
+
+
+  
+  
+  
+  
+  
+  
+  <li>
+    <a target="_blank" href="https://github.com/guokehujin">
+      <span class="fa-stack fa-lg">
+        <i class="fa fa-circle fa-stack-2x"></i>
+        <i class="fa fa-github fa-stack-1x fa-inverse"></i>
+      </span>
+    </a>
+  </li>
+  
+  
+</ul>
+
+                <p class="copyright text-muted">
+                    Copyright &copy; Hujin Blog 2023
+                    <br>
+                    Powered by <a href="http://hujin.github.com">Hujin Blog</a> |
+                    <iframe style="margin-left: 2px; margin-bottom:-5px;" frameborder="0" scrolling="0" width="100px"
+                        height="20px"
+                        src="https://ghbtns.com/github-btn.html?user=huxpro&repo=huxpro.github.io&type=star&count=true">
+                    </iframe>
+                </p>
+            </div>
+        </div>
+    </div>
+</footer>
+
+<!-- jQuery -->
+<script src="/blog/js/jquery.min.js "></script>
+
+<!-- Bootstrap Core JavaScript -->
+<!-- Currently, only navbar scroll-down effect at desktop still depends on this -->
+<script src="/blog/js/bootstrap.min.js "></script>
+
+<!-- Custom Theme JavaScript -->
+<script src="/blog/js/hux-blog.min.js "></script>
+
+<!-- Simple Jekyll Search -->
+<script src="/blog/js/simple-jekyll-search.min.js"></script>
+
+<!-- Service Worker -->
+
+<script src="/blog/js/snackbar.js "></script>
+<script src="/blog/js/sw-registration.js "></script>
+
+
+<!-- async load function -->
+<script>
+    function async(u, c) {
+        var d = document, t = 'script',
+            o = d.createElement(t),
+            s = d.getElementsByTagName(t)[0];
+        o.src = u;
+        if (c) { o.addEventListener('load', function (e) { c(null, e); }, false); }
+        s.parentNode.insertBefore(o, s);
+    }
+</script>
+
+<!--
+     Because of the native support for backtick-style fenced code blocks
+     right within the Markdown is landed in Github Pages,
+     From V1.6, There is no need for Highlight.js,
+     so Huxblog drops it officially.
+
+     - https://github.com/blog/2100-github-pages-now-faster-and-simpler-with-jekyll-3-0
+     - https://help.github.com/articles/creating-and-highlighting-code-blocks/
+     - https://github.com/jneen/rouge/wiki/list-of-supported-languages-and-lexers
+-->
+<!--
+    <script>
+        async("http://cdn.bootcss.com/highlight.js/8.6/highlight.min.js", function(){
+            hljs.initHighlightingOnLoad();
+        })
+    </script>
+    <link href="http://cdn.bootcss.com/highlight.js/8.6/styles/github.min.css" rel="stylesheet">
+-->
+
+
+
+
+
+
+
+<!--fastClick.js -->
+<script>
+    async("//cdnjs.cloudflare.com/ajax/libs/fastclick/1.0.6/fastclick.min.js", function () {
+        var $nav = document.querySelector("nav");
+        if ($nav) FastClick.attach($nav);
+    })
+</script>
+
+
+<!-- Google Analytics -->
+
+<script>
+    // dynamic User by Hujin
+    var _gaId = 'UA-49627206-1';
+    var _gaDomain = 'smallcoderhujin.github.io/blog/';
+
+    // Originial
+    (function (i, s, o, g, r, a, m) {
+        i['GoogleAnalyticsObject'] = r; i[r] = i[r] || function () {
+            (i[r].q = i[r].q || []).push(arguments)
+        }, i[r].l = 1 * new Date(); a = s.createElement(o),
+            m = s.getElementsByTagName(o)[0]; a.async = 1; a.src = g; m.parentNode.insertBefore(a, m)
+    })(window, document, 'script', '//www.google-analytics.com/analytics.js', 'ga');
+
+    ga('create', _gaId, _gaDomain);
+    ga('send', 'pageview');
+</script>
+
+
+
+<!-- Baidu Tongji -->
+
+
+
+<!-- Side Catalog -->
+
+<script type="text/javascript">
+    function generateCatalog(selector) {
+
+        // interop with multilangual 
+        if ('' == 'true') {
+            _containerSelector = 'div.post-container.active'
+        } else {
+            _containerSelector = 'div.post-container'
+        }
+
+        // init
+        var P = $(_containerSelector), a, n, t, l, i, c;
+        a = P.find('h1,h2,h3,h4,h5,h6');
+
+        // clean
+        $(selector).html('')
+
+        // appending
+        a.each(function () {
+            n = $(this).prop('tagName').toLowerCase();
+            i = "#" + $(this).prop('id');
+            t = $(this).text();
+            c = $('<a href="' + i + '" rel="nofollow">' + t + '</a>');
+            l = $('<li class="' + n + '_nav"></li>').append(c);
+            $(selector).append(l);
+        });
+        return true;
+    }
+
+    generateCatalog(".catalog-body");
+
+    // toggle side catalog
+    $(".catalog-toggle").click((function (e) {
+        e.preventDefault();
+        $('.side-catalog').toggleClass("fold")
+    }))
+
+    /*
+     * Doc: https://github.com/davist11/jQuery-One-Page-Nav
+     * Fork by Hujin to support padding
+     */
+    async("/blog/js/jquery.nav.js", function () {
+        $('.catalog-body').onePageNav({
+            currentClass: "active",
+            changeHash: !1,
+            easing: "swing",
+            filter: "",
+            scrollSpeed: 700,
+            scrollOffset: 0,
+            scrollThreshold: .2,
+            begin: null,
+            end: null,
+            scrollChange: null,
+            padding: 80
+        });
+    });
+</script>
+
+
+
+<!-- Multi-Lingual -->
+
+
+<!-- Simple Jekyll Search -->
+<script>
+    // https://stackoverflow.com/questions/1912501/unescape-html-entities-in-javascript
+    function htmlDecode(input) {
+        var e = document.createElement('textarea');
+        e.innerHTML = input;
+        // handle case of empty input
+        return e.childNodes.length === 0 ? "" : e.childNodes[0].nodeValue;
+    }
+
+    SimpleJekyllSearch({
+        searchInput: document.getElementById('search-input'),
+        resultsContainer: document.getElementById('search-results'),
+        json: '/search.json',
+        searchResultTemplate: '<div class="post-preview item"><a href="{url}"><h2 class="post-title">{title}</h2><h3 class="post-subtitle">{subtitle}</h3><hr></a></div>',
+        noResultsText: 'No results',
+        limit: 50,
+        fuzzy: false,
+        // a hack to get escaped subtitle unescaped. for some reason, 
+        // post.subtitle w/o escape filter nuke entire search.
+        templateMiddleware: function (prop, value, template) {
+            if (prop === 'subtitle' || prop === 'title') {
+                if (value.indexOf("code")) {
+                    return htmlDecode(value);
+                } else {
+                    return value;
+                }
+            }
+        }
+    });
+
+    $(document).ready(function () {
+        var $searchPage = $('.search-page');
+        var $searchOpen = $('.search-icon');
+        var $searchClose = $('.search-icon-close');
+        var $searchInput = $('#search-input');
+        var $body = $('body');
+
+        $searchOpen.on('click', function (e) {
+            e.preventDefault();
+            $searchPage.toggleClass('search-active');
+            var prevClasses = $body.attr('class') || '';
+            setTimeout(function () {
+                $body.addClass('no-scroll');
+            }, 400)
+
+            if ($searchPage.hasClass('search-active')) {
+                $searchClose.on('click', function (e) {
+                    e.preventDefault();
+                    $searchPage.removeClass('search-active');
+                    $body.attr('class', prevClasses);  // from closure 
+                });
+                $searchInput.focus();
+            }
+        });
+    });
+</script>
+
+
+<!-- Image to hack wechat -->
+<img src="/img/icon_wechat.png" width="0" height="0" />
+<!-- Migrate from head to bottom, no longer block render and still work -->
+
+</body>
+
+</html>

@@ -5,9 +5,1710 @@
     <description>Hujin，Openstack &amp; SDN &amp; Kubernetes Lover，Software Engineer，| 与你一起发现更大的世界</description>
     <link>http://0.0.0.0:4000/blog/</link>
     <atom:link href="http://0.0.0.0:4000/blog/feed.xml" rel="self" type="application/rss+xml" />
-    <pubDate>Tue, 07 Mar 2023 01:27:58 +0000</pubDate>
-    <lastBuildDate>Tue, 07 Mar 2023 01:27:58 +0000</lastBuildDate>
+    <pubDate>Tue, 14 Mar 2023 05:16:23 +0000</pubDate>
+    <lastBuildDate>Tue, 14 Mar 2023 05:16:23 +0000</lastBuildDate>
     <generator>Jekyll v4.2.2</generator>
+    
+      <item>
+        <title>Neuvector源码分析之 文件管理</title>
+        <description>&lt;h2 id=&quot;背景&quot;&gt;背景&lt;/h2&gt;
+
+&lt;p&gt;进程规则、文件规则、网络规则、dlp、waf都是在监控组下的功能。本次我们通过源码的方式来深入了解文件规则是如何实现的。
+文件规则支持用户自定义关注的文件、目录，设置规则的学习或者保护模式，相应的如果容器访问到了指定的文件，且文件规则设置保护模式，则对文件的写会产生告警。&lt;/p&gt;
+
+&lt;h2 id=&quot;架构图&quot;&gt;架构图&lt;/h2&gt;
+
+&lt;p&gt;&lt;img src=&quot;/blog/img/neuvector_file0.png&quot; alt=&quot;neuvector file&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;我们从几个维度来看neuvector的文件管理功能：&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;页面/接口用户下发的文件规则如何让每个节点的Agent服务感知的&lt;/li&gt;
+  &lt;li&gt;文件规则如何和容器关联起来的，Agent中是如何处理的&lt;/li&gt;
+  &lt;li&gt;对文件执行读写操作后Agent如何感知&lt;/li&gt;
+  &lt;li&gt;fanotify/inotify怎么处理文件的操作的&lt;/li&gt;
+  &lt;li&gt;文件管理怎么体现学习模式下学习&lt;/li&gt;
+  &lt;li&gt;文件操作告警信息怎么采集的，告警的规则是什么&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;下面我们带着这几个问题，来看看源码，我们先看第一个问题。&lt;/p&gt;
+
+&lt;h2 id=&quot;源码&quot;&gt;源码&lt;/h2&gt;
+
+&lt;h3 id=&quot;下发的文件规则如何到达每个节点的agent服务&quot;&gt;下发的文件规则如何到达每个节点的Agent服务&lt;/h3&gt;
+&lt;p&gt;&lt;img src=&quot;/blog/img/neuvector_file1.png&quot; alt=&quot;neuvector file&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;我们先看看界面新增文件规则的流程：&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;获取group对象，获取group中profile和rule两组数据&lt;/li&gt;
+  &lt;li&gt;profile是文件规则，rule是文件规则中应用规则&lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;将新增数据和已有数据合并，然后保存到数据库&lt;/p&gt;
+
+    &lt;p&gt;func handlerFileMonitorConfig(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+      …
+      // Check if we can config the profile. Only need authorize group
+      grp, err := cacher.GetGroupBrief(group, false, acc)
+      if err != nil {
+          restRespNotFoundLogAccessDenied(w, login, err)
+          return
+      }&lt;/p&gt;
+
+    &lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+55
+56
+57
+58
+59
+60
+61
+62
+63
+64
+65
+66
+67
+68
+69
+70
+71
+72
+73
+74
+75
+76
+77
+78
+79
+80
+81
+82
+83
+84
+85
+86
+87
+88
+89
+90
+91
+92
+93
+94
+95
+96
+97
+98
+99
+100
+101
+102
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;  if grp.Kind != share.GroupKindContainer {
+      // &quot;nodes&quot; : share.GroupKindNode
+      log.WithFields(log.Fields{&quot;group&quot;: group, &quot;kind&quot;: grp.Kind}).Error(&quot;Get profile failed!&quot;)
+      restRespError(w, http.StatusBadRequest, api.RESTErrObjectNotFound)
+      return
+  }
+
+  var profChanged bool
+  profConf, profRev := clusHelper.GetFileMonitorProfile(group)
+  ruleConf, ruleRev := clusHelper.GetFileAccessRule(group)
+
+  ...
+  // validate add
+  if config.AddFilters != nil {
+      for _, filter := range config.AddFilters {
+          path := filter.Filter
+          filter.Filter = filepath.Clean(filter.Filter)
+          if filter.Filter == &quot;.&quot; || filter.Filter == &quot;/&quot; {
+              restRespErrorMessage(w, http.StatusBadRequest, api.RESTErrInvalidRequest,
+                  fmt.Sprintf(&quot;Unsupported filter: %s[%s]&quot;, path, filter.Filter))
+              return
+          }
+
+          // append the &quot;/&quot; back
+          if path[len(path)-1:] == &quot;/&quot; {
+              filter.Filter += &quot;/&quot;
+          }
+
+          base, regex, ok := parseFileFilter(filter.Filter)
+          if !ok {
+              restRespErrorMessage(w, http.StatusBadRequest, api.RESTErrInvalidRequest,
+                  fmt.Sprintf(&quot;Unsupported filter: %s&quot;, filter.Filter))
+              return
+          }
+
+          for i, cfilter := range profConf.Filters {
+              if cfilter.Filter == filter.Filter {
+                  // conflict, delete predefined
+                  if !cfilter.CustomerAdd {
+                      profConf.Filters = append(profConf.Filters[:i], profConf.Filters[i+1:]...)
+                      // replace the rule below
+                      idx := utils.FilterIndexKey(cfilter.Path, cfilter.Regex)
+                      delete(ruleConf.Filters, idx)
+                      break
+                  } else {
+                      restRespErrorMessage(w, http.StatusBadRequest, api.RESTErrInvalidRequest,
+                          fmt.Sprintf(&quot;duplicate filter: %s&quot;, filter.Filter))
+                      return
+                  }
+              }
+          }
+          flt := share.CLUSFileMonitorFilter{
+              Filter:      filter.Filter,
+              Path:        base,
+              Regex:       regex,
+              Recursive:   filter.Recursive,
+              CustomerAdd: true,
+          }
+          if fileAccessOptionSet.Contains(filter.Behavior) {
+              flt.Behavior = filter.Behavior
+          } else {
+              restRespErrorMessage(w, http.StatusBadRequest, api.RESTErrInvalidRequest, &quot;Invalid File access option&quot;)
+              return
+          }
+
+          profConf.Filters = append(profConf.Filters, flt)
+          // add rule
+          idx := utils.FilterIndexKey(flt.Path, flt.Regex)
+          capps := make([]string, len(filter.Apps))
+          for j, app := range filter.Apps {
+              capps[j] = app
+          }
+          frule := &amp;amp;share.CLUSFileAccessFilterRule{
+              Apps:        capps,
+              CreatedAt:   tm,
+              UpdatedAt:   tm,
+              Behavior:    flt.Behavior,
+              CustomerAdd: true,
+          }
+          ruleConf.Filters[idx] = frule
+          profChanged = true
+      }
+  }
+
+  ...
+
+  if profChanged {
+      // Write to cluster
+      if err := clusHelper.PutFileMonitorProfile(group, profConf, profRev); err != nil {
+          log.WithFields(log.Fields{&quot;error&quot;: err}).Error(&quot;Write cluster fail&quot;)
+          restRespError(w, http.StatusInternalServerError, api.RESTErrFailWriteCluster)
+          return
+      }
+  }
+  // Write access rule
+  if err := clusHelper.PutFileAccessRule(group, ruleConf, ruleRev); err != nil {
+      log.WithFields(log.Fields{&quot;error&quot;: err}).Error(&quot;Write cluster fail&quot;)
+      restRespError(w, http.StatusInternalServerError, api.RESTErrFailWriteCluster)
+      return
+  }
+
+  ...
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;    &lt;/div&gt;
+  &lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;看看数据怎么保存的，这里有个小坑：&lt;/p&gt;
+&lt;ul&gt;
+  &lt;li&gt;默认数据保存在/object/config/file_monitor/&lt;group-name&gt;下面&lt;/group-name&gt;&lt;/li&gt;
+  &lt;li&gt;在保存数据前还有一个DuplicateNetworkKey操作，会将数据保存一份到/node/&lt;node-id&gt;/common/profile/file/&lt;group-name&gt;下面&lt;/group-name&gt;&lt;/node-id&gt;&lt;/li&gt;
+  &lt;li&gt;后面那个保存位置的数据会被每个enforcer watch&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;PutFileMonitorProfile:&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;func (m clusterHelper) PutFileMonitorProfile(name string, conf *share.CLUSFileMonitorProfile, rev uint64) error {
+    key := share.CLUSFileMonitorKey(name)
+    value, _ := json.Marshal(conf)
+    m.DuplicateNetworkKey(key, value)
+    return cluster.PutRev(key, value, rev)
+}
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;上面看了controller中数据保存流程，下面来看看enforcer中数据watch流程&lt;/p&gt;
+
+&lt;p&gt;和其他功能类似，肯定有个地方在watch这个数据变化，然后执行一些操作,这里先看file_monitor部分的逻辑（access_rule是类似的）&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;func profileDerivedProc(nType cluster.ClusterNotifyType, key string, value []byte) {
+    which := share.CLUSNetworkKey2Subject(key)
+    value, _ = utils.UnzipDataIfValid(value)
+    // log.WithFields(log.Fields{&quot;key&quot;: key}).Debug(&quot;GRP:&quot;)
+    switch which {
+    case share.ProfileGroup:                     // group
+        systemConfigGroup(nType, key, value)
+    case share.ProfileProcess:                   // process
+        profileConfigGroup(nType, key, value)
+    case share.ProfileFileMonitor:               // file
+        systemConfigFileMonitor(nType, key, value)  
+    case share.ProfileFileAccess:                // fileAccess
+        systemConfigFileAccessRule(nType, key, value)
+    case share.ProfileScript:                    // script, 这个在数据库里没找到
+        systemConfigScript(nType, key, value)
+    default:
+        log.WithFields(log.Fields{&quot;derived&quot;: which}).Debug(&quot;Miss handler&quot;)
+    }
+}
+
+func systemConfigFileMonitor(nType cluster.ClusterNotifyType, key string, value []byte) {
+  switch nType {
+  case cluster.ClusterNotifyAdd, cluster.ClusterNotifyModify:
+      ...
+      updateGroupProfileCache(nType, name, profile)   // 这里重点看下这个函数
+  case cluster.ClusterNotifyDelete: // required no group member that means no belonged containers, either
+  }   }
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h3 id=&quot;文件规则和监控组容器关联&quot;&gt;文件规则和监控组、容器关联&lt;/h3&gt;
+
+&lt;p&gt;用户规则创建后保存到数据库，enforcer watch到数据变化会更新本地内存数据&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;对比内存数据，不一致则更新&lt;/li&gt;
+  &lt;li&gt;targets是当前group中容器id列表&lt;/li&gt;
+  &lt;li&gt;可以看到grpNotifyFile是当前节点所有容器id的集合&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;updateGroupProfileCache:&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;func updateGroupProfileCache(nType cluster.ClusterNotifyType, name string, obj interface{}) bool {
+    ...
+    targets := utils.NewSet()
+    switch obj.(type) {
+    ...
+    case share.CLUSFileMonitorProfile:
+        file := obj.(share.CLUSFileMonitorProfile)
+        if file.Mode != grpCache.file.Mode || len(grpCache.file.Filters) == 0 || reflect.DeepEqual(file.Filters, grpCache.file.Filters) == false {
+            for i, _ := range file.Filters {
+                file.Filters[i].DerivedGroup = name // late filled-up to save kv storages
+            }
+            grpCache.file = &amp;amp;file
+            targets = grpCache.members.Clone()
+            if targets.Cardinality() &amp;gt; 0 {
+                fileUpdated = true
+            }
+        }
+    ...
+
+    if fileUpdated {
+        grpNotifyFile = grpNotifyFile.Union(targets)
+    }
+
+    targets.Clear()
+    targets = nil
+    return true
+}
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;看到这里有点好奇，group和容器是怎么关联上的，也就是上面代码中grpCache.members在哪里维护的：&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;在enforcer中监听runtime事件时，会监听容器的创建事件，对应的回调函数有个groupWorkloadJoin&lt;/li&gt;
+  &lt;li&gt;在groupWorkloadJoin中根据workload的learnedGroupName获取对应的系统组，然后加入&lt;/li&gt;
+  &lt;li&gt;用户自定义组根据Criteria和domain来识别是否包含此workload&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;registerEventHandlers&amp;amp;groupWorkloadJoin:&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;func registerEventHandlers() {
+    ...
+    evhdls.Register(EV_WORKLOAD_START, []eventHandlerFunc{
+        groupWorkloadJoin,
+        scanWorkloadAdd,
+    })
+    ...
+
+
+func groupWorkloadJoin(id string, param interface{}) {
+    ...
+    if cache, ok := groupCacheMap[wlc.learnedGroupName]; !ok || isDummyGroupCache(cache) {
+        ...
+    } else {
+        if !cache.members.Contains(wl.ID) {
+            wlc.groups.Add(wlc.learnedGroupName)
+            cache.members.Add(wl.ID)
+            memberUpdated = true
+            log.WithFields(log.Fields{&quot;group&quot;: wlc.learnedGroupName}).Debug(&quot;Join group&quot;)
+        }
+    }
+
+    // Join user defined group
+    for _, cache := range groupCacheMap {
+        if cache.group.CfgType == share.Learned {
+            continue
+        }
+
+        if share.IsGroupMember(cache.group, wlc.workload) {
+            if !cache.members.Contains(wl.ID) {
+                wlc.groups.Add(cache.group.Name)
+                cache.members.Add(wl.ID)
+                memberUpdated = true
+                log.WithFields(log.Fields{&quot;group&quot;: cache.group.Name}).Debug(&quot;Join group&quot;)
+            }
+    ...
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;到这里我们可以看到内存中的数据一直在实时更新，监控组和容器的关系也建立好了，文件规则也更新到了指定组对象了，如何使用这些数据呢，我们继续往下看&lt;/p&gt;
+
+&lt;h3 id=&quot;定时更新fanotify关注的容器文件&quot;&gt;定时更新fanotify关注的容器文件&lt;/h3&gt;
+
+&lt;p&gt;&lt;img src=&quot;/blog/img/neuvector_file2.png&quot; alt=&quot;neuvector file&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;enforcer中创建了一个定时任务，每隔5s执行一次，遍历所有容器，将内存中的文件规则应用到的fanotify中&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;func fileMemberChanges(members utils.Set) {
+    log.WithFields(log.Fields{&quot;count&quot;: members.Cardinality()}).Debug(&quot;GRP:&quot;)
+    for cid := range members.Iter() {
+        ...
+        c, ok := gInfo.activeContainers[id]
+        gInfoRUnlock()
+        if ok {
+            applyFileGroupProfile(c)
+        } ...
+}
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;在applyFileGroupProfile中涉及三个主要流程：&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;calculateFileGroupProfile： 根据用户创建的文件规则筛选出所有相关file，根据监控组模式设置file的mask属性&lt;/li&gt;
+  &lt;li&gt;更新容器matchRules：将计算到的file/access规则添加到workload对象中（纯数据转换处理逻辑）&lt;/li&gt;
+  &lt;li&gt;StartWatch：将file添加到fanotify中&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;calculateFileGroupProfile就是获取内存中group的file和access规则，
+getFileMonitorProfile会加载数据库中的数据，如果内存不存在指定的group信息时&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;func calculateFileGroupProfile(id, svc string) (*share.CLUSFileMonitorProfile, *share.CLUSFileAccessRule, bool) {
+    log.WithFields(log.Fields{&quot;id&quot;: id, &quot;svc&quot;: svc}).Debug(&quot;GRP: &quot;)
+
+    file := &amp;amp;share.CLUSFileMonitorProfile{
+        Filters:    make([]share.CLUSFileMonitorFilter, 0),
+        FiltersCRD: make([]share.CLUSFileMonitorFilter, 0),
+    }
+    ...
+    for _, grpCache := range grpProfileCacheMap {
+        if grpCache.members.Contains(id) {
+            file.Filters = append(file.Filters, grpCache.file.Filters...)
+            file.FiltersCRD = append(file.FiltersCRD, grpCache.file.FiltersCRD...)
+            mergeFileAccessProfile(access, grpCache.access)
+        }
+    }
+    grpCacheLock.Unlock()
+
+    // log.WithFields(log.Fields{&quot;filter&quot;: file.Filters}).Debug(&quot;GRP:&quot;)
+    ok, svc_file := getFileMonitorProfile(svc)
+    if !ok {
+        log.WithFields(log.Fields{&quot;id&quot;: id, &quot;svc&quot;: svc}).Debug(&quot;GRP: no file profile&quot;)
+        return nil, nil, false
+    }
+
+    // basic information
+    file.Group = svc_file.Group
+    file.Mode = svc_file.Mode
+
+    // merge regular files
+    file.Filters = append(file.Filters, svc_file.Filters...)
+    file.Filters = mergeFileMonitorProfile(file.Filters)
+    ...
+    return file, access, true
+}
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;我们重点看下StartWatch方法&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;func (w *FileWatch) StartWatch(id string, rootPid int, conf *FsmonConfig, capBlock, bNeuvectorSvc bool) {
+    ...
+    dirs, files := w.getCoreFile(id, rootPid, conf.Profile)
+
+    w.fanotifier.SetMode(rootPid, access, perm, capBlock, bNeuvectorSvc)
+
+    w.addCoreFile(id, dirs, files)
+
+    w.fanotifier.StartMonitor(rootPid)
+    ...
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;getCoreFile: 会根据用户下发的文件规则（path可能带*）会获取所有相关的目录和文件路径&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;func (w *FileWatch) getCoreFile(cid string, pid int, profile *share.CLUSFileMonitorProfile) (map[string]*osutil.FileInfoExt, []*osutil.FileInfoExt) {
+    dirList := make(map[string]*osutil.FileInfoExt)
+    singleFiles := make([]*osutil.FileInfoExt, 0)
+
+    // get files and dirs from all filters
+    for _, filter := range profile.Filters {
+        flt := &amp;amp;filterRegex{path: filterIndexKey(filter)}
+        flt.regex, _ = regexp.Compile(fmt.Sprintf(&quot;^%s$&quot;, flt.path))
+        bBlockAccess := filter.Behavior == share.FileAccessBehaviorBlock
+        bUserAdded := filter.CustomerAdd
+        if strings.Contains(filter.Path, &quot;*&quot;) {
+            subDirs := w.getSubDirList(pid, filter.Path, cid)
+            for _, sub := range subDirs {
+                singles := w.getDirAndFileList(pid, sub, filter.Regex, cid, flt, filter.Recursive, bBlockAccess, bUserAdded, dirList)
+                singleFiles = append(singleFiles, singles...)
+            }
+        } else {
+            singles := w.getDirAndFileList(pid, filter.Path, filter.Regex, cid, flt, filter.Recursive, bBlockAccess, bUserAdded, dirList)
+            singleFiles = append(singleFiles, singles...)
+        }
+    }
+
+    ...
+    return dirList, singleFiles
+}
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;SetMode：内存中创建rootFd对象，需要注意一点如果监控组是保护模式会设置permControl为true，这个在后面处理文件事件会用到&lt;/p&gt;
+
+&lt;p&gt;addCoreFile&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;向fanotify注册需要关注的文件列表，以及设置文件mask，以addFile为例&lt;/li&gt;
+  &lt;li&gt;这里如果监控path是包管理路径会额外再调用inotify来监控&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;addCoreFile&amp;amp;addFile:&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;func (w *FileWatch) addCoreFile(cid string, dirList map[string]*osutil.FileInfoExt, singleFiles []*osutil.FileInfoExt) {
+    // add files
+    for _, finfo := range singleFiles {
+        // need to move the cross link files to dirs
+        di, ok := dirList[filepath.Dir(finfo.Path)]
+        if ok &amp;amp;&amp;amp; !isRunTimeAddedFile(finfo.Path) {
+            finfo.Filter = di.Filter
+            di.Children = append(di.Children, finfo)
+        } else {
+            finfo.ContainerId = cid
+            w.addFile(finfo)
+        }
+    }
+
+    // add directories
+    ...
+} 
+
+
+func (w *FileWatch) addFile(finfo *osutil.FileInfoExt) {
+    w.fanotifier.AddMonitorFile(finfo.Path, finfo.Filter, finfo.Protect, finfo.UserAdded, w.cbNotify, finfo)
+    if _, path := global.SYS.ParseContainerFilePath(finfo.Path); packageFile.Contains(path) {
+        w.inotifier.AddMonitorFile(finfo.Path, w.cbNotify, finfo)
+    }
+}
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;fanotify的addFile&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;path形如：/host/proc/17490/root/usr/bin，解析到容器的pid和操作的文件路径&lt;/li&gt;
+  &lt;li&gt;fn.roots[rootPid]得到容器的root fd&lt;/li&gt;
+  &lt;li&gt;这里注意mask的取值逻辑：userAdded/protect基本都符合可以忽略，permControl表示监控组是保护模式，configPerm正常是true，可以理解成监控组保护模式下默认给文件设置mask是FAN_OPEN_PERM，其他情况都是FAN_OPEN，这个需要结合后面fanotify事件的处理流程一起看&lt;/li&gt;
+  &lt;li&gt;这样就将所有需要监听的文件权限、路径、容器id等所有相关的元数据都处理好了，后面就是实际应用到fanotify中了&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;addFile&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;func (fn *FaNotify) addFile(path string, filter interface{}, protect, isDir, userAdded bool, files map[string]interface{}, cb NotifyCallback, params interface{}) bool {
+    ...
+    rootPid, rPath, err := ParseMonitorPath(path)
+    ...
+    r, ok := fn.roots[rootPid]
+    ...
+
+    var mask uint64 = faMarkMask
+    if userAdded || protect { // user-defined or protected: including access control
+        if r.permControl { // protect mode
+            if fn.configPerm { // system-wise : access control is available
+                mask |= FAN_OPEN_PERM
+            } else {
+                mask |= FAN_OPEN
+            }
+        } else {
+            mask |= FAN_OPEN
+        }
+    }
+
+    var file *IFile
+    if isDir {
+        ...
+
+    } else {
+        if _, ok = r.paths[rPath]; ok {
+            return false
+        }
+        file = &amp;amp;IFile{
+            path:    path,
+            mask:    mask,
+            params:  params,
+            cb:      cb,
+            filter:  filter.(*filterRegex),
+            protect: protect,         // access control
+            learnt:  r.accessMonitor, // discover mode
+            userAdd: userAdded,
+        }
+
+        r.paths[rPath] = file
+    }
+...
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;fa.StartMonitor真正将文件规则应用到fanotify&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;这里的Mark是调用fanotify，给出需要监控的文件路径、文件事件、权限&lt;/li&gt;
+  &lt;li&gt;addHostNetworkFilesCopiedFiles是将hostnetwork的容器中一些通用的文件（/etc/hosts /etc/resolv.conf）进行监控&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;StartMonitor:&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;func (fn *FaNotify) StartMonitor(rootPid int) bool {
+    ...
+    r, ok := fn.roots[rootPid]
+    ...
+
+    ppath := fmt.Sprintf(procRootMountPoint, rootPid)
+    for dir, mask := range r.dirMonitorMap {
+        path := ppath + dir
+        if err := fn.fa.Mark(faMarkAddFlags, mask, unix.AT_FDCWD, path); err != nil {
+            log.WithFields(log.Fields{&quot;path&quot;: path, &quot;error&quot;: err}).Error(&quot;FMON:&quot;)
+        } else {
+            mLog.WithFields(log.Fields{&quot;path&quot;: path, &quot;mask&quot;: fmt.Sprintf(&quot;0x%08x&quot;, mask)}).Debug(&quot;FMON:&quot;)
+        }
+    }
+
+    //
+    fn.addHostNetworkFilesCopiedFiles(r)
+    return ok
+}
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;到这里已经将用户下发的文件规则，关联到group，关联到具体的容器（workload）中，同时也将用户规则进行重计算，得到一个完整的文件集合，
+将需要关注（监控）的文件以及事件等细节都告诉了fanotify和inotify，下面就看看实际watch到文件事件后如何处理了&lt;/p&gt;
+
+&lt;h3 id=&quot;文件操作的感知&quot;&gt;文件操作的感知&lt;/h3&gt;
+
+&lt;p&gt;&lt;img src=&quot;/blog/img/neuvector_file3.png&quot; alt=&quot;neuvector file&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;上面直接调用fn.fa.Mark去告诉fanotify需要关注的文件，但是这个对象哪里来的？&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;NewFaNotify: 初始化fanotify&lt;/li&gt;
+  &lt;li&gt;NewInotify: 初始化inotify&lt;/li&gt;
+  &lt;li&gt;MonitorFileEvents：监听来自fanotify和inotify的文件事件并处理&lt;/li&gt;
+  &lt;li&gt;fw.loop：这个后面我们讲&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;NewFileWatcher:&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;func NewFileWatcher(config *FileMonitorConfig) (*FileWatch, error) {
+    ...
+
+    n, err := NewFaNotify(config.EndChan, config.PidLookup, global.SYS)
+    if err != nil {
+        log.WithFields(log.Fields{&quot;error&quot;: err}).Error(&quot;Open fanotify fail&quot;)
+        return nil, err
+    }
+    ni, err := NewInotify()
+    if err != nil {
+        log.WithFields(log.Fields{&quot;error&quot;: err}).Error(&quot;Open inotify fail&quot;)
+        return nil, err
+    }
+
+    go n.MonitorFileEvents()
+    go ni.MonitorFileEvents()
+
+    fw := &amp;amp;FileWatch{
+        aufs:       config.IsAufs,
+        fanotifier: n,
+        inotifier:  ni,
+        fileEvents: make(map[string]*fileMod),
+        groups:     make(map[int]*groupInfo),
+        sendrpt:    config.SendReport,
+        sendRule:   config.SendAccessRule,
+        estRuleSrc: config.EstRule,
+        walkerTask: config.WalkerTask,
+    }
+    go fw.loop()
+    ...
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;文件事件处理：&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;在获取到文件事件后，获取事件中进程pid、容器的root fd、文件mask&lt;/li&gt;
+  &lt;li&gt;这里如果文件fmask是FAN_OPEN_PERM，则perm是1。前面提过如果监控组是保护模式，则会设置对应文件的mask是FAN_OPEN_PERM&lt;/li&gt;
+  &lt;li&gt;resp：用来给fanotify回复的结果，计算方式见下文的流程图&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;handleEvents:&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;func (fn *FaNotify) handleEvents() error {
+    for {
+        ev, err := fn.fa.GetEvent()
+        ...
+        pid := int(ev.Pid)
+        fd := int(ev.File.Fd())
+        fmask := uint64(ev.Mask)
+        perm := (fmask &amp;amp; (FAN_OPEN_PERM | FAN_ACCESS_PERM)) &amp;gt; 0
+        ...
+        resp, mask, ifile, pInfo := fn.calculateResponse(pid, fd, fmask, perm)
+        if perm {
+            fn.fa.Response(ev, resp)
+        }
+        ev.File.Close()
+        ...
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;&lt;img src=&quot;/blog/img/neuvector_file4.png&quot; alt=&quot;neuvector file&quot; /&gt;&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;resp的值默认是true&lt;/li&gt;
+  &lt;li&gt;如果文件规则是保护模式，且操作进程不在允许的应用中，则resp是false&lt;/li&gt;
+  &lt;li&gt;将fmask转换成mask（一个操作会有多个事件，只有第一个事件中fmask是设置过的）&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;calculateResponse:&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;func (fn *FaNotify) calculateResponse(pid, fd int, fmask uint64, perm bool) (bool, uint32, *IFile, *ProcInfo) {
+    ...
+
+    ifile, _, mask := fn.lookupFile(r, linkPath, pInfo)
+    if ifile == nil {
+        return true, mask, nil, nil
+    }
+
+    // log.WithFields(log.Fields{&quot;protect&quot;: ifile.protect, &quot;perm&quot;: perm, &quot;path&quot;: linkPath, &quot;ifile&quot;: ifile, &quot;evMask&quot;: fmt.Sprintf(&quot;0x%08x&quot;, fmask)}).Debug(&quot;FMON:&quot;)
+
+    // permition decision
+    resp := true
+    if ifile.protect { // always verify app for block-access
+        resp = fn.lookupRule(r, ifile, pInfo, linkPath)
+        // log.WithFields(log.Fields{&quot;resp&quot;: resp}).Debug(&quot;FMON:&quot;)
+    }
+
+    if (fmask &amp;amp; FAN_MODIFY) &amp;gt; 0 {
+        mask |= syscall.IN_MODIFY
+        log.WithFields(log.Fields{&quot;path&quot;: linkPath}).Info(&quot;FMON: modified&quot;)
+    } else if (fmask &amp;amp; FAN_CLOSE_WRITE) &amp;gt; 0 {
+        mask |= syscall.IN_CLOSE_WRITE
+        log.WithFields(log.Fields{&quot;path&quot;: linkPath}).Info(&quot;FMON: cls_wr&quot;)
+    } else {
+        mask |= syscall.IN_ACCESS
+            log.WithFields(log.Fields{&quot;path&quot;: linkPath}).Info(&quot;FMON: read&quot;)
+        if fn.isFileException(false, linkPath, pInfo, mask) {
+            resp = true
+            mask &amp;amp;^= syscall.IN_ACCESS
+        }
+    }
+
+    if perm &amp;amp;&amp;amp; !resp {
+        pInfo.Deny = true
+        log.WithFields(log.Fields{&quot;path&quot;: linkPath, &quot;app&quot;: pInfo.Path}).Debug(&quot;FMON: denied&quot;)
+    }
+    return resp, mask, ifile, pInfo
+}
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;综合看一下&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/blog/img/neuvector_file5.png&quot; alt=&quot;neuvector file&quot; /&gt;&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;只有监控组是保护模式的时候perm才是true&lt;/li&gt;
+  &lt;li&gt;perm是true的时候才会给fanotify发送response，其他时候都不会发送&lt;/li&gt;
+  &lt;li&gt;只有文件规则是保护模式的时候resp才是false，其他时候都是true&lt;/li&gt;
+  &lt;li&gt;换句话说：只有监控组是保护模式且文件规则是保护模式的时候fanotify才会阻断文件操作，其他都是允许&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 id=&quot;规则学习--告警信息上报&quot;&gt;规则学习 &amp;amp; 告警信息上报&lt;/h3&gt;
+
+&lt;p&gt;&lt;img src=&quot;/blog/img/neuvector_file6.png&quot; alt=&quot;neuvector file&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;前面看了文件事件处理流程，但是我们忽略了一个细节&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;这里有个change参数，用来判断文件是否被修改&lt;/li&gt;
+  &lt;li&gt;当fmask是FAN_CLOSE_WRITE表示文件被修改&lt;/li&gt;
+  &lt;li&gt;当文件规则是学习模式，或者保护模式下修改了文件 事件都需要report&lt;/li&gt;
+  &lt;li&gt;文件被修改或者需要上报都需要调用回调函数&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;handleEvents:&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;func (fn *FaNotify) handleEvents() error {
+    for {
+        ev, err := fn.fa.GetEvent()
+        ...
+        change := (fmask &amp;amp; FAN_CLOSE_WRITE) &amp;gt; 0
+        // log.WithFields(log.Fields{&quot;ifile&quot;: ifile, &quot;pInfo&quot;: pInfo, &quot;Resp&quot;: resp, &quot;Change&quot;: change, &quot;Perm&quot;: perm}).Debug(&quot;FMON:&quot;)
+
+        var bReporting bool
+        if ifile.learnt { // discover mode
+            bReporting = ifile.userAdd // learn app for customer-added entry
+        } else { // monitor or protect mode
+            allowRead := resp &amp;amp;&amp;amp; !change
+            bReporting = (allowRead == false) // allowed app by block_access
+        }
+
+        if bReporting || change { // report changed file
+            ifile.cb(ifile.path, mask, ifile.params, pInfo)
+        }
+    }
+    return nil
+}
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;回调函数： 只是将事件更新或者保存到内存中，那事件在哪里处理的呢？&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;func (w *FileWatch) cbNotify(filePath string, mask uint32, params interface{}, pInfo *ProcInfo) {
+    //ignore the container remove event. they are too many
+    if (mask&amp;amp;syscall.IN_IGNORED) != 0 || (mask&amp;amp;syscall.IN_UNMOUNT) != 0 {
+        w.inotifier.RemoveMonitorFile(filePath)
+        return
+    }
+
+    w.mux.Lock()
+    defer w.mux.Unlock()
+    if fm, ok := w.fileEvents[filePath]; ok {
+        fm.mask |= mask
+        fm.delay = 0
+        fm.pInfo = append(fm.pInfo, pInfo)
+    } else {
+        pi := make([]*ProcInfo, 1)
+        pi[0] = pInfo
+        w.fileEvents[filePath] = &amp;amp;fileMod{
+            mask:  mask,
+            delay: 0,
+            finfo: params.(*osutil.FileInfoExt),
+            pInfo: pi,
+        }
+    }
+}
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;这里在enforcer启动时创建了两个定时任务，分别用来处理事件和学习规则用&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;HandleWatchedFiles会根据路径类型（文件还是目录）调用对应的处理方法&lt;/li&gt;
+  &lt;li&gt;reportLearningRules:后面细讲&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;HandleWatchedFiles:&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;func (w *FileWatch) HandleWatchedFiles() {
+    events := make(map[string]*fileMod)
+    w.mux.Lock()
+    for filePath, fmod := range w.fileEvents {
+        events[filePath] = fmod
+        delete(w.fileEvents, filePath)
+    }
+    w.mux.Unlock()
+
+    for fullPath, fmod := range events {
+        pid, path := global.SYS.ParseContainerFilePath(fullPath)
+        //to avoid false alarm of /etc/hosts and /etc/resolv.conf, check whether the container is still exist
+        //these two files has attribute changed when the container leave
+        //this maybe miss some events file changed right before container leave. But for these kind of event,
+        //it is not useful if the container already leave
+        //	log.WithFields(log.Fields{&quot;pid&quot;: pid, &quot;path&quot;: path, &quot;pInfo&quot;: fmod.pInfo[0], &quot;fInfo&quot;: fmod.finfo}).Debug(&quot;FMON:&quot;)
+        //	if fmod.pInfo != nil {
+        //		log.WithFields(log.Fields{&quot;pInfo&quot;: fmod.pInfo[0]}).Debug(&quot;FMON:&quot;)
+        //	}
+        rootPath := global.SYS.ContainerProcFilePath(pid, &quot;&quot;)
+        if _, err := os.Stat(rootPath); err == nil &amp;amp;&amp;amp; path != &quot;&quot; {
+            var event uint32
+            info, _ := os.Lstat(fullPath)
+            if fmod.finfo.FileMode.IsDir() {
+                event = w.handleDirEvents(fmod, info, fullPath, path, pid)
+            } else {
+                event = w.handleFileEvents(fmod, info, fullPath, pid)
+            }
+            if event != 0 {
+                w.learnFromEvents(pid, fmod, path, event)
+            }
+        }
+    }
+}
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;这里我们看看文件事件处理逻辑&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;如果用户删除文件规则后，会更新enforcer内存数据，也就是将fileinfo删除，这里的info就是nil了，也就需要让fanotify知道不再需要关注这些文件了，执行RemoveMonitorFile方法&lt;/li&gt;
+  &lt;li&gt;这里的event是文件操作类型参数，不为空时调用learnFromEvents&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;handleFileEvents:&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;func (w *FileWatch) handleFileEvents(fmod *fileMod, info os.FileInfo, fullPath string, pid int) uint32 {
+    var event uint32
+    if info != nil {
+        if info.Mode() != fmod.finfo.FileMode {
+            //attribute is changed
+            event = fileEventAttr
+            fmod.finfo.FileMode = info.Mode()
+        }
+        // check the hash existing and match
+        // skip directory new file event, report later
+        hash, err := osutil.GetFileHash(fullPath)
+        if err != nil &amp;amp;&amp;amp; !osutil.HashZero(fmod.finfo.Hash) ||
+            err == nil &amp;amp;&amp;amp; hash != fmod.finfo.Hash ||
+            fmod.finfo.Size != info.Size() {
+            event |= fileEventModified
+            fmod.finfo.Hash = hash
+        } else if (fmod.mask &amp;amp; syscall.IN_ACCESS) &amp;gt; 0 {
+            event |= fileEventAccessed
+        }
+        if (fmod.finfo.FileMode &amp;amp; os.ModeSymlink) != 0 {
+            //handle symlink
+            rpath, err := osutil.GetContainerRealFilePath(pid, fullPath)
+            if err == nil &amp;amp;&amp;amp; fmod.finfo.Link != rpath {
+                event |= fileEventSymModified
+            }
+        }
+        if (fmod.mask &amp;amp; inodeChangeMask) &amp;gt; 0 {
+            w.removeFile(fullPath)
+            w.addFile(fmod.finfo)
+        }
+    } else {
+        //file is removed
+        event = fileEventRemoved
+        w.fanotifier.RemoveMonitorFile(fullPath)
+    }
+    return event
+}
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;规则学习：&lt;/p&gt;
+&lt;ul&gt;
+  &lt;li&gt;如果监控组是学习模式，且进程访问的文件path匹配到文件规则，会将进程path保存到监控组的learnRules中（这个数据后面还有一个定时任务来处理）&lt;/li&gt;
+  &lt;li&gt;通过最后的判断条件可以看出：非文件访问或者非学习模式下才发告警&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;learnFromEvents:&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;func (w *FileWatch) learnFromEvents(rootPid int, fmod *fileMod, path string, event uint32) {
+    ...
+    grp, ok := w.groups[rootPid]
+    mode := grp.mode
+    if mode == share.PolicyModeLearn {
+        flt := fmod.finfo.Filter.(*filterRegex)
+        if applyRules, ok := grp.applyRules[flt.path]; ok {
+            learnRules, ok := grp.learnRules[flt.path]
+            if !ok {
+                learnRules = utils.NewSet()
+            }
+            for _, pf := range fmod.pInfo {
+                // only use the process name/path as profile
+                if pf != nil &amp;amp;&amp;amp; pf.Path != &quot;&quot; {
+                    if !applyRules.Contains(pf.Path) &amp;amp;&amp;amp; !learnRules.Contains(pf.Path) {
+                        learnRules.Add(pf.Path)
+                        log.WithFields(log.Fields{&quot;rule&quot;: pf.Path, &quot;filter&quot;: flt}).Debug(&quot;FMON:&quot;)
+                    }
+                }
+            }
+            // for inotify, cannot learn
+            if learnRules.Cardinality() &amp;gt; 0 {
+                grp.learnRules[flt.path] = learnRules
+            }
+        } else {
+            log.WithFields(log.Fields{&quot;path&quot;: path}).Debug(&quot;FMON: no access rules&quot;)
+        }
+    }
+    w.mux.Unlock()
+
+    if event != fileEventAccessed ||
+        (mode == share.PolicyModeEnforce || mode == share.PolicyModeEvaluate) {
+        w.sendMsg(fmod.finfo.ContainerId, path, event, fmod.pInfo, mode)
+    }
+}
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h3 id=&quot;规则学习&quot;&gt;规则学习&lt;/h3&gt;
+&lt;p&gt;这里有个注意点，学习模式下文件管理和进程管理工作模式有点区别：&lt;/p&gt;
+&lt;ul&gt;
+  &lt;li&gt;进程管理会自动学习新的进程规则，并添加到数据库&lt;/li&gt;
+  &lt;li&gt;文件管理的规则必须手动创建，只会自动学习应用并添加到对应的规则中（规则允许的应用属性）&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;在enforcer中还有一个定时任务，用来处理内存中学习到的文件应用数据&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;func (w *FileWatch) reportLearningRules() {
+    learnRules := make([]*share.CLUSFileAccessRuleReq, 0)
+    w.mux.Lock()
+    for _, grp := range w.groups {
+        if len(grp.learnRules) &amp;gt; 0 {
+            for flt, rule := range grp.learnRules {
+                for itr := range rule.Iter() {
+                    prf := itr.(string)
+                    rl := &amp;amp;share.CLUSFileAccessRuleReq{
+                        GroupName: grp.profile.Group,
+                        Filter:    flt,
+                        Path:      prf,
+                    }
+                    learnRules = append(learnRules, rl)
+                }
+            }
+            grp.learnRules = make(map[string]utils.Set)
+        }
+    }
+    w.mux.Unlock()
+    if len(learnRules) &amp;gt; 0 {
+        w.sendRule(learnRules)
+    }
+}
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;可以看到通过grpc调用ReportFileAccessRule将学习到的应用发送给controller&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;func sendLearnedFileAccessRule(rules []*share.CLUSFileAccessRuleReq) error {
+    log.WithFields(log.Fields{&quot;rules&quot;: len(rules)}).Debug(&quot;&quot;)
+    client, err := getControllerServiceClient()
+    if err != nil {
+        log.WithFields(log.Fields{&quot;error&quot;: err}).Error(&quot;Failed to find ctrl client&quot;)
+        return fmt.Errorf(&quot;Fail to find controller client&quot;)
+    }
+
+    ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
+    defer cancel()
+
+    ruleArray := &amp;amp;share.CLUSFileAccessRuleArray{
+        Rules: rules,
+    }
+
+    _, err = client.ReportFileAccessRule(ctx, ruleArray)
+    if err != nil {
+        log.WithFields(log.Fields{&quot;error&quot;: err}).Debug(&quot;Fail to report file rule to controller&quot;)
+        return fmt.Errorf(&quot;Fail to report file rule to controller&quot;)
+    }
+    return nil
+}
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;在controller中有个定时任务来处理学习到的文件规则，有兴趣的可以再看下代码，最终就是调用PutFileAccessRule保存到数据库&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;func FileReportBkgSvc() {
+    for {
+        if len(chanFileRules) &amp;gt; 0 {
+            if kv.IsImporting() {
+                for i := 0; i &amp;lt; len(chanFileRules); i++ {
+                    &amp;lt;-chanFileRules
+                }
+            } else {
+                if lock, _ := clusHelper.AcquireLock(share.CLUSLockPolicyKey, policyClusterLockWait); lock != nil {
+                    for i := 0; i &amp;lt; len(chanFileRules) &amp;amp;&amp;amp; i &amp;lt; 16; i++ {
+                        rules := &amp;lt;-chanFileRules
+                        updateFileMonitorProfile(rules)
+                    }
+                    clusHelper.ReleaseLock(lock)
+                }
+            }
+        } else {
+            time.Sleep(time.Millisecond * 100) // yield
+        }
+    }
+}
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h2 id=&quot;总结&quot;&gt;总结&lt;/h2&gt;
+
+&lt;p&gt;我们从几位维度去看待文件管理这个功能，了解了文件规则如何下发到enforcer，enforcer如何监控当前节点所有容器的文件操作，文件事件如何处理，
+文件学习如何实现。最终呈现在我们面前的文件管理是这样的：&lt;/p&gt;
+
+&lt;table&gt;
+  &lt;thead&gt;
+    &lt;tr&gt;
+      &lt;th&gt;对象&lt;/th&gt;
+      &lt;th&gt;模式&lt;/th&gt;
+      &lt;th&gt; &lt;/th&gt;
+      &lt;th&gt; &lt;/th&gt;
+      &lt;th&gt; &lt;/th&gt;
+      &lt;th&gt; &lt;/th&gt;
+      &lt;th&gt; &lt;/th&gt;
+    &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+    &lt;tr&gt;
+      &lt;td&gt;监控组&lt;/td&gt;
+      &lt;td&gt;学习&lt;/td&gt;
+      &lt;td&gt;学习&lt;/td&gt;
+      &lt;td&gt;告警&lt;/td&gt;
+      &lt;td&gt;告警&lt;/td&gt;
+      &lt;td&gt;保护&lt;/td&gt;
+      &lt;td&gt;保护&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;文件规则&lt;/td&gt;
+      &lt;td&gt;告警&lt;/td&gt;
+      &lt;td&gt;保护&lt;/td&gt;
+      &lt;td&gt;告警&lt;/td&gt;
+      &lt;td&gt;保护&lt;/td&gt;
+      &lt;td&gt;告警&lt;/td&gt;
+      &lt;td&gt;保护&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;读告警&lt;/td&gt;
+      &lt;td&gt;否&lt;/td&gt;
+      &lt;td&gt;否&lt;/td&gt;
+      &lt;td&gt;否&lt;/td&gt;
+      &lt;td&gt;否&lt;/td&gt;
+      &lt;td&gt;否&lt;/td&gt;
+      &lt;td&gt;否&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;写告警&lt;/td&gt;
+      &lt;td&gt;是&lt;/td&gt;
+      &lt;td&gt;是&lt;/td&gt;
+      &lt;td&gt;是&lt;/td&gt;
+      &lt;td&gt;是&lt;/td&gt;
+      &lt;td&gt;是&lt;/td&gt;
+      &lt;td&gt;否&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;阻断&amp;amp;告警&lt;/td&gt;
+      &lt;td&gt;否&lt;/td&gt;
+      &lt;td&gt;否&lt;/td&gt;
+      &lt;td&gt;否&lt;/td&gt;
+      &lt;td&gt;否&lt;/td&gt;
+      &lt;td&gt;否&lt;/td&gt;
+      &lt;td&gt;是&lt;/td&gt;
+    &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+
+&lt;p&gt;进程管理和文件管理的代码流程基本一致，可以参考来看&lt;/p&gt;
+
+&lt;p&gt;以上是代码逻辑以及一些个人理解，有问题的地方可以及时微信联系我更正&lt;/p&gt;
+</description>
+        <pubDate>Tue, 14 Mar 2023 00:00:00 +0000</pubDate>
+        <link>http://0.0.0.0:4000/blog/2023/03/14/neuvector-file/</link>
+        <guid isPermaLink="true">http://0.0.0.0:4000/blog/2023/03/14/neuvector-file/</guid>
+        
+        <category>neuvector</category>
+        
+        <category>文件管理</category>
+        
+        <category>fanotify</category>
+        
+        <category>inotify</category>
+        
+        
+      </item>
     
       <item>
         <title>Calico单节点网络实现</title>
@@ -3440,324 +5141,6 @@ spec:
         <category>istio</category>
         
         <category>bookinfo</category>
-        
-        
-      </item>
-    
-      <item>
-        <title>Istio集成测试</title>
-        <description>&lt;h2 id=&quot;简介&quot;&gt;简介&lt;/h2&gt;
-&lt;p&gt;istio集成测试使用go test，会自动读取源码目录下面名为 *_test.go 的文件，生成并运行测试用的可执行文件。istio集成测试脚本中根据case定义一般会先部署istio集群，再部署对应的echo instance，最后执行具体的case。&lt;/p&gt;
-
-&lt;h2 id=&quot;准备&quot;&gt;准备&lt;/h2&gt;
-&lt;p&gt;修改master节点apiserver参数
-这里需要支持第三方token(third-party-token)，默认k8s使用first-party-jwt&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;cat /etc/kubernetes/manifests/kube-apiserver.yaml
-...
-- --service-account-signing-key-file=/etc/kubernetes/ssl/sa.key
-- --service-account-key-file=/etc/kubernetes/ssl/sa.pub
-- --service-account-issuer=api
-- --service-account-api-audiences=api,vault,factors
-...
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;安装metallb组件&lt;/p&gt;
-
-&lt;p&gt;由于istio集成测试时会部署loadbalancer类型的service，在独立的k8s环境中没有上有的LB提供服务，因此需要引入metallb组件&lt;/p&gt;
-
-&lt;p&gt;metallb分为l2模式和bgp模式，这里我们使用l2模式&lt;/p&gt;
-
-&lt;p&gt;开启strictARP&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;# see what changes would be made, returns nonzero returncode if different
-kubectl get configmap kube-proxy -n kube-system -o yaml | \
-sed -e &quot;s/strictARP: false/strictARP: true/&quot; | \
-kubectl diff -f - -n kube-system
-
-# actually apply the changes, returns nonzero returncode on errors only
-kubectl get configmap kube-proxy -n kube-system -o yaml | \
-sed -e &quot;s/strictARP: false/strictARP: true/&quot; | \
-kubectl apply -f - -n kube-system
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;创建metallb-system namespace&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.11.0/manifests/namespace.yaml
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;下载configmap，并修改address参数，预留一段k8s管理网络IP段给Loadbalancer类型的service使用&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;wget https://github.com/metallb/metallb/blob/v0.11.0/manifests/example-layer2-config.yaml
-vi example-layer2-config.yaml
-mv example-layer2-config.yaml l2-config.yaml
-kubectl apply -f l2-config.yaml
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;安装metallb speaker和controller等资源&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.11.0/manifests/metallb.yaml
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;提前下载的镜像&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;gcr.io/istio-testing/app:1.12-dev
-gcr.io/istio-testing/operator:1.12-dev
-gcr.io/istio-testing/proxyv2:1.12-dev
-gcr.io/istio-testing/pilot:1.12-dev
-gcr.io/istio-testing/app_sidecar_ubuntu_bionic:1.12-dev
-gcr.io/istio-testing/fake-gce-metadata:1.0
-gcr.io/istio-testing/ext-authz:0.7
-
-jimmidyson/configmap-reload:v0.5.0
-envoyproxy/ratelimit:6f5de117
-openzipkin/zipkin-slim:2.23.0
-gcr.io/istio-release/pilot:1.6.11
-gcr.io/istio-release/pilot:1.7.6
-gcr.io/istio-release/pilot:1.8.6
-gcr.io/istio-release/pilot:1.9.5
-gcr.io/istio-release/pilot:1.10.0
-gcr.io/istio-release/proxyv2:1.11.3
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;下载istio源码，当前测试的版本是release-1.12&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;git clone https://github.com/istio/istio.git -b release-1.12
-cd istio
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;h2 id=&quot;集成测试&quot;&gt;集成测试&lt;/h2&gt;
-&lt;p&gt;go test命令行参数介绍&lt;/p&gt;
-
-&lt;ul&gt;
-  &lt;li&gt;-p 允许并行执行通过调用 t.Parallel 的测试函数的最大次数&lt;/li&gt;
-  &lt;li&gt;-vet 在 “go test “期间对 “go vet ” 的调用，以使用逗号分隔的vet检查列表, off表示不执行go vet&lt;/li&gt;
-  &lt;li&gt;-v 显示测试的详细命令&lt;/li&gt;
-  &lt;li&gt;-count 运行每个测试和基准测试的次数（默认 1）&lt;/li&gt;
-  &lt;li&gt;-timeout 执行二进制文件超时时间，超过会报panic&lt;/li&gt;
-  &lt;li&gt;-tags&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;h3 id=&quot;telemetry集成测试&quot;&gt;telemetry集成测试&lt;/h3&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;go test -p 1 -vet=off -v -count=1 -tags=integ ./tests/integration/telemetry/... -timeout 30m \
---istio.test.istio.istiodlessRemotes --istio.test.ci --istio.test.work_dir=/logs/artifacts \
---istio.test.tag=1.12-dev --istio.test.pullpolicy=IfNotPresent
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;telemetry失败case:&lt;/p&gt;
-&lt;ul&gt;
-  &lt;li&gt;TestVMTelemetry: 依赖谷歌的GCP项目 &lt;a href=&quot;https://github.com/istio/istio/issues/35923&quot;&gt;https://github.com/istio/istio/issues/35923&lt;/a&gt;，需要临时删除这个case： git rm -r tests/integration/telemetry/stackdriver/vm/&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;h3 id=&quot;security集成测试&quot;&gt;security集成测试&lt;/h3&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;go test -p 1 -vet=off -v -count=1 -tags=integ ./tests/integration/security/... -timeout 30m \
---istio.test.work_dir=/logs/artifacts --istio.test.tag=1.12-dev \
---istio.test.pullpolicy=IfNotPresent --istio.test.skip TestAuthorization_JWT \
---istio.test.skip TestAuthorization_EgressGateway \
---istio.test.skip TestRequestAuthentication \
---istio.test.skip TestIngressRequestAuthentication
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;security失败case:&lt;/p&gt;
-&lt;ul&gt;
-  &lt;li&gt;TestAuthorization_JWT:&lt;/li&gt;
-  &lt;li&gt;TestAuthorization_EgressGateway:&lt;/li&gt;
-  &lt;li&gt;TestRequestAuthentication:&lt;/li&gt;
-  &lt;li&gt;TestIngressRequestAuthentication:&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;h3 id=&quot;pilot集成测试&quot;&gt;pilot集成测试&lt;/h3&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;go test -p 1 -vet=off -v -count=1 -tags=integ ./tests/integration/pilot/... -timeout 30m \
---istio.test.work_dir=/logs/artifacts --istio.test.tag=1.12-dev \
---istio.test.pullpolicy=IfNotPresent --istio.test.skip TestCustomGateway \
---istio.test.skip TestTproxy \
---istio.test.skip TestTraffic
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;pilot失败case&lt;/p&gt;
-&lt;ul&gt;
-  &lt;li&gt;TestCustomGateway&lt;/li&gt;
-  &lt;li&gt;TestTproxy&lt;/li&gt;
-  &lt;li&gt;TestTraffic&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;h3 id=&quot;helm集成测试&quot;&gt;helm集成测试&lt;/h3&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;go test -p 1 -vet=off -v -count=1 -tags=integ ./tests/integration/helm/... -timeout 30m \
---istio.test.work_dir=/logs/artifacts --istio.test.tag=1.12-dev \
---istio.test.pullpolicy=IfNotPresent
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;h3 id=&quot;operator集成测试&quot;&gt;operator集成测试&lt;/h3&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;go test -p 1 -vet=off -v -count=1 -tags=integ ./tests/integration/operator/... -timeout 30m \
---istio.test.work_dir=/logs/artifacts --istio.test.tag=1.12-dev \
---istio.test.pullpolicy=IfNotPresent
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;h3 id=&quot;总结&quot;&gt;总结&lt;/h3&gt;
-
-&lt;table&gt;
-  &lt;thead&gt;
-    &lt;tr&gt;
-      &lt;th&gt;组件&lt;/th&gt;
-      &lt;th&gt;case数量(total:nopass)&lt;/th&gt;
-      &lt;th&gt;执行时间（m）&lt;/th&gt;
-      &lt;th&gt;备注&lt;/th&gt;
-    &lt;/tr&gt;
-  &lt;/thead&gt;
-  &lt;tbody&gt;
-    &lt;tr&gt;
-      &lt;td&gt;helm&lt;/td&gt;
-      &lt;td&gt;7:7&lt;/td&gt;
-      &lt;td&gt;6&lt;/td&gt;
-      &lt;td&gt; &lt;/td&gt;
-    &lt;/tr&gt;
-    &lt;tr&gt;
-      &lt;td&gt;operator&lt;/td&gt;
-      &lt;td&gt;3:0&lt;/td&gt;
-      &lt;td&gt;6&lt;/td&gt;
-      &lt;td&gt; &lt;/td&gt;
-    &lt;/tr&gt;
-    &lt;tr&gt;
-      &lt;td&gt;pilot&lt;/td&gt;
-      &lt;td&gt;60:3&lt;/td&gt;
-      &lt;td&gt;18&lt;/td&gt;
-      &lt;td&gt; &lt;/td&gt;
-    &lt;/tr&gt;
-    &lt;tr&gt;
-      &lt;td&gt;security&lt;/td&gt;
-      &lt;td&gt;48:4&lt;/td&gt;
-      &lt;td&gt;12&lt;/td&gt;
-      &lt;td&gt;都和jwt相关&lt;/td&gt;
-    &lt;/tr&gt;
-    &lt;tr&gt;
-      &lt;td&gt;telemetry&lt;/td&gt;
-      &lt;td&gt;32:1&lt;/td&gt;
-      &lt;td&gt;30&lt;/td&gt;
-      &lt;td&gt;依赖谷歌的GCP项目，无法执行通过&lt;/td&gt;
-    &lt;/tr&gt;
-    &lt;tr&gt;
-      &lt;td&gt;总计&lt;/td&gt;
-      &lt;td&gt;150：15&lt;/td&gt;
-      &lt;td&gt;72&lt;/td&gt;
-      &lt;td&gt; &lt;/td&gt;
-    &lt;/tr&gt;
-  &lt;/tbody&gt;
-&lt;/table&gt;
-
-&lt;p&gt;注意：执行完成后需要执行清理操作，防止残留&lt;/p&gt;
-
-&lt;h2 id=&quot;清理脚本&quot;&gt;清理脚本&lt;/h2&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;for ns in default ingress-nginx metallb-system;
-do
-kubectl delete cm istio-ca-root-cert -n $ns;
-done
-
-for ns in 1- service- se- app- istio- gce-metadata default- stable- external- echo- test-ns canary;
-do
-for i in `kubectl get ns |grep $ns |awk &apos;{print $1}&apos;`;do kubectl delete all --all -n $i --force &amp;amp;&amp;amp; kubectl delete cm -n $i istio-ca-root-cert &amp;amp; done;
-done
-
-for ns in 1- service- se- app- istio- gce-metadata default- stable- external- echo- test-ns canary;
-do
-for i in `kubectl get ns |grep $ns |awk &apos;{print $1}&apos;`;do kubectl delete namespace $i --force;done;
-done
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;h2 id=&quot;参考&quot;&gt;参考&lt;/h2&gt;
-&lt;ul&gt;
-  &lt;li&gt;集成测试官方文档：https://github.com/istio/istio/tree/master/tests/integration&lt;/li&gt;
-  &lt;li&gt;metallb部署：https://metallb.universe.tf/installation/&lt;/li&gt;
-  &lt;li&gt;jwt配置：https://imroc.cc/istio/troubleshooting/istio-token-setup-failed-for-volume-istio-token/&lt;/li&gt;
-&lt;/ul&gt;
-</description>
-        <pubDate>Fri, 24 Dec 2021 00:00:00 +0000</pubDate>
-        <link>http://0.0.0.0:4000/blog/2021/12/24/istio-integration-test/</link>
-        <guid isPermaLink="true">http://0.0.0.0:4000/blog/2021/12/24/istio-integration-test/</guid>
-        
-        <category>istio</category>
-        
-        <category>integration-test</category>
         
         
       </item>

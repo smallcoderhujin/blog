@@ -234,6 +234,40 @@
             ">
     			
 <div class="post-preview">
+    <a href="/blog/2023/03/14/neuvector-file/">
+        <h2 class="post-title">
+            Neuvector源码分析之 文件管理
+        </h2>
+        
+        <h3 class="post-subtitle">
+            
+        </h3>
+        
+        <div class="post-content-preview">
+            
+                背景
+
+进程规则、文件规则、网络规则、dlp、waf都是在监控组下的功能。本次我们通过源码的方式来深入了解文件规则是如何实现的。
+文件规则支持用户自定义关注的文件、目录，设置规则的学习或者保护模式，相应的如果容器访问到了指定的文件，且文件规则设置保护模式，则对文件的写会产生告警。
+
+架构图
+
+
+
+我们从几个维度来看neuvector的文件管理功能：
+
+
+  页面/接口用户下发的文件规则如何让...
+            
+        </div>
+    </a>
+    <p class="post-meta">
+        Posted by hujin on March 14, 2023
+    </p>
+</div>
+<hr>
+
+<div class="post-preview">
     <a href="/blog/2023/02/27/calico-route/">
         <h2 class="post-title">
             Calico单节点网络实现
@@ -535,33 +569,6 @@ cat /etc/h...
 </div>
 <hr>
 
-<div class="post-preview">
-    <a href="/blog/2021/12/24/istio-integration-test/">
-        <h2 class="post-title">
-            Istio集成测试
-        </h2>
-        
-        <h3 class="post-subtitle">
-            
-        </h3>
-        
-        <div class="post-content-preview">
-            
-                简介
-istio集成测试使用go test，会自动读取源码目录下面名为 *_test.go 的文件，生成并运行测试用的可执行文件。istio集成测试脚本中根据case定义一般会先部署istio集群，再部署对应的echo instance，最后执行具体的case。
-
-准备
-修改master节点apiserver参数
-这里需要支持第三方token(third-party-token)，默认k8s...
-            
-        </div>
-    </a>
-    <p class="post-meta">
-        Posted by hujin on December 24, 2021
-    </p>
-</div>
-<hr>
-
 
 <!-- Pager -->
 
@@ -598,17 +605,17 @@ istio集成测试使用go test，会自动读取源码目录下面名为 *_test.
         
         
         
-                <a data-sort="0019" 
+                <a data-sort="0020" 
                     href="/blog/archive/?tag=kubernetes"
                     title="kubernetes"
                     rel="5">kubernetes</a>
         
-                <a data-sort="0017" 
+                <a data-sort="0018" 
                     href="/blog/archive/?tag=k8s"
                     title="k8s"
                     rel="7">k8s</a>
         
-                <a data-sort="0019" 
+                <a data-sort="0020" 
                     href="/blog/archive/?tag=cni"
                     title="cni"
                     rel="5">cni</a>
@@ -616,19 +623,19 @@ istio集成测试使用go test，会自动读取源码目录下面名为 *_test.
                 <a data-sort="0020" 
                     href="/blog/archive/?tag=neuvector"
                     title="neuvector"
-                    rel="4">neuvector</a>
+                    rel="5">neuvector</a>
         
-                <a data-sort="0021" 
+                <a data-sort="0022" 
                     href="/blog/archive/?tag=istio"
                     title="istio"
                     rel="3">istio</a>
         
-                <a data-sort="0022" 
+                <a data-sort="0023" 
                     href="/blog/archive/?tag=calico"
                     title="calico"
                     rel="2">calico</a>
         
-                <a data-sort="0022" 
+                <a data-sort="0023" 
                     href="/blog/archive/?tag=tungstenfabric"
                     title="tungstenfabric"
                     rel="2">tungstenfabric</a>

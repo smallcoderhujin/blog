@@ -236,6 +236,33 @@
             ">
     			
 <div class="post-preview">
+    <a href="/blog/2021/12/24/istio-integration-test/">
+        <h2 class="post-title">
+            Istio集成测试
+        </h2>
+        
+        <h3 class="post-subtitle">
+            
+        </h3>
+        
+        <div class="post-content-preview">
+            
+                简介
+istio集成测试使用go test，会自动读取源码目录下面名为 *_test.go 的文件，生成并运行测试用的可执行文件。istio集成测试脚本中根据case定义一般会先部署istio集群，再部署对应的echo instance，最后执行具体的case。
+
+准备
+修改master节点apiserver参数
+这里需要支持第三方token(third-party-token)，默认k8s...
+            
+        </div>
+    </a>
+    <p class="post-meta">
+        Posted by hujin on December 24, 2021
+    </p>
+</div>
+<hr>
+
+<div class="post-preview">
     <a href="/blog/2021/10/21/docker-package/">
         <h2 class="post-title">
             DockerCE20.10版本打包流程
@@ -533,55 +560,6 @@ Kuryr 是 OpenStack Neutron 的子项目，其主要目标是透过该项目来�
 </div>
 <hr>
 
-<div class="post-preview">
-    <a href="/blog/2021/03/04/k8s-gdb/">
-        <h2 class="post-title">
-            Golang Debug -- gdb
-        </h2>
-        
-        <h3 class="post-subtitle">
-            
-        </h3>
-        
-        <div class="post-content-preview">
-            
-                获取源码并编译
-
-1
-2
-3
-4
-5
-git clone https://github.com/coredns/coredns.git
-cd coredns
-go build -gcflags "-N -l" coredns.go
-
-yum install -y gdb
-
-
-debug
-
-1
-2
-3
-gdb coredns
-b coredns.go:11
-run
-
-
-参考
-
-
-  https...
-            
-        </div>
-    </a>
-    <p class="post-meta">
-        Posted by hujin on March 4, 2021
-    </p>
-</div>
-<hr>
-
 
 <!-- Pager -->
 
@@ -622,17 +600,17 @@ run
         
         
         
-                <a data-sort="0019" 
+                <a data-sort="0020" 
                     href="/blog/archive/?tag=kubernetes"
                     title="kubernetes"
                     rel="5">kubernetes</a>
         
-                <a data-sort="0017" 
+                <a data-sort="0018" 
                     href="/blog/archive/?tag=k8s"
                     title="k8s"
                     rel="7">k8s</a>
         
-                <a data-sort="0019" 
+                <a data-sort="0020" 
                     href="/blog/archive/?tag=cni"
                     title="cni"
                     rel="5">cni</a>
@@ -640,19 +618,19 @@ run
                 <a data-sort="0020" 
                     href="/blog/archive/?tag=neuvector"
                     title="neuvector"
-                    rel="4">neuvector</a>
+                    rel="5">neuvector</a>
         
-                <a data-sort="0021" 
+                <a data-sort="0022" 
                     href="/blog/archive/?tag=istio"
                     title="istio"
                     rel="3">istio</a>
         
-                <a data-sort="0022" 
+                <a data-sort="0023" 
                     href="/blog/archive/?tag=calico"
                     title="calico"
                     rel="2">calico</a>
         
-                <a data-sort="0022" 
+                <a data-sort="0023" 
                     href="/blog/archive/?tag=tungstenfabric"
                     title="tungstenfabric"
                     rel="2">tungstenfabric</a>
