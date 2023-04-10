@@ -5,9 +5,488 @@
     <description>Hujin，Openstack &amp; SDN &amp; Kubernetes Lover，Software Engineer，| 与你一起发现更大的世界</description>
     <link>http://0.0.0.0:4000/blog/</link>
     <atom:link href="http://0.0.0.0:4000/blog/feed.xml" rel="self" type="application/rss+xml" />
-    <pubDate>Tue, 14 Mar 2023 05:25:57 +0000</pubDate>
-    <lastBuildDate>Tue, 14 Mar 2023 05:25:57 +0000</lastBuildDate>
+    <pubDate>Mon, 10 Apr 2023 03:32:33 +0000</pubDate>
+    <lastBuildDate>Mon, 10 Apr 2023 03:32:33 +0000</lastBuildDate>
     <generator>Jekyll v4.2.2</generator>
+    
+      <item>
+        <title>Docker容器的网络命名空间为什么不可见？</title>
+        <description>&lt;h2 id=&quot;背景&quot;&gt;背景&lt;/h2&gt;
+&lt;p&gt;因为做过openstack的虚拟网络，习惯使用netns去管理linux的网络命名空间，也一直理解容器网络应该是类似的。
+但是实际在使用时（runtime使用docker）发现每个非hostnetwork的容器创建后并不会查看到一个network namespace(通过ip netns ls查看)；
+在使用的runtime是containerd的时候呢，这个namespace又出现了，有点迷糊了，今天就专门看了这里面的原因&lt;/p&gt;
+
+&lt;h2 id=&quot;容器网络命名空间以及问题&quot;&gt;容器网络命名空间以及问题&lt;/h2&gt;
+&lt;p&gt;我们将研究Docker容器的网络名称空间文件的问题。具体来说，我们将了解为什么ip netns ls命令看不到网络名称空间文件。
+Docker容器的最基础层是Linux cgroup和名称空间机制。这两种机制协同工作，在Docker容器中提供我们所利用的进程和资源隔离。
+其中cgroups限制一个进程可以使用的资源，名称空间控制进程间资源的可见性。命名空间中一个类型就是网络命名空间(network namespace)。&lt;/p&gt;
+
+&lt;p&gt;network namespace实质上虚拟化并隔离了进程的网络堆栈。也就是说不同的进程可以有自己独特的防火墙配置、私有IP地址和路由规则。
+通过网络命名空间，我们可以为每个Docker容器提供一个与主机网络隔离的网络堆栈。&lt;/p&gt;
+
+&lt;p&gt;在Linux中，管理网络名称空间的主要工具之一是ip netns。这个命令行工具是ip工具的扩展。它允许我们在不同的网络名称空间上执行ip兼容的命令。&lt;/p&gt;
+
+&lt;p&gt;每当我们创建Docker容器时，守护进程都会为容器进程创建名称空间对应文件。然后，它会将这些文件放在目录/proc/{pid}/ns下，其中pid是容器的进程id。&lt;/p&gt;
+
+&lt;p&gt;让我们看一个例子:&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;$ sudo docker run --rm -d ubuntu:latest sleep infinity
+2545fdac9b41e463a29b4a61c201b789d567f88d54b6973bdcca9e69ba35ba92
+$ sudo docker inspect -f &apos;&apos; 2545fdac9b41e463a29b4a61c201b789d567f88d54b6973bdcca9e69ba35ba92
+3357
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;在上面的命令中，首先创建一个运行ubuntu:latest映像的Docker容器。然后，我们通过运行sleep infinity来保持容器运行。
+最后，我们运行docker inspect命令来获取容器的进程id。&lt;/p&gt;
+
+&lt;p&gt;现在，查看/proc/3357/ns目录，我们可以看到创建了所有不同种类的名称空间:&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;$ sudo ls -la /proc/3357/ns
+total 0
+dr-x--x--x 2 root root 0 Feb  5 04:24 .
+dr-xr-xr-x 9 root root 0 Feb  5 04:24 ..
+lrwxrwxrwx 1 root root 0 Feb  5 04:25 cgroup -&amp;gt; &apos;cgroup:[4026531835]&apos;
+lrwxrwxrwx 1 root root 0 Feb  5 04:25 ipc -&amp;gt; &apos;ipc:[4026532720]&apos;
+lrwxrwxrwx 1 root root 0 Feb  5 04:25 mnt -&amp;gt; &apos;mnt:[4026532718]&apos;
+lrwxrwxrwx 1 root root 0 Feb  5 04:24 net -&amp;gt; &apos;net:[4026532723]&apos;
+lrwxrwxrwx 1 root root 0 Feb  5 04:25 pid -&amp;gt; &apos;pid:[4026532721]&apos;
+lrwxrwxrwx 1 root root 0 Feb  5 04:25 pid_for_children -&amp;gt; &apos;pid:[4026532721]&apos;
+lrwxrwxrwx 1 root root 0 Feb  5 04:25 time -&amp;gt; &apos;time:[4026531834]&apos;
+lrwxrwxrwx 1 root root 0 Feb  5 04:25 time_for_children -&amp;gt; &apos;time:[4026531834]&apos;
+lrwxrwxrwx 1 root root 0 Feb  5 04:25 user -&amp;gt; &apos;user:[4026531837]&apos;
+lrwxrwxrwx 1 root root 0 Feb  5 04:25 uts -&amp;gt; &apos;uts:[4026532719]&apos;
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;从名称空间对应文件列表中，我们可以看到这个进程的net文件的存在。因为net文件对应于一个Linux网络名称空间，所以理论上我们现在可以列出所有network namespace，
+然而事实并非如此。现在运行ip netns ls将显示0个结果:&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;$ ip netns ls
+$
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;作为对比让我们手动创建一个网络名称空间。然后，验证它是否在我们运行ip netns时出现:&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;$ sudo ip netns add netA
+$ ip netns ls
+netA
+$
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;正如我们所看到的，它按照预期显示netA。那么为什么不显示docker run创建的network namespace呢？&lt;/p&gt;
+
+&lt;h2 id=&quot;不可见的原因丢失的文件引用&quot;&gt;不可见的原因：丢失的文件引用&lt;/h2&gt;
+
+&lt;p&gt;为了理解这个问题，我们需要知道ip netns ls命令其实是在/var/run/netns目录中查找网络名称空间文件。但是，Docker守护进程在创建后并不会在/var/run/netns目录中创建网络名称空间文件的引用。
+因此，ip netns ls无法解析网络命名空间文件。&lt;/p&gt;
+
+&lt;p&gt;解决这种不一致现象的方法是在/var/run/netns目录中为net文件创建一个文件引用。具体来说，我们可以将net名称空间文件绑定挂载到我们在/var/run/netns目录中创建的一个空文件上。&lt;/p&gt;
+
+&lt;p&gt;首先，我们在目录中创建一个空文件，并用名称空间文件所关联的容器id来命名它:&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;$ mkdir -p /var/run/netns
+$ touch /var/run/netns/$container_id
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;其中$container_id是一个环境变量，是创建的Docker容器的id&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;随后，我们可以运行mount -o bind命令来绑定挂载net文件:&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;$ mount -o bind /proc/3357/ns/net /var/run/netns/$container_id
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;3357是上面获取的容器的pid&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;现在，再次运行相同的ip netns ls命令，我们就能看到docker容器的网络命名空间了:&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;$ ip netns ls
+ip netns ls
+2545fdac9b41e463a29b4a61c201b789d567f88d54b6973bdcca9e69ba35ba92
+netA
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;建立了对网络名称空间文件的文件引用，我们就可以使用ip netns exec运行任何ip命令。例如，我们可以使用ip addr list命令查看网络命名空间上的接口:&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;$ ip netns exec $container_id ip addr list
+1: lo: &amp;lt;LOOPBACK,UP,LOWER_UP&amp;gt; mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+inet 127.0.0.1/8 scope host lo
+valid_lft forever preferred_lft forever
+4: eth0@if5: &amp;lt;BROADCAST,MULTICAST,UP,LOWER_UP&amp;gt; mtu 1500 qdisc noqueue state UP group default
+link/ether 02:42:ac:11:00:02 brd ff:ff:ff:ff:ff:ff link-netnsid 0
+inet 172.17.0.2/16 brd 172.17.255.255 scope global eth0
+valid_lft forever preferred_lft forever
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h2 id=&quot;containerd中如何实现网络命名空间的挂载的&quot;&gt;containerd中如何实现网络命名空间的挂载的&lt;/h2&gt;
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;[root@node1 ~]# kubectl cluster-info dump |grep containerRuntimeVersion
+&quot;f:containerRuntimeVersion&quot;: {},
+&quot;containerRuntimeVersion&quot;: &quot;containerd://1.6.6&quot;,
+&quot;f:containerRuntimeVersion&quot;: {},
+&quot;containerRuntimeVersion&quot;: &quot;containerd://1.6.6&quot;,
+&quot;f:containerRuntimeVersion&quot;: {},
+&quot;containerRuntimeVersion&quot;: &quot;containerd://1.6.6&quot;,
+[root@node1 ~]# ip netns
+cni-028380d7-7dcf-44f5-35a4-607654492671 (id: 1)
+cni-c37c9aee-54d5-baf1-a606-1c1865b83f6e (id: 0)
+cni-63d627ff-481c-20ac-7abe-42ce95db7d28 (id: 21)
+cni-1e075915-b90a-e7db-936d-569b71f45c2b (id: 20)
+cni-61035ce0-1910-0de3-d59e-837321c2e5e4 (id: 19)
+cni-05895113-0f27-8966-8db3-fb45bdd196fe (id: 18)
+cni-ac9ba39f-68a4-4fb4-3c14-9d0b893d5687 (id: 17)
+cni-ed0a2a49-bd79-775e-b2b1-70b0a662466b (id: 16)
+cni-27ad6830-a146-ec01-425c-b6e846cb0207 (id: 15)
+cni-cac98bd4-2a73-014f-5ef3-fe634ecdb9b6 (id: 14)
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;前面背景中提到的问题原因找到了，但是我们发现在使用containerd作为runtime时，是可以通过ip netns查看到容器的网络命名空间的，这是怎么做的呢？
+这里可以简单看下containerd的代码就清楚了:&lt;/p&gt;
+
+&lt;p&gt;containerd/pkg/cri/sbserver/sandbox_run.go&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;// RunPodSandbox creates and starts a pod-level sandbox. Runtimes should ensure
+// the sandbox is in ready state.
+func (c *criService) RunPodSandbox(ctx context.Context, r *runtime.RunPodSandboxRequest) (_ *runtime.RunPodSandboxResponse, retErr error) {
+    ...
+
+    // Create initial internal sandbox object.
+    sandbox := sandboxstore.NewSandbox(
+        sandboxstore.Metadata{
+            ID:             id,
+            Name:           name,
+            Config:         config,
+            RuntimeHandler: r.GetRuntimeHandler(),
+        },
+        sandboxstore.Status{
+            State: sandboxstore.StateUnknown,
+        },
+    )
+
+    if _, err := c.client.SandboxStore().Create(ctx, sandboxInfo); err != nil {
+        return nil, fmt.Errorf(&quot;failed to save sandbox metadata: %w&quot;, err)
+    }
+    ...
+
+    // Setup the network namespace if host networking wasn&apos;t requested.
+    if !hostNetwork(config) {
+        netStart := time.Now()
+        // If it is not in host network namespace then create a namespace and set the sandbox
+        // handle. NetNSPath in sandbox metadata and NetNS is non empty only for non host network
+        // namespaces. If the pod is in host network namespace then both are empty and should not
+        // be used.
+        var netnsMountDir = &quot;/var/run/netns&quot;
+        if c.config.NetNSMountsUnderStateDir {
+            netnsMountDir = filepath.Join(c.config.StateDir, &quot;netns&quot;)
+        }
+        sandbox.NetNS, err = netns.NewNetNS(netnsMountDir)
+        if err != nil {
+            return nil, fmt.Errorf(&quot;failed to create network namespace for sandbox %q: %w&quot;, id, err)
+        }
+        // Update network namespace in the store, which is used to generate the container&apos;s spec
+        sandbox.NetNSPath = sandbox.NetNS.GetPath()
+        ...
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;可以看到在创建容器时会创建一个sandbox容器用来共享网络命名空间，那就认为只有这个容器会对应一个网络命名空间，这里我们重点看NewNetNS方法的调用，最终调用newNS方法&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+55
+56
+57
+58
+59
+60
+61
+62
+63
+64
+65
+66
+67
+68
+69
+70
+71
+72
+73
+74
+75
+76
+77
+78
+79
+80
+81
+82
+83
+84
+85
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;func newNS(baseDir string, pid uint32) (nsPath string, err error) {
+    b := make([]byte, 16)
+
+    _, err = rand.Read(b)
+    if err != nil {
+        return &quot;&quot;, fmt.Errorf(&quot;failed to generate random netns name: %w&quot;, err)
+    }
+
+    // Create the directory for mounting network namespaces
+    // This needs to be a shared mountpoint in case it is mounted in to
+    // other namespaces (containers)
+    if err := os.MkdirAll(baseDir, 0755); err != nil {
+        return &quot;&quot;, err
+    }
+
+    // create an empty file at the mount point and fail if it already exists
+    nsName := fmt.Sprintf(&quot;cni-%x-%x-%x-%x-%x&quot;, b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
+    nsPath = path.Join(baseDir, nsName)
+    mountPointFd, err := os.OpenFile(nsPath, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0666)
+    if err != nil {
+        return &quot;&quot;, err
+    }
+    mountPointFd.Close()
+
+    defer func() {
+        // Ensure the mount point is cleaned up on errors
+        if err != nil {
+            os.RemoveAll(nsPath)
+        }
+    }()
+
+    if pid != 0 {
+        procNsPath := getNetNSPathFromPID(pid)
+        // bind mount the netns onto the mount point. This causes the namespace
+        // to persist, even when there are no threads in the ns.
+        if err = unix.Mount(procNsPath, nsPath, &quot;none&quot;, unix.MS_BIND, &quot;&quot;); err != nil {
+            return &quot;&quot;, fmt.Errorf(&quot;failed to bind mount ns src: %v at %s: %w&quot;, procNsPath, nsPath, err)
+        }
+        return nsPath, nil
+    }
+
+    var wg sync.WaitGroup
+    wg.Add(1)
+
+    // do namespace work in a dedicated goroutine, so that we can safely
+    // Lock/Unlock OSThread without upsetting the lock/unlock state of
+    // the caller of this function
+    go (func() {
+        defer wg.Done()
+        runtime.LockOSThread()
+        // Don&apos;t unlock. By not unlocking, golang will kill the OS thread when the
+        // goroutine is done (for go1.10+)
+
+        var origNS cnins.NetNS
+        origNS, err = cnins.GetNS(getCurrentThreadNetNSPath())
+        if err != nil {
+            return
+        }
+        defer origNS.Close()
+
+        // create a new netns on the current thread
+        err = unix.Unshare(unix.CLONE_NEWNET)
+        if err != nil {
+            return
+        }
+
+        // Put this thread back to the orig ns, since it might get reused (pre go1.10)
+        defer origNS.Set()
+
+        // bind mount the netns from the current thread (from /proc) onto the
+        // mount point. This causes the namespace to persist, even when there
+        // are no threads in the ns.
+        err = unix.Mount(getCurrentThreadNetNSPath(), nsPath, &quot;none&quot;, unix.MS_BIND, &quot;&quot;)
+        if err != nil {
+            err = fmt.Errorf(&quot;failed to bind mount ns at %s: %w&quot;, nsPath, err)
+        }
+    })()
+    wg.Wait()
+
+    if err != nil {
+        return &quot;&quot;, fmt.Errorf(&quot;failed to create namespace: %w&quot;, err)
+    }
+
+    return nsPath, nil
+}
+&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;这里baseDir是/var/run/netns，nsName是随机生成的36位字符串， pid是0&lt;/li&gt;
+  &lt;li&gt;getCurrentThreadNetNSPath方法直接返回的是容器的网络命名空间路径：/proc/{pid}/task/{pid}/ns/net&lt;/li&gt;
+  &lt;li&gt;最终将proc中网络命名空间mount到nsPath对应位置，和上面我们手动操作的情况类似&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&quot;总结&quot;&gt;总结&lt;/h2&gt;
+&lt;p&gt;本次我们从简单介绍Linux名称空间和cgroup开始。然后演示了当我们运行ip netns ls时，docker run创建的网络名称空间文件不显示的问题。
+随后解释了这是因为文件引用不是在/var/run/netns创建的，而ip netns ls命令只在这个目录中查找网络名称空间。&lt;/p&gt;
+
+&lt;p&gt;随后，我们以一个简单的修正结束了本文，即将文件绑定挂载到/var/run/netns，这样就可以通过ip netns ls找到它。
+最后通过查看containerd的代码发现它也是采用类似方式自动将文件mount到/var/run/netns目录下的，这样就比较方便的通过ip netns来管理容器的网络命名空间了，
+这里有个不太方便的地方是查询容器和这个network namespace的对应关系，从代码里也看到是随机生成的uuid&lt;/p&gt;
+</description>
+        <pubDate>Thu, 06 Apr 2023 00:00:00 +0000</pubDate>
+        <link>http://0.0.0.0:4000/blog/2023/04/06/netns/</link>
+        <guid isPermaLink="true">http://0.0.0.0:4000/blog/2023/04/06/netns/</guid>
+        
+        <category>docker</category>
+        
+        <category>netns</category>
+        
+        
+      </item>
     
       <item>
         <title>Neuvector源码分析之 文件管理</title>
@@ -4662,483 +5141,6 @@ kubectl apply -f calico.yaml
         <category>部署</category>
         
         <category>kubeadm</category>
-        
-        
-      </item>
-    
-      <item>
-        <title>Istio Bookinfo</title>
-        <description>&lt;h2 id=&quot;架构图&quot;&gt;架构图&lt;/h2&gt;
-&lt;p&gt;&lt;img src=&quot;https://istio.io/latest/zh/docs/examples/bookinfo/noistio.svg&quot; /&gt;&lt;/p&gt;
-
-&lt;p&gt;在k8s中通过deployment安装一些微服务并通过service暴露出来，包括&lt;/p&gt;
-&lt;ul&gt;
-  &lt;li&gt;productpage: python编写，服务主界面，或者叫index页面，页面中会访问其他微服务&lt;/li&gt;
-  &lt;li&gt;reviews： java编写，书籍评价微服务&lt;/li&gt;
-  &lt;li&gt;details： ruby编写，书籍详情信息微服务&lt;/li&gt;
-  &lt;li&gt;ratings： nodejs编写，数据推荐指数微服务，rating service的后端pod有三个，分别对应三个version&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;h2 id=&quot;部署&quot;&gt;部署&lt;/h2&gt;
-
-&lt;h3 id=&quot;部署原始应用deploymentservice等&quot;&gt;部署原始应用（deployment/service等）&lt;/h3&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;kubectl apply -f samples/bookinfo/platform/kube/bookinfo.yaml
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;查看安装结果&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;[root@controller01 ~]# kubectl get svc
-NAME          TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)    AGE
-details       ClusterIP   10.96.192.251   &amp;lt;none&amp;gt;        9080/TCP   87s
-kubernetes    ClusterIP   10.96.0.1       &amp;lt;none&amp;gt;        443/TCP    119d
-productpage   ClusterIP   10.96.93.53     &amp;lt;none&amp;gt;        9080/TCP   86s
-ratings       ClusterIP   10.96.137.195   &amp;lt;none&amp;gt;        9080/TCP   87s
-reviews       ClusterIP   10.96.146.191   &amp;lt;none&amp;gt;        9080/TCP   86s
-
-[root@controller01 ~]# kubectl get pods -owide
-NAME                              READY   STATUS    RESTARTS   AGE   IP               NODE           NOMINATED NODE   READINESS GATES
-details-v1-66b6955995-n4rwz       2/2     Running   0          92s   10.244.114.172   controller01   &amp;lt;none&amp;gt;           &amp;lt;none&amp;gt;
-productpage-v1-5d9b4c9849-mjrcf   2/2     Running   0          91s   10.244.114.141   controller01   &amp;lt;none&amp;gt;           &amp;lt;none&amp;gt;
-ratings-v1-fd78f799f-ckf66        2/2     Running   0          92s   10.244.114.187   controller01   &amp;lt;none&amp;gt;           &amp;lt;none&amp;gt;
-reviews-v1-6549ddccc5-gtstf       2/2     Running   0          92s   10.244.114.175   controller01   &amp;lt;none&amp;gt;           &amp;lt;none&amp;gt;
-reviews-v2-76c4865449-sz5dr       2/2     Running   0          92s   10.244.114.188   controller01   &amp;lt;none&amp;gt;           &amp;lt;none&amp;gt;
-reviews-v3-6b554c875-jdpn6        2/2     Running   0          92s   10.244.114.143   controller01   &amp;lt;none&amp;gt;           &amp;lt;none&amp;gt;
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;h3 id=&quot;此时服务可以通过k8s原生的service访问成功且rating-service有三个后端pod所以平均切换&quot;&gt;此时服务可以通过k8s原生的service访问成功，且rating service有三个后端pod，所以平均切换&lt;/h3&gt;
-&lt;p&gt;修改productpage service类型，改成nodeport（之前是clusterip）&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-20
-21
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;kubectl edit svc productpage
-apiVersion: v1
-kind: Service
-metadata:
-  labels:
-    app: productpage
-    service: productpage
-  name: productpage
-spec:
-  clusterIP: 112.96.53.21
-  clusterIPs:
-  - 112.96.53.21
-  ports:
-  - name: http
-    nodePort: 30607
-    port: 9080
-    protocol: TCP
-    targetPort: 9080
-  selector:
-    app: productpage
-  type: NodePort
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;通过http://[管理IP]:[svc-nodeport]/productpage来访问productpage服务&lt;/p&gt;
-
-&lt;blockquote&gt;
-  &lt;p&gt;上面演示的是原生k8s的service功能，通过管理IP和nodeport的方式访问productpage服务，下面我们将通过istio的方式来访问微服务&lt;/p&gt;
-&lt;/blockquote&gt;
-
-&lt;h3 id=&quot;启用istio-注入功能&quot;&gt;启用istio 注入功能&lt;/h3&gt;
-
-&lt;p&gt;允许default namespace自动注入istio sidecar&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;kubectl label namespace default istio-injection=enabled
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;重新部署所有微服务，注入istio sidecar&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;kubectl delete -f samples/bookinfo/platform/kube/bookinfo.yaml
-kubectl apply -f samples/bookinfo/platform/kube/bookinfo.yaml
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;创建gateway&lt;/p&gt;
-
-&lt;blockquote&gt;
-  &lt;p&gt;这里创建gateway，保证流量可以进入ingressgateway，并进行转发&lt;/p&gt;
-&lt;/blockquote&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;[root@controller01 ~]# kubectl apply -f istio-1.11.2/samples/bookinfo/networking/bookinfo-gateway.yaml 
-gateway.networking.istio.io/bookinfo-gateway created
-virtualservice.networking.istio.io/bookinfo created
-
-
-[root@controller01 ~]# kubectl get gateway
-NAME               AGE
-bookinfo-gateway   109s
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;获取Istio Ingress Gateway的外部端口：&lt;/p&gt;
-
-&lt;blockquote&gt;
-  &lt;p&gt;注意这里的31460 nodeport，需要通过这个访问bookinfo入口服务&lt;/p&gt;
-&lt;/blockquote&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;[root@controller01 ~]# kubectl get svc -n istio-system |grep gateway
-istio-egressgateway    ClusterIP      10.96.188.75    &amp;lt;none&amp;gt;        80/TCP,443/TCP                                                               4m8s
-istio-ingressgateway   LoadBalancer   10.96.156.24    &amp;lt;pending&amp;gt;     15021:31717/TCP,80:31460/TCP,443:30052/TCP,31400:32767/TCP,15443:30069/TCP   4m8s
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;创建destination rules, 配置路由访问规则：&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;kubectl apply -f samples/bookinfo/networking/destination-rule-all.yaml
-
-[root@nested-istio-node1 networking]# kubectl get destinationrule 
-NAME          HOST          AGE
-details       details       15h
-productpage   productpage   15h
-ratings       ratings       15h
-reviews       reviews       15h
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;blockquote&gt;
-  &lt;p&gt;此时bookinfo的virtualservice只是将流量转发到productpage这个destination v1上，其他destination只是创建，未被引用&lt;/p&gt;
-&lt;/blockquote&gt;
-
-&lt;blockquote&gt;
-  &lt;p&gt;此时访问页面，页面中review微服务还是会三个版本平均切换的&lt;/p&gt;
-&lt;/blockquote&gt;
-
-&lt;h2 id=&quot;智能路由&quot;&gt;智能路由&lt;/h2&gt;
-
-&lt;h3 id=&quot;根据版本路由&quot;&gt;根据版本路由&lt;/h3&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-20
-21
-22
-23
-24
-25
-26
-27
-28
-29
-30
-31
-32
-33
-34
-35
-36
-37
-38
-39
-40
-41
-42
-43
-44
-45
-46
-47
-48
-49
-50
-51
-52
-53
-54
-55
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;kubectl apply -f samples/bookinfo/networking/virtual-service-all-v1.yaml
-
-cat samples/bookinfo/networking/virtual-service-all-v1.yaml
-apiVersion: networking.istio.io/v1alpha3
-kind: VirtualService
-metadata:
-  name: productpage
-spec:
-  hosts:
-  - productpage
-  http:
-  - route:
-    - destination:
-        host: productpage
-        subset: v1
----
-apiVersion: networking.istio.io/v1alpha3
-kind: VirtualService
-metadata:
-  name: reviews
-spec:
-  hosts:
-  - reviews
-  http:
-  - route:
-    - destination:
-        host: reviews
-        subset: v1
----
-apiVersion: networking.istio.io/v1alpha3
-kind: VirtualService
-metadata:
-  name: ratings
-spec:
-  hosts:
-  - ratings
-  http:
-  - route:
-    - destination:
-        host: ratings
-        subset: v1
----
-apiVersion: networking.istio.io/v1alpha3
-kind: VirtualService
-metadata:
-  name: details
-spec:
-  hosts:
-  - details
-  http:
-  - route:
-    - destination:
-        host: details
-        subset: v1
----
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;blockquote&gt;
-  &lt;p&gt;这里创建了几个service，并将流量都转发到各自的v1 destinationrule上（demo中只有rating有多版本），访问服务，发现不管怎么刷页面，都看不到星星，因为v1版本没星星&lt;/p&gt;
-&lt;/blockquote&gt;
-
-&lt;h3 id=&quot;根据用户路由&quot;&gt;根据用户路由&lt;/h3&gt;
-
-&lt;p&gt;在vs中定义转发规则，如果发现header中有个jason用户信息，转发到v2，否则转发到v1后端pod&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-20
-21
-22
-23
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;kubectl delete -f samples/bookinfo/networking/virtual-service-all-v1.yaml
-kubectl apply -f samples/bookinfo/networking/virtual-service-reviews-test-v2.yaml
-
-apiVersion: networking.istio.io/v1alpha3
-kind: VirtualService
-metadata:
-  name: reviews
-spec:
-  hosts:
-    - reviews
-  http:
-  - match:
-    - headers:
-        end-user:
-          exact: jason
-    route:
-    - destination:
-        host: reviews
-        subset: v2
-  - route:
-    - destination:
-        host: reviews
-        subset: v1
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;blockquote&gt;
-  &lt;p&gt;再次访问，用jason用户登录就能看到黑星星，而其它方式看到的页面都是无星星&lt;/p&gt;
-&lt;/blockquote&gt;
-
-&lt;h3 id=&quot;故障注入&quot;&gt;故障注入&lt;/h3&gt;
-
-&lt;p&gt;注入错误让jason用户有个7s的延迟:&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-20
-21
-22
-23
-24
-25
-26
-27
-28
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;kubectl apply -f samples/bookinfo/networking/virtual-service-reviews-test-delay.yaml
-
-cat samples/bookinfo/networking/virtual-service-reviews-test-delay.yaml
-apiVersion: networking.istio.io/v1alpha3
-kind: VirtualService
-metadata:
-  name: reviews
-spec:
-  hosts:
-  - reviews
-  http:
-  - match:
-    - headers:
-        end-user:
-          exact: jason
-    fault:
-      delay:
-        percentage:
-          value: 100.0
-        fixedDelay: 7s
-    route:
-    - destination:
-        host: reviews
-        subset: v2
-  - route:
-    - destination:
-        host: reviews
-        subset: v3
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;blockquote&gt;
-  &lt;p&gt;使用jason用户访问页面会有7s延迟，其他用户则转发到v3版本的reviews&lt;/p&gt;
-&lt;/blockquote&gt;
-
-&lt;h3 id=&quot;链路切换&quot;&gt;链路切换&lt;/h3&gt;
-&lt;p&gt;把100%流量切到v1&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;kubectl apply -f samples/bookinfo/networking/virtual-service-all-v1.yaml
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;blockquote&gt;
-  &lt;p&gt;页面不论刷几遍，都没有星星&lt;/p&gt;
-&lt;/blockquote&gt;
-
-&lt;p&gt;v1 v3各50%流量&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;kubectl apply -f samples/bookinfo/networking/virtual-service-reviews-50-v3.yaml
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;blockquote&gt;
-  &lt;p&gt;刷新页面, 一会有红星，一会没星，50%的概率&lt;/p&gt;
-&lt;/blockquote&gt;
-
-&lt;p&gt;把100%流量切到v3&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;kubectl apply -f samples/bookinfo/networking/virtual-service-reviews-v3.yaml
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;blockquote&gt;
-  &lt;p&gt;刷新页面，我们看到的都是红心了&lt;/p&gt;
-&lt;/blockquote&gt;
-
-</description>
-        <pubDate>Fri, 15 Apr 2022 00:00:00 +0000</pubDate>
-        <link>http://0.0.0.0:4000/blog/2022/04/15/istio-bookinfo/</link>
-        <guid isPermaLink="true">http://0.0.0.0:4000/blog/2022/04/15/istio-bookinfo/</guid>
-        
-        <category>istio</category>
-        
-        <category>bookinfo</category>
         
         
       </item>

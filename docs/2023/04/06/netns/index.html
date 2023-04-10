@@ -11,37 +11,30 @@
     <meta name="theme-color" content="#000000">
     
     <!-- Open Graph -->
-    <meta property="og:title" content="Calico单节点网络实现 - 胡进的博客 | Hujin's Blog">
+    <meta property="og:title" content="Docker容器的网络命名空间为什么不可见？ - 胡进的博客 | Hujin's Blog">
     
     <meta property="og:type" content="article">
     <meta property="og:description" content="背景
-最近有跟同事讨论calico的网络实现的话题，说calico 设计很巧妙，把 2-3层都给处理成了3层，想看看是如何实现的
-
-实现
-查看官方文档，发现有几个解释，通过这几个解释我们实际看看Calico中如何实现将2-3层流量都处理成3层的
-
-问题一： 为什么容器中有一条到169.254.1.1的路由规则
-
-1
-2
-3
-4
-Why does my container have a rou...">
+因为做过openstack的虚拟网络，习惯使用netns去管理linux的网络命名空间，也一直理解容器网络应该是类似的。
+但是实际在使用时（runtime使用docker）发现每个非hostnetwork的容器创建后并不会查看到一个network namespace(通过ip netns ls查看)；
+在使用的runtime是containerd的时候呢，这个namespace又出现了...">
     
-    <meta property="article:published_time" content="2023-02-27T00:00:00Z">
+    <meta property="article:published_time" content="2023-04-06T00:00:00Z">
     
     
     <meta property="article:author" content="hujin">
     
     
-    <meta property="article:tag" content="calico">
+    <meta property="article:tag" content="docker">
+    
+    <meta property="article:tag" content="netns">
     
     
     <meta property="og:image" content="http://0.0.0.0:4000/blog/img/avatar-hux-ny.jpg">
-    <meta property="og:url" content="http://0.0.0.0:4000/2023/02/27/calico-route/">
+    <meta property="og:url" content="http://0.0.0.0:4000/2023/04/06/netns/">
     <meta property="og:site_name" content="胡进的博客 | Hujin's Blog">
     
-    <title>Calico单节点网络实现 - 胡进的博客 | Hujin's Blog</title>
+    <title>Docker容器的网络命名空间为什么不可见？ - 胡进的博客 | Hujin's Blog</title>
 
     <!-- Web App Manifest -->
     <link rel="manifest" href="/blog/pwa/manifest.json">
@@ -50,7 +43,7 @@ Why does my container have a rou...">
     <link rel="shortcut icon" href="/blog/img/favicon.ico">
     
     <!-- Canonical URL -->
-    <link rel="canonical" href="http://0.0.0.0:4000/blog/2023/02/27/calico-route/">
+    <link rel="canonical" href="http://0.0.0.0:4000/blog/2023/04/06/netns/">
 
     <!-- Bootstrap Core CSS -->
     <link rel="stylesheet" href="/blog/css/bootstrap.min.css">
@@ -243,13 +236,15 @@ Why does my container have a rou...">
                 <div class="post-heading">
                     <div class="tags">
                         
-                        <a class="tag" href="/blog/archive/?tag=calico" title="calico">calico</a>
+                        <a class="tag" href="/blog/archive/?tag=docker" title="docker">docker</a>
+                        
+                        <a class="tag" href="/blog/archive/?tag=netns" title="netns">netns</a>
                         
                     </div>
-                    <h1>Calico单节点网络实现</h1>
+                    <h1>Docker容器的网络命名空间为什么不可见？</h1>
                     
                     <h2 class="subheading"></h2>
-                    <span class="meta">Posted by hujin on February 27, 2023</span>
+                    <span class="meta">Posted by hujin on April 6, 2023</span>
                 </div>
             </div>
         </div>
@@ -276,30 +271,198 @@ Why does my container have a rou...">
                 
 
 				<h2 id="背景">背景</h2>
-<p>最近有跟同事讨论calico的网络实现的话题，说calico 设计很巧妙，把 2-3层都给处理成了3层，想看看是如何实现的</p>
+<p>因为做过openstack的虚拟网络，习惯使用netns去管理linux的网络命名空间，也一直理解容器网络应该是类似的。
+但是实际在使用时（runtime使用docker）发现每个非hostnetwork的容器创建后并不会查看到一个network namespace(通过ip netns ls查看)；
+在使用的runtime是containerd的时候呢，这个namespace又出现了，有点迷糊了，今天就专门看了这里面的原因</p>
 
-<h2 id="实现">实现</h2>
-<p>查看官方文档，发现有几个解释，通过这几个解释我们实际看看Calico中如何实现将2-3层流量都处理成3层的</p>
+<h2 id="容器网络命名空间以及问题">容器网络命名空间以及问题</h2>
+<p>我们将研究Docker容器的网络名称空间文件的问题。具体来说，我们将了解为什么ip netns ls命令看不到网络名称空间文件。
+Docker容器的最基础层是Linux cgroup和名称空间机制。这两种机制协同工作，在Docker容器中提供我们所利用的进程和资源隔离。
+其中cgroups限制一个进程可以使用的资源，名称空间控制进程间资源的可见性。命名空间中一个类型就是网络命名空间(network namespace)。</p>
 
-<h3 id="问题一-为什么容器中有一条到16925411的路由规则">问题一： 为什么容器中有一条到169.254.1.1的路由规则</h3>
+<p>network namespace实质上虚拟化并隔离了进程的网络堆栈。也就是说不同的进程可以有自己独特的防火墙配置、私有IP地址和路由规则。
+通过网络命名空间，我们可以为每个Docker容器提供一个与主机网络隔离的网络堆栈。</p>
+
+<p>在Linux中，管理网络名称空间的主要工具之一是ip netns。这个命令行工具是ip工具的扩展。它允许我们在不同的网络名称空间上执行ip兼容的命令。</p>
+
+<p>每当我们创建Docker容器时，守护进程都会为容器进程创建名称空间对应文件。然后，它会将这些文件放在目录/proc/{pid}/ns下，其中pid是容器的进程id。</p>
+
+<p>让我们看一个例子:</p>
 
 <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
 2
 3
 4
-</pre></td><td class="rouge-code"><pre>Why does my container have a route to 169.254.1.1?
+</pre></td><td class="rouge-code"><pre>$ sudo docker run --rm -d ubuntu:latest sleep infinity
+2545fdac9b41e463a29b4a61c201b789d567f88d54b6973bdcca9e69ba35ba92
+$ sudo docker inspect -f '' 2545fdac9b41e463a29b4a61c201b789d567f88d54b6973bdcca9e69ba35ba92
+3357
+</pre></td></tr></tbody></table></code></pre></div></div>
 
-In a Calico network, each host acts as a gateway router for the workloads that it hosts. In container deployments, Calico uses 169.254.1.1 as the address for the Calico router. By using a link-local address, Calico saves precious IP addresses and avoids burdening the user with configuring a suitable address.
-While the routing table may look a little odd to someone who is used to configuring LAN networking, using explicit routes rather than subnet-local gateways is fairly common in WAN networking.
+<p>在上面的命令中，首先创建一个运行ubuntu:latest映像的Docker容器。然后，我们通过运行sleep infinity来保持容器运行。
+最后，我们运行docker inspect命令来获取容器的进程id。</p>
+
+<p>现在，查看/proc/3357/ns目录，我们可以看到创建了所有不同种类的名称空间:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+</pre></td><td class="rouge-code"><pre>$ sudo ls -la /proc/3357/ns
+total 0
+dr-x--x--x 2 root root 0 Feb  5 04:24 .
+dr-xr-xr-x 9 root root 0 Feb  5 04:24 ..
+lrwxrwxrwx 1 root root 0 Feb  5 04:25 cgroup -&gt; 'cgroup:[4026531835]'
+lrwxrwxrwx 1 root root 0 Feb  5 04:25 ipc -&gt; 'ipc:[4026532720]'
+lrwxrwxrwx 1 root root 0 Feb  5 04:25 mnt -&gt; 'mnt:[4026532718]'
+lrwxrwxrwx 1 root root 0 Feb  5 04:24 net -&gt; 'net:[4026532723]'
+lrwxrwxrwx 1 root root 0 Feb  5 04:25 pid -&gt; 'pid:[4026532721]'
+lrwxrwxrwx 1 root root 0 Feb  5 04:25 pid_for_children -&gt; 'pid:[4026532721]'
+lrwxrwxrwx 1 root root 0 Feb  5 04:25 time -&gt; 'time:[4026531834]'
+lrwxrwxrwx 1 root root 0 Feb  5 04:25 time_for_children -&gt; 'time:[4026531834]'
+lrwxrwxrwx 1 root root 0 Feb  5 04:25 user -&gt; 'user:[4026531837]'
+lrwxrwxrwx 1 root root 0 Feb  5 04:25 uts -&gt; 'uts:[4026532719]'
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>从名称空间对应文件列表中，我们可以看到这个进程的net文件的存在。因为net文件对应于一个Linux网络名称空间，所以理论上我们现在可以列出所有network namespace，
+然而事实并非如此。现在运行ip netns ls将显示0个结果:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+</pre></td><td class="rouge-code"><pre>$ ip netns ls
+$
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>作为对比让我们手动创建一个网络名称空间。然后，验证它是否在我们运行ip netns时出现:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+</pre></td><td class="rouge-code"><pre>$ sudo ip netns add netA
+$ ip netns ls
+netA
+$
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>正如我们所看到的，它按照预期显示netA。那么为什么不显示docker run创建的network namespace呢？</p>
+
+<h2 id="不可见的原因丢失的文件引用">不可见的原因：丢失的文件引用</h2>
+
+<p>为了理解这个问题，我们需要知道ip netns ls命令其实是在/var/run/netns目录中查找网络名称空间文件。但是，Docker守护进程在创建后并不会在/var/run/netns目录中创建网络名称空间文件的引用。
+因此，ip netns ls无法解析网络命名空间文件。</p>
+
+<p>解决这种不一致现象的方法是在/var/run/netns目录中为net文件创建一个文件引用。具体来说，我们可以将net名称空间文件绑定挂载到我们在/var/run/netns目录中创建的一个空文件上。</p>
+
+<p>首先，我们在目录中创建一个空文件，并用名称空间文件所关联的容器id来命名它:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+</pre></td><td class="rouge-code"><pre>$ mkdir -p /var/run/netns
+$ touch /var/run/netns/$container_id
 </pre></td></tr></tbody></table></code></pre></div></div>
 
 <blockquote>
-  <p>简单翻译：在Calico网络中，每台主机都充当容器的网关（路由器）。在容器部署中，Calico使用169.254.1.1作为网关路由器的地址。
-通过使用link-local地址，Calico节省了宝贵的IP地址，并避免了用户配置合适地址的负担。
-虽然对于习惯于配置LAN网络的人来说，路由表可能看起来有点奇怪，但在WAN网络中，使用显式路由而不是子网本地网关是相当常见的。</p>
+  <p>其中$container_id是一个环境变量，是创建的Docker容器的id</p>
 </blockquote>
 
-<p>我们看看容器中的网卡：</p>
+<p>随后，我们可以运行mount -o bind命令来绑定挂载net文件:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+</pre></td><td class="rouge-code"><pre>$ mount -o bind /proc/3357/ns/net /var/run/netns/$container_id
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<blockquote>
+  <p>3357是上面获取的容器的pid</p>
+</blockquote>
+
+<p>现在，再次运行相同的ip netns ls命令，我们就能看到docker容器的网络命名空间了:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+</pre></td><td class="rouge-code"><pre>$ ip netns ls
+ip netns ls
+2545fdac9b41e463a29b4a61c201b789d567f88d54b6973bdcca9e69ba35ba92
+netA
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>建立了对网络名称空间文件的文件引用，我们就可以使用ip netns exec运行任何ip命令。例如，我们可以使用ip addr list命令查看网络命名空间上的接口:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+</pre></td><td class="rouge-code"><pre>$ ip netns exec $container_id ip addr list
+1: lo: &lt;LOOPBACK,UP,LOWER_UP&gt; mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+inet 127.0.0.1/8 scope host lo
+valid_lft forever preferred_lft forever
+4: eth0@if5: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 1500 qdisc noqueue state UP group default
+link/ether 02:42:ac:11:00:02 brd ff:ff:ff:ff:ff:ff link-netnsid 0
+inet 172.17.0.2/16 brd 172.17.255.255 scope global eth0
+valid_lft forever preferred_lft forever
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<h2 id="containerd中如何实现网络命名空间的挂载的">containerd中如何实现网络命名空间的挂载的</h2>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+</pre></td><td class="rouge-code"><pre>[root@node1 ~]# kubectl cluster-info dump |grep containerRuntimeVersion
+"f:containerRuntimeVersion": {},
+"containerRuntimeVersion": "containerd://1.6.6",
+"f:containerRuntimeVersion": {},
+"containerRuntimeVersion": "containerd://1.6.6",
+"f:containerRuntimeVersion": {},
+"containerRuntimeVersion": "containerd://1.6.6",
+[root@node1 ~]# ip netns
+cni-028380d7-7dcf-44f5-35a4-607654492671 (id: 1)
+cni-c37c9aee-54d5-baf1-a606-1c1865b83f6e (id: 0)
+cni-63d627ff-481c-20ac-7abe-42ce95db7d28 (id: 21)
+cni-1e075915-b90a-e7db-936d-569b71f45c2b (id: 20)
+cni-61035ce0-1910-0de3-d59e-837321c2e5e4 (id: 19)
+cni-05895113-0f27-8966-8db3-fb45bdd196fe (id: 18)
+cni-ac9ba39f-68a4-4fb4-3c14-9d0b893d5687 (id: 17)
+cni-ed0a2a49-bd79-775e-b2b1-70b0a662466b (id: 16)
+cni-27ad6830-a146-ec01-425c-b6e846cb0207 (id: 15)
+cni-cac98bd4-2a73-014f-5ef3-fe634ecdb9b6 (id: 14)
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>前面背景中提到的问题原因找到了，但是我们发现在使用containerd作为runtime时，是可以通过ip netns查看到容器的网络命名空间的，这是怎么做的呢？
+这里可以简单看下containerd的代码就清楚了:</p>
+
+<p>containerd/pkg/cri/sbserver/sandbox_run.go</p>
 
 <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
 2
@@ -323,105 +486,69 @@ While the routing table may look a little odd to someone who is used to configur
 20
 21
 22
-</pre></td><td class="rouge-code"><pre>[root@node2 ~]# docker exec -it d3d044626d12 sh
-# ip a 
-1: lo: &lt;LOOPBACK,UP,LOWER_UP&gt; mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
-    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
-    inet 127.0.0.1/8 scope host lo
-       valid_lft forever preferred_lft forever
-2: tunl0@NONE: &lt;NOARP&gt; mtu 1480 qdisc noop state DOWN group default qlen 1000
-    link/ipip 0.0.0.0 brd 0.0.0.0
-4: eth0@if55: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 1480 qdisc noqueue state UP group default 
-    link/ether d6:84:ed:49:d4:cf brd ff:ff:ff:ff:ff:ff link-netnsid 0
-    inet 11.244.104.3/32 brd 11.244.104.3 scope global eth0
-       valid_lft forever preferred_lft forever
-# ip r
-default via 169.254.1.1 dev eth0 
-169.254.1.1 dev eth0 scope link 
-# exit
-[root@node2 ~]# ip a |grep 55
-1: lo: &lt;LOOPBACK,UP,LOWER_UP&gt; mtu 655
-36 qdisc noqueue state UNKNOWN group default qlen 1000
-    inet 179.20.23.41/24 brd 179.20.23.255 scope global noprefixroute ens160
-    inet 172.17.0.1/16 brd 172.17.255.255 scope global docker0
-55: calic4eb42dc79d@if4: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 1480 qdisc noqueue state UP group default
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+</pre></td><td class="rouge-code"><pre>// RunPodSandbox creates and starts a pod-level sandbox. Runtimes should ensure
+// the sandbox is in ready state.
+func (c *criService) RunPodSandbox(ctx context.Context, r *runtime.RunPodSandboxRequest) (_ *runtime.RunPodSandboxResponse, retErr error) {
+    ...
+
+    // Create initial internal sandbox object.
+    sandbox := sandboxstore.NewSandbox(
+        sandboxstore.Metadata{
+            ID:             id,
+            Name:           name,
+            Config:         config,
+            RuntimeHandler: r.GetRuntimeHandler(),
+        },
+        sandboxstore.Status{
+            State: sandboxstore.StateUnknown,
+        },
+    )
+
+    if _, err := c.client.SandboxStore().Create(ctx, sandboxInfo); err != nil {
+        return nil, fmt.Errorf("failed to save sandbox metadata: %w", err)
+    }
+    ...
+
+    // Setup the network namespace if host networking wasn't requested.
+    if !hostNetwork(config) {
+        netStart := time.Now()
+        // If it is not in host network namespace then create a namespace and set the sandbox
+        // handle. NetNSPath in sandbox metadata and NetNS is non empty only for non host network
+        // namespaces. If the pod is in host network namespace then both are empty and should not
+        // be used.
+        var netnsMountDir = "/var/run/netns"
+        if c.config.NetNSMountsUnderStateDir {
+            netnsMountDir = filepath.Join(c.config.StateDir, "netns")
+        }
+        sandbox.NetNS, err = netns.NewNetNS(netnsMountDir)
+        if err != nil {
+            return nil, fmt.Errorf("failed to create network namespace for sandbox %q: %w", id, err)
+        }
+        // Update network namespace in the store, which is used to generate the container's spec
+        sandbox.NetNSPath = sandbox.NetNS.GetPath()
+        ...
 </pre></td></tr></tbody></table></code></pre></div></div>
 
-<ul>
-  <li>容器中有一张eth0网卡，ip是11.244.104.3，对应的另一端veth设备是calic4eb42dc79d</li>
-  <li>容器中只有两条路由规则，分别是默认路由和一条32位路由</li>
-  <li>下一跳是169.254.1.1</li>
-</ul>
-
-<p>从上面容器内的情况可以看到，任何容器流量都是发送给169.254.1.1这个网关的，那么这个网关在哪里，同节点容器如何通信，跨节点容器如何通信呢？我们继续看第二个问题</p>
-
-<h3 id="问题二为什么我们在host上没有找到ip地址是16925411的设备">问题二：为什么我们在host上没有找到ip地址是169.254.1.1的设备？</h3>
-
-<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
-2
-3
-</pre></td><td class="rouge-code"><pre>Why can't I see the 169.254.1.1 address mentioned above on my host?
-
-Calico tries hard to avoid interfering with any other configuration on the host. Rather than adding the gateway address to the host side of each workload interface, Calico sets the proxy_arp flag on the interface. This makes the host behave like a gateway, responding to ARPs for 169.254.1.1 without having to actually allocate the IP address to the interface.
-</pre></td></tr></tbody></table></code></pre></div></div>
-
-<blockquote>
-  <p>简单翻译是：Calico努力避免干扰主机上的配置。Calico没有将网关地址添加到每个容器网卡的主机端，而是在主机端设备上设置proxy_arp标志。
-这使得主机能像网关一样响应169.254.1.1的ARP，而不必实际将IP地址分配给接口。</p>
-</blockquote>
-
-<p>稍微解释下：</p>
-
-<ul>
-  <li>Calico中容器网卡类型是veth，其中一端在容器内，另一端在主机上</li>
-  <li>这里通过设置主机端设备，开启proxy_arp，同时设置这个设备的mac地址固定为ee:ee:ee:ee:ee:ee</li>
-  <li>这样任意发送这个设备上的arp请求，该设备都会发送arp reply包，表示自己是网关，可以将后面的包发送给我，我给你们转发</li>
-</ul>
-
-<p><img src="/blog/img/arp.png" alt="arp流程" /></p>
-
-<p>实际在容器中查看：</p>
-
-<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
-2
-3
-4
-5
-6
-7
-8
-</pre></td><td class="rouge-code"><pre>[root@node2 ~]# ip link show calic4eb42dc79d
-55: calic4eb42dc79d@if4: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 1480 qdisc noqueue state UP mode DEFAULT group default 
-    link/ether ee:ee:ee:ee:ee:ee brd ff:ff:ff:ff:ff:ff link-netnsid 7
-[root@node2 ~]# sysctl -a  |grep calic4eb42dc79d |grep proxy_arp
-net.ipv4.conf.calic4eb42dc79d.proxy_arp = 1
-net.ipv4.conf.calic4eb42dc79d.proxy_arp_pvlan = 0
-[root@node2 ~]# ip r |grep calic4eb42dc79d
-11.244.104.3 dev calic4eb42dc79d scope link 
-</pre></td></tr></tbody></table></code></pre></div></div>
-
-<ul>
-  <li>calic4eb42dc79d这个设备的mac地址是ee:ee:ee:ee:ee:ee</li>
-  <li>calic4eb42dc79d设备开启了arp代答功能，这样任意发送到这个设备上的arp，且目的mac地址是ee:ee:ee:ee:ee:ee的请求，都会返回arp reply</li>
-</ul>
-
-<p>这里我们来抓包看看，先看看容器分布：</p>
-
-<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
-2
-3
-4
-5
-6
-</pre></td><td class="rouge-code"><pre>[root@node1 ~]# kubectl get pods -owide |grep 11.244.104.3
-sectest-app-influxdb-deployment-6df667cd75-bmkk5    1/1     Running     4          2d23h   11.244.104.3     node2   &lt;none&gt;           &lt;none&gt;
-[root@node1 ~]# kubectl get pods -owide |grep 11.244.104.7
-sectest-app-rabbitmq-deployment-545f49dd55-bp5tl    1/1     Running     4          2d23h   11.244.104.7     node2   &lt;none&gt;           &lt;none&gt;
-[root@node1 ~]# kubectl get pods -owide |grep 11.244.135.31
-sectest-app-haproxy-deployment-58bfd8b4b-29f79      1/1     Running     2          2d23h   11.244.135.31    node3   &lt;none&gt;           &lt;none&gt;
-</pre></td></tr></tbody></table></code></pre></div></div>
-
-<p>容器同节点通信抓包：</p>
+<p>可以看到在创建容器时会创建一个sandbox容器用来共享网络命名空间，那就认为只有这个容器会对应一个网络命名空间，这里我们重点看NewNetNS方法的调用，最终调用newNS方法</p>
 
 <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
 2
@@ -432,73 +559,194 @@ sectest-app-haproxy-deployment-58bfd8b4b-29f79      1/1     Running     2       
 7
 8
 9
-</pre></td><td class="rouge-code"><pre>tcpdump: verbose output suppressed, use -v or -vv for full protocol decode
-listening on calic4eb42dc79d, link-type EN10MB (Ethernet), capture size 262144 bytes
-14:10:55.717915 d6:84:ed:49:d4:cf &gt; ee:ee:ee:ee:ee:ee, ethertype ARP (0x0806), length 42: Request who-has 169.254.1.1 tell 11.244.104.3, length 28
-14:10:55.717943 ee:ee:ee:ee:ee:ee &gt; d6:84:ed:49:d4:cf, ethertype ARP (0x0806), length 42: Reply 169.254.1.1 is-at ee:ee:ee:ee:ee:ee, length 28
-14:10:56.705970 d6:84:ed:49:d4:cf &gt; ee:ee:ee:ee:ee:ee, ethertype IPv4 (0x0800), length 98: 11.244.104.3 &gt; 11.244.104.7: ICMP echo request, id 10, seq 7, length 64
-14:10:56.706026 ee:ee:ee:ee:ee:ee &gt; d6:84:ed:49:d4:cf, ethertype IPv4 (0x0800), length 98: 11.244.104.7 &gt; 11.244.104.3: ICMP echo reply, id 10, seq 7, length 64
-14:10:57.705969 d6:84:ed:49:d4:cf &gt; ee:ee:ee:ee:ee:ee, ethertype IPv4 (0x0800), length 98: 11.244.104.3 &gt; 11.244.104.7: ICMP echo request, id 10, seq 8, length 64
-14:10:57.706019 ee:ee:ee:ee:ee:ee &gt; d6:84:ed:49:d4:cf, ethertype IPv4 (0x0800), length 98: 11.244.104.7 &gt; 11.244.104.3: ICMP echo reply, id 10, seq 8, length 64
-14:10:58.705990 d6:84:ed:49:d4:cf &gt; ee:ee:ee:ee:ee:ee, ethertype IPv4 (0x0800), length 98: 11.244.104.3 &gt; 11.244.104.7: ICMP echo request, id 10, seq 9, length 64
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+55
+56
+57
+58
+59
+60
+61
+62
+63
+64
+65
+66
+67
+68
+69
+70
+71
+72
+73
+74
+75
+76
+77
+78
+79
+80
+81
+82
+83
+84
+85
+</pre></td><td class="rouge-code"><pre>func newNS(baseDir string, pid uint32) (nsPath string, err error) {
+    b := make([]byte, 16)
+
+    _, err = rand.Read(b)
+    if err != nil {
+        return "", fmt.Errorf("failed to generate random netns name: %w", err)
+    }
+
+    // Create the directory for mounting network namespaces
+    // This needs to be a shared mountpoint in case it is mounted in to
+    // other namespaces (containers)
+    if err := os.MkdirAll(baseDir, 0755); err != nil {
+        return "", err
+    }
+
+    // create an empty file at the mount point and fail if it already exists
+    nsName := fmt.Sprintf("cni-%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
+    nsPath = path.Join(baseDir, nsName)
+    mountPointFd, err := os.OpenFile(nsPath, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0666)
+    if err != nil {
+        return "", err
+    }
+    mountPointFd.Close()
+
+    defer func() {
+        // Ensure the mount point is cleaned up on errors
+        if err != nil {
+            os.RemoveAll(nsPath)
+        }
+    }()
+
+    if pid != 0 {
+        procNsPath := getNetNSPathFromPID(pid)
+        // bind mount the netns onto the mount point. This causes the namespace
+        // to persist, even when there are no threads in the ns.
+        if err = unix.Mount(procNsPath, nsPath, "none", unix.MS_BIND, ""); err != nil {
+            return "", fmt.Errorf("failed to bind mount ns src: %v at %s: %w", procNsPath, nsPath, err)
+        }
+        return nsPath, nil
+    }
+
+    var wg sync.WaitGroup
+    wg.Add(1)
+
+    // do namespace work in a dedicated goroutine, so that we can safely
+    // Lock/Unlock OSThread without upsetting the lock/unlock state of
+    // the caller of this function
+    go (func() {
+        defer wg.Done()
+        runtime.LockOSThread()
+        // Don't unlock. By not unlocking, golang will kill the OS thread when the
+        // goroutine is done (for go1.10+)
+
+        var origNS cnins.NetNS
+        origNS, err = cnins.GetNS(getCurrentThreadNetNSPath())
+        if err != nil {
+            return
+        }
+        defer origNS.Close()
+
+        // create a new netns on the current thread
+        err = unix.Unshare(unix.CLONE_NEWNET)
+        if err != nil {
+            return
+        }
+
+        // Put this thread back to the orig ns, since it might get reused (pre go1.10)
+        defer origNS.Set()
+
+        // bind mount the netns from the current thread (from /proc) onto the
+        // mount point. This causes the namespace to persist, even when there
+        // are no threads in the ns.
+        err = unix.Mount(getCurrentThreadNetNSPath(), nsPath, "none", unix.MS_BIND, "")
+        if err != nil {
+            err = fmt.Errorf("failed to bind mount ns at %s: %w", nsPath, err)
+        }
+    })()
+    wg.Wait()
+
+    if err != nil {
+        return "", fmt.Errorf("failed to create namespace: %w", err)
+    }
+
+    return nsPath, nil
+}
 </pre></td></tr></tbody></table></code></pre></div></div>
 
-<p>容器跨节点通信抓包：</p>
-
-<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
-2
-3
-4
-5
-6
-7
-8
-</pre></td><td class="rouge-code"><pre>14:10:08.101925 d6:84:ed:49:d4:cf &gt; ee:ee:ee:ee:ee:ee, ethertype ARP (0x0806), length 42: Request who-has 169.254.1.1 tell 11.244.104.3, length 28
-14:10:08.101948 ee:ee:ee:ee:ee:ee &gt; d6:84:ed:49:d4:cf, ethertype ARP (0x0806), length 42: Reply 169.254.1.1 is-at ee:ee:ee:ee:ee:ee, length 28
-14:10:09.093021 d6:84:ed:49:d4:cf &gt; ee:ee:ee:ee:ee:ee, ethertype IPv4 (0x0800), length 98: 11.244.104.3 &gt; 11.244.135.31: ICMP echo request, id 9, seq 7, length 64
-14:10:09.093406 ee:ee:ee:ee:ee:ee &gt; d6:84:ed:49:d4:cf, ethertype IPv4 (0x0800), length 98: 11.244.135.31 &gt; 11.244.104.3: ICMP echo reply, id 9, seq 7, length 64
-14:10:10.093016 d6:84:ed:49:d4:cf &gt; ee:ee:ee:ee:ee:ee, ethertype IPv4 (0x0800), length 98: 11.244.104.3 &gt; 11.244.135.31: ICMP echo request, id 9, seq 8, length 64
-14:10:10.093386 ee:ee:ee:ee:ee:ee &gt; d6:84:ed:49:d4:cf, ethertype IPv4 (0x0800), length 98: 11.244.135.31 &gt; 11.244.104.3: ICMP echo reply, id 9, seq 8, length 64
-14:10:11.093573 d6:84:ed:49:d4:cf &gt; ee:ee:ee:ee:ee:ee, ethertype IPv4 (0x0800), length 98: 11.244.104.3 &gt; 11.244.135.31: ICMP echo request, id 9, seq 9, length 64
-14:10:11.093910 ee:ee:ee:ee:ee:ee &gt; d6:84:ed:49:d4:cf, ethertype IPv4 (0x0800), length 98: 11.244.135.31 &gt; 11.244.104.3: ICMP echo reply, id 9, seq 9, length 64
-</pre></td></tr></tbody></table></code></pre></div></div>
-
-<p>在arp请求169.254.1.1后，在主机中的veth设备会返回arp reply包，容器内部会生成一条neigh信息：</p>
-
-<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
-2
-3
-</pre></td><td class="rouge-code"><pre>[root@node2 ~]# docker exec -it d3d044626d12 sh
-# ip neigh
-169.254.1.1 dev eth0 lladdr ee:ee:ee:ee:ee:ee STALE
-</pre></td></tr></tbody></table></code></pre></div></div>
+<ul>
+  <li>这里baseDir是/var/run/netns，nsName是随机生成的36位字符串， pid是0</li>
+  <li>getCurrentThreadNetNSPath方法直接返回的是容器的网络命名空间路径：/proc/{pid}/task/{pid}/ns/net</li>
+  <li>最终将proc中网络命名空间mount到nsPath对应位置，和上面我们手动操作的情况类似</li>
+</ul>
 
 <h2 id="总结">总结</h2>
-<ul>
-  <li>从抓包结果看二层通信和三层通信的结果都是类似的，都会先arp请求网关169.254.1.1，再将包转发到网关设备。也就是将二层和三层通信都通过三层进行转发</li>
-  <li>数据包到达主机上的veth设备（容器认为的网关）后，根据主机上的路由进行转发即可</li>
-  <li>主机路由是由bgp（bird）服务维护的</li>
-  <li>由于arp在host的veth就终结了（arp代答的功劳），这种实现有效屏蔽的arp广播，降低广播风暴的威胁</li>
-</ul>
+<p>本次我们从简单介绍Linux名称空间和cgroup开始。然后演示了当我们运行ip netns ls时，docker run创建的网络名称空间文件不显示的问题。
+随后解释了这是因为文件引用不是在/var/run/netns创建的，而ip netns ls命令只在这个目录中查找网络名称空间。</p>
+
+<p>随后，我们以一个简单的修正结束了本文，即将文件绑定挂载到/var/run/netns，这样就可以通过ip netns ls找到它。
+最后通过查看containerd的代码发现它也是采用类似方式自动将文件mount到/var/run/netns目录下的，这样就比较方便的通过ip netns来管理容器的网络命名空间了，
+这里有个不太方便的地方是查询容器和这个network namespace的对应关系，从代码里也看到是随机生成的uuid</p>
 
 
                 <hr style="visibility: hidden;">
                 <ul class="pager">
                     
                     <li class="previous">
-                        <a href="/blog/2023/02/15/kata-network/" data-toggle="tooltip" data-placement="top" title="Kata容器网络实现">
-                        Previous<br>
-                        <span>Kata容器网络实现</span>
-                        </a>
-                    </li>
-                    
-                    
-                    <li class="next">
                         <a href="/blog/2023/03/14/neuvector-file/" data-toggle="tooltip" data-placement="top" title="Neuvector源码分析之 文件管理">
-                        Next<br>
+                        Previous<br>
                         <span>Neuvector源码分析之 文件管理</span>
                         </a>
                     </li>
+                    
                     
                 </ul>
                 <hr style="visibility: hidden;">

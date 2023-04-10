@@ -234,6 +234,31 @@
             ">
     			
 <div class="post-preview">
+    <a href="/blog/2023/04/06/netns/">
+        <h2 class="post-title">
+            Docker容器的网络命名空间为什么不可见？
+        </h2>
+        
+        <h3 class="post-subtitle">
+            
+        </h3>
+        
+        <div class="post-content-preview">
+            
+                背景
+因为做过openstack的虚拟网络，习惯使用netns去管理linux的网络命名空间，也一直理解容器网络应该是类似的。
+但是实际在使用时（runtime使用docker）发现每个非hostnetwork的容器创建后并不会查看到一个network namespace(通过ip netns ls查看)；
+在使用的runtime是containerd的时候呢，这个namespace又出现了...
+            
+        </div>
+    </a>
+    <p class="post-meta">
+        Posted by hujin on April 6, 2023
+    </p>
+</div>
+<hr>
+
+<div class="post-preview">
     <a href="/blog/2023/03/14/neuvector-file/">
         <h2 class="post-title">
             Neuvector源码分析之 文件管理
@@ -539,36 +564,6 @@ cat /etc/h...
 </div>
 <hr>
 
-<div class="post-preview">
-    <a href="/blog/2022/04/15/istio-bookinfo/">
-        <h2 class="post-title">
-            Istio Bookinfo
-        </h2>
-        
-        <h3 class="post-subtitle">
-            
-        </h3>
-        
-        <div class="post-content-preview">
-            
-                架构图
-
-
-在k8s中通过deployment安装一些微服务并通过service暴露出来，包括
-
-  productpage: python编写，服务主界面，或者叫index页面，页面中会访问其他微服务
-  reviews： java编写，书籍评价微服务
-  details： ruby编写，书籍详情信息微服务
-  ratings： nodejs编写，数据推荐指数微服务，rating serv...
-            
-        </div>
-    </a>
-    <p class="post-meta">
-        Posted by hujin on April 15, 2022
-    </p>
-</div>
-<hr>
-
 
 <!-- Pager -->
 
@@ -605,37 +600,42 @@ cat /etc/h...
         
         
         
-                <a data-sort="0020" 
+                <a data-sort="0021" 
                     href="/blog/archive/?tag=kubernetes"
                     title="kubernetes"
                     rel="5">kubernetes</a>
         
-                <a data-sort="0018" 
+                <a data-sort="0019" 
                     href="/blog/archive/?tag=k8s"
                     title="k8s"
                     rel="7">k8s</a>
         
-                <a data-sort="0020" 
+                <a data-sort="0021" 
                     href="/blog/archive/?tag=cni"
                     title="cni"
                     rel="5">cni</a>
         
-                <a data-sort="0020" 
+                <a data-sort="0021" 
                     href="/blog/archive/?tag=neuvector"
                     title="neuvector"
                     rel="5">neuvector</a>
         
-                <a data-sort="0022" 
+                <a data-sort="0023" 
                     href="/blog/archive/?tag=istio"
                     title="istio"
                     rel="3">istio</a>
         
-                <a data-sort="0023" 
+                <a data-sort="0024" 
                     href="/blog/archive/?tag=calico"
                     title="calico"
                     rel="2">calico</a>
         
-                <a data-sort="0023" 
+                <a data-sort="0024" 
+                    href="/blog/archive/?tag=docker"
+                    title="docker"
+                    rel="2">docker</a>
+        
+                <a data-sort="0024" 
                     href="/blog/archive/?tag=tungstenfabric"
                     title="tungstenfabric"
                     rel="2">tungstenfabric</a>
