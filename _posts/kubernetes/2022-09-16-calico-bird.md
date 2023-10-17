@@ -58,29 +58,29 @@ node1节点
 node2节点
 
     # 创建namespace和虚拟网卡
-    ip netns add ns2
-    ip link add tap1 type veth peer name nsvth netns ns2
+    ip netns add ns1
+    ip link add tap1 type veth peer name nsvth netns ns1
     ip link set tap1 up
-    ip netns exec ns2 ip link set lo up
-    ip netns exec ns2 ip link set nsvth up
+    ip netns exec ns1 ip link set lo up
+    ip netns exec ns1 ip link set nsvth up
 
 
     # 配置路由和IP地址
-    ip netns exec ns2 ip addr add 10.244.104.0/24 dev nsvth
+    ip netns exec ns1 ip addr add 10.244.104.0/24 dev nsvth
     ip r add 10.244.104.0/32 dev tap1
-    ip netns exec ns2 ip r add 169.254.1.1 dev nsvth
-    ip netns exec ns2 ip r add default via 169.254.1.1 dev nsvth
+    ip netns exec ns1 ip r add 169.254.1.1 dev nsvth
+    ip netns exec ns1 ip r add default via 169.254.1.1 dev nsvth
 
 
     # 配置neigh
     ip link set address ee:ee:ee:ee:ee:ee dev tap1
-    ip netns exec ns2 ip neigh add 169.254.1.1 dev nsvth lladdr ee:ee:ee:ee:ee:ee
+    ip netns exec ns1 ip neigh add 169.254.1.1 dev nsvth lladdr ee:ee:ee:ee:ee:ee
 
 
 每个节点启动bird
 启动一个容器并获取内部的bird二进制文件，镜像使用calico/node:v3.11.1
 
-    docker run --name calico-temp -d calico/node:v3.11.1 sleep 200
+    docker run --name calico-temp -d calico/node:v3.11.1 sleep 3600
     docker cp calico-temp:/usr/bin/bird /usr/bin
     docker rm -f calico-temp
 
@@ -151,43 +151,28 @@ node2节点
     }
     
     # ------------- Node-to-node mesh -------------
-    
-    
-    
-    
-    
     # For peer /host/node1/ip_addr_v4
     # Skipping ourselves (10.20.30.30)
-    
-    
-    
-    
+
     # For peer /host/node2/ip_addr_v4
     protocol bgp Mesh_10_20_30_31 from bgp_template {
       neighbor 10.20.30.31 as 64512;
       source address 10.20.30.30;  # The local address we use for the TCP connection
-      passive on; # Mesh is unidirectional, peer will connect to us.
+      #passive on; # Mesh is unidirectional, peer will connect to us.
     }
-    
-    
-    
+
     # For peer /host/node3/ip_addr_v4
     #protocol bgp Mesh_10_20_30_32 from bgp_template {
     #  neighbor 10.20.30.32 as 64512;
     #  source address 10.20.30.30;  # The local address we use for the TCP connection
     #  passive on; # Mesh is unidirectional, peer will connect to us.
     #}
-    
-    
-    
+
     # ------------- Global peers -------------
     # No global peers configured.
-    
-    
-    # ------------- Node-specific peers -------------
-    
-    # No node-specific peers configured.
 
+    # ------------- Node-specific peers -------------
+    # No node-specific peers configured.
 
 创建bird_ipam.cfg配置
 
@@ -292,4 +277,5 @@ node2节点
 ## 参考
 - bird手册：The BIRD Internet Routing Daemon Project (network.cz)
 
+## 如果对您有帮忙，打个赏
 

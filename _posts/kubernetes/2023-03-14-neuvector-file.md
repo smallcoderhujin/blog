@@ -1,5 +1,5 @@
 ---
-title: "Neuvector源码分析之 文件管理"
+title: "Neuvector源码之 文件管理"
 subtitle: ""
 layout: post
 author: "hujin"

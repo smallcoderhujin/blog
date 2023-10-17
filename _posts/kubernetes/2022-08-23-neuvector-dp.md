@@ -1,5 +1,5 @@
 ---
-title: "Neuvector源码分析之 dp引流的实现"
+title: "Neuvector源码之 dp引流的实现"
 subtitle: ""
 layout: post
 author: "hujin"

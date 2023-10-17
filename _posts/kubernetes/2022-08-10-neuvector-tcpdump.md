@@ -1,5 +1,5 @@
 ---
-title: "Neuvector源码分析之 网络抓包"
+title: "Neuvector源码之 网络抓包"
 subtitle: ""
 layout: post
 author: "hujin"

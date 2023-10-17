@@ -1,5 +1,5 @@
 ---
-title: "Neuvector源码分析之 合规性检测"
+title: "Neuvector源码之 合规性检测"
 subtitle: ""
 layout: post
 author: "hujin"
