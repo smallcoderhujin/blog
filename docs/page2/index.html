@@ -236,6 +236,51 @@
             ">
     			
 <div class="post-preview">
+    <a href="/blog/2022/08/09/k8s-deploy/">
+        <h2 class="post-title">
+            5分钟快速部署Kubernetes集群
+        </h2>
+        
+        <h3 class="post-subtitle">
+            
+        </h3>
+        
+        <div class="post-content-preview">
+            
+                环境信息
+
+
+  操作系统：centos7.6 4C8G
+  节点个数：1master+2node
+  内核版本：3.10.0-1127.el7.x86_64
+  网络信息：1管理 1业务
+
+
+准备（master+node）
+
+每个节点修改hostname
+
+1
+hostnamectl set-hostname nodex
+
+
+配置/etc/hosts
+
+1
+2
+3
+4
+cat /etc/h...
+            
+        </div>
+    </a>
+    <p class="post-meta">
+        Posted by hujin on August 9, 2022
+    </p>
+</div>
+<hr>
+
+<div class="post-preview">
     <a href="/blog/2022/04/15/istio-bookinfo/">
         <h2 class="post-title">
             Istio Bookinfo
@@ -525,42 +570,6 @@ Kuryr 是 OpenStack Neutron 的子项目，其主要目标是透过该项目来�
 </div>
 <hr>
 
-<div class="post-preview">
-    <a href="/blog/2021/04/06/k8s-go-mod/">
-        <h2 class="post-title">
-            GO MOD使用私有仓库
-        </h2>
-        
-        <h3 class="post-subtitle">
-            go mod gerrit
-        </h3>
-        
-        <div class="post-content-preview">
-            
-                背景
-
-在常见的项目中使用go mod做包管理，在引用第三方包时这个包可能维护在内部私有仓库中，需要解决几个问题：
-
-
-  引用第三方库
-  引用私有仓库时不使用代理
-  使用git方式获取代码
-
-
-替换引用的仓库地址
-这里直接修改代码中的引用工作量太大了，可以通过在go.mod中添加replace的方式：
-
-
-  github.com/gophercloud/gophercloud =&g...
-            
-        </div>
-    </a>
-    <p class="post-meta">
-        Posted by hujin on April 6, 2021
-    </p>
-</div>
-<hr>
-
 
 <!-- Pager -->
 
@@ -601,42 +610,42 @@ Kuryr 是 OpenStack Neutron 的子项目，其主要目标是透过该项目来�
         
         
         
-                <a data-sort="0021" 
+                <a data-sort="0022" 
                     href="/blog/archive/?tag=kubernetes"
                     title="kubernetes"
                     rel="5">kubernetes</a>
         
-                <a data-sort="0019" 
+                <a data-sort="0020" 
                     href="/blog/archive/?tag=k8s"
                     title="k8s"
                     rel="7">k8s</a>
         
                 <a data-sort="0021" 
+                    href="/blog/archive/?tag=neuvector"
+                    title="neuvector"
+                    rel="6">neuvector</a>
+        
+                <a data-sort="0022" 
                     href="/blog/archive/?tag=cni"
                     title="cni"
                     rel="5">cni</a>
         
-                <a data-sort="0021" 
-                    href="/blog/archive/?tag=neuvector"
-                    title="neuvector"
-                    rel="5">neuvector</a>
-        
-                <a data-sort="0023" 
+                <a data-sort="0024" 
                     href="/blog/archive/?tag=istio"
                     title="istio"
                     rel="3">istio</a>
         
-                <a data-sort="0024" 
+                <a data-sort="0025" 
                     href="/blog/archive/?tag=calico"
                     title="calico"
                     rel="2">calico</a>
         
-                <a data-sort="0024" 
+                <a data-sort="0025" 
                     href="/blog/archive/?tag=docker"
                     title="docker"
                     rel="2">docker</a>
         
-                <a data-sort="0024" 
+                <a data-sort="0025" 
                     href="/blog/archive/?tag=tungstenfabric"
                     title="tungstenfabric"
                     rel="2">tungstenfabric</a>

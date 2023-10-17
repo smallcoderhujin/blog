@@ -5,9 +5,212 @@
     <description>Hujin，Openstack &amp; SDN &amp; Kubernetes Lover，Software Engineer，| 与你一起发现更大的世界</description>
     <link>http://0.0.0.0:4000/blog/</link>
     <atom:link href="http://0.0.0.0:4000/blog/feed.xml" rel="self" type="application/rss+xml" />
-    <pubDate>Mon, 10 Apr 2023 03:32:33 +0000</pubDate>
-    <lastBuildDate>Mon, 10 Apr 2023 03:32:33 +0000</lastBuildDate>
+    <pubDate>Tue, 17 Oct 2023 06:57:32 +0000</pubDate>
+    <lastBuildDate>Tue, 17 Oct 2023 06:57:32 +0000</lastBuildDate>
     <generator>Jekyll v4.2.2</generator>
+    
+      <item>
+        <title>Neuvector源码之 网络流量拓扑</title>
+        <description>&lt;h2 id=&quot;背景&quot;&gt;背景&lt;/h2&gt;
+
+&lt;p&gt;容器环境通信频繁，包含大量的东西向和南北向通信，通过neuvector的网络活动功能，可以全局查看集群中容器间的流量/访问host的流量/访问外网以及来自外网的流量。
+网络活动功能比较丰富，包含：&lt;/p&gt;
+&lt;ul&gt;
+  &lt;li&gt;网络抓包&lt;/li&gt;
+  &lt;li&gt;模式切换（学习/告警/保护）&lt;/li&gt;
+  &lt;li&gt;实时流量查看（方向/协议/端口/数据统计等）&lt;/li&gt;
+  &lt;li&gt;容器的自动发现和展示&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;这里我们只深入介绍下实时流量的实现，并讨论下移植到虚拟机场景的可能性&lt;/p&gt;
+
+&lt;h2 id=&quot;架构图&quot;&gt;架构图&lt;/h2&gt;
+
+&lt;p&gt;&lt;img src=&quot;/blog/img/neuvector_flow.png&quot; alt=&quot;neuvector file&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;kubernetes的网络是通过cni标准来实现的，实现方式多种多样。neuvector提供一种不依赖特定cni的通用的方式来获取容器流量并展示&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/blog/img/neuvector_flow1.png&quot; alt=&quot;neuvector file&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;我们从几个维度来看neuvector的流量拓扑功能：&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;分成三个模块，分别是controller/enforce/dp&lt;/li&gt;
+  &lt;li&gt;controller负责提供api接口，汇总监控数据并行成map拓扑数据&lt;/li&gt;
+  &lt;li&gt;enforce负责监控节点容器的生命周期，汇总dp的数据，并添加相关容器信息，上报给controller&lt;/li&gt;
+  &lt;li&gt;dp是最底层负责解析数据报文，创建连接session并提供连接监控数据&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&quot;源码&quot;&gt;源码&lt;/h2&gt;
+&lt;p&gt;这里先看下容器的探测
+&lt;img src=&quot;/blog/img/neuvector_flow2.png&quot; alt=&quot;neuvector file&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;拓扑展示资源包括：&lt;/p&gt;
+&lt;ul&gt;
+  &lt;li&gt;container：容器资源，以group为单位，一个group中可能包含多个容器，类似pod&lt;/li&gt;
+  &lt;li&gt;node：物理节点&lt;/li&gt;
+  &lt;li&gt;external：外部网络&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;这里通过容器资源的获取来具体介绍流程情况：&lt;/p&gt;
+&lt;ul&gt;
+  &lt;li&gt;每个节点的enforce容器负责监听当前节点容器runtime的事件，runtime包括：docker/containerd/crio&lt;/li&gt;
+  &lt;li&gt;监听的事件包括：创建、停止、删除、拷贝进容器、从容器拷贝出&lt;/li&gt;
+  &lt;li&gt;这里会根据节点中proc目录下每个容器的cgroup信息来处理pod中多个容器，这里资源展示以pod单位&lt;/li&gt;
+  &lt;li&gt;在监听到事件后更新本地内存数据，同时更新到consul数据库中&lt;/li&gt;
+  &lt;li&gt;在controller容器中会watch consul数据库的变化，在发现有容器数据新建后更新本地的内存数据&lt;/li&gt;
+  &lt;li&gt;在用户请求api获取容器资源列表时，直接读取内存数据并返回&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;然后我们再看看connection如何获取的：
+&lt;img src=&quot;/blog/img/neuvector_flow3.png&quot; alt=&quot;neuvector file&quot; /&gt;&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;当容器创建或者更新时，enforce会调用dp接口下发相关的网络信息&lt;/li&gt;
+  &lt;li&gt;当两个容器在相互通信时，所有报文都会被容器所在节点的dp模块监听，dp模块在发现一个新的session创建后，会通过socket连接通知节点上的enforce 容器&lt;/li&gt;
+  &lt;li&gt;enforce容器会解析dp发送的消息，同时根据报文mac地址识别出mac对应的源容器，目标容器一般是无法识别的，需要上送到controller中进一步识别&lt;/li&gt;
+  &lt;li&gt;在enforce容器中会一个定时任务用来将本地的连接数据通过grpc发送到controller模块&lt;/li&gt;
+  &lt;li&gt;在controller中reportconnection方法会更新本地的wlGraph内存数据，并将连接保存到数据库中&lt;/li&gt;
+  &lt;li&gt;在用户请求api获取容器资源间连接列表或者指定两个资源间的连接时，直接读取内存数据并返回&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;最后看看dp中如何获取连接信息的：
+&lt;img src=&quot;/blog/img/neuvector_flow4.png&quot; alt=&quot;neuvector file&quot; /&gt;&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;当一个新的容器创建完成后，dp会通过socket连接到容器网卡上&lt;/li&gt;
+  &lt;li&gt;dp会接受容器网卡的tx和rx报文，其中主要分析rx报文&lt;/li&gt;
+  &lt;li&gt;首先会根据报文特征查询对应的session，并更新session中连接信息，主要是一个技术类的参数&lt;/li&gt;
+  &lt;li&gt;dp中有一个定时器，每6s将dp中所有进程的连接数据发送到enforce容器
+    &lt;blockquote&gt;
+      &lt;p&gt;注意：当前只支持ipv4连接的上报&lt;/p&gt;
+    &lt;/blockquote&gt;
+  &lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&quot;虚拟机流量拓扑&quot;&gt;虚拟机流量拓扑&lt;/h2&gt;
+&lt;p&gt;进一步分析源码，发现这套机制完全可以应用到虚拟机场景，不过有几个问题需要解决：&lt;/p&gt;
+&lt;ul&gt;
+  &lt;li&gt;虚拟机的探测：需要监控libvirt事件，检测虚拟机的生命周期&lt;/li&gt;
+  &lt;li&gt;虚拟机网卡的探测：需要定时探测虚拟机网卡，包括新增和卸载网卡，并将网卡信息下发给dp，dp和虚拟机网卡建立socket连接&lt;/li&gt;
+  &lt;li&gt;保护模式理论上也是可以支持的，但是需要根据虚拟机网络的具体实现在链路中嵌入dp那一套流程（参考另一篇博客）&lt;/li&gt;
+  &lt;li&gt;同网络通信是正常支持的，对于vxlan多网络场景，cidr可能相同的情况下，部分根据ip/mac地址获取虚拟机信息的流程需要优化&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;虚拟机的流量拓扑已经基本实现，这里有需要可以进一步讨论&lt;/p&gt;
+
+&lt;h2 id=&quot;总结&quot;&gt;总结&lt;/h2&gt;
+&lt;p&gt;本次没有针对源码逐步分析，从架构和流程上分析了流量拓扑的实现原理，同时分析虚拟机场景下使用这种方案的可能行。
+实际发现流量探测的时效性还是挺高的，基本秒级响应，同时对于异常（告警/攻击/保护）流量可以实时告警。
+个人感觉唯一不足的地方是支持的协议不太多，但常用是够的，后面可以看看如何自定义。&lt;/p&gt;
+
+&lt;p&gt;支持的协议：&lt;/p&gt;
+
+&lt;table&gt;
+  &lt;thead&gt;
+    &lt;tr&gt;
+      &lt;th&gt;协议&lt;/th&gt;
+      &lt;th&gt;备注&lt;/th&gt;
+    &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+    &lt;tr&gt;
+      &lt;td&gt;cassandra&lt;/td&gt;
+      &lt;td&gt;-&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;couchbase&lt;/td&gt;
+      &lt;td&gt;-&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;dhcp&lt;/td&gt;
+      &lt;td&gt;-&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;dns&lt;/td&gt;
+      &lt;td&gt;-&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;echo&lt;/td&gt;
+      &lt;td&gt;-&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;grpc&lt;/td&gt;
+      &lt;td&gt;-&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;http&lt;/td&gt;
+      &lt;td&gt;-&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;kafka&lt;/td&gt;
+      &lt;td&gt;-&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;mongodb&lt;/td&gt;
+      &lt;td&gt;-&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;mysql&lt;/td&gt;
+      &lt;td&gt;-&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;ntp&lt;/td&gt;
+      &lt;td&gt;-&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;postgresql&lt;/td&gt;
+      &lt;td&gt;-&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;redis&lt;/td&gt;
+      &lt;td&gt;-&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;spark&lt;/td&gt;
+      &lt;td&gt;-&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;sqlinjection&lt;/td&gt;
+      &lt;td&gt;-&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;ssh&lt;/td&gt;
+      &lt;td&gt;-&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;ssl&lt;/td&gt;
+      &lt;td&gt;-&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;tds&lt;/td&gt;
+      &lt;td&gt;-&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;tftp&lt;/td&gt;
+      &lt;td&gt;-&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;tns&lt;/td&gt;
+      &lt;td&gt;-&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;zookeeper&lt;/td&gt;
+      &lt;td&gt;-&lt;/td&gt;
+    &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+</description>
+        <pubDate>Mon, 16 Oct 2023 00:00:00 +0000</pubDate>
+        <link>http://0.0.0.0:4000/blog/2023/10/16/neuvector-visualization/</link>
+        <guid isPermaLink="true">http://0.0.0.0:4000/blog/2023/10/16/neuvector-visualization/</guid>
+        
+        <category>neuvector</category>
+        
+        <category>网络流量拓扑</category>
+        
+        
+      </item>
     
       <item>
         <title>Docker容器的网络命名空间为什么不可见？</title>
@@ -489,7 +692,7 @@ func (c *criService) RunPodSandbox(ctx context.Context, r *runtime.RunPodSandbox
       </item>
     
       <item>
-        <title>Neuvector源码分析之 文件管理</title>
+        <title>Neuvector源码之 文件管理</title>
         <description>&lt;h2 id=&quot;背景&quot;&gt;背景&lt;/h2&gt;
 
 &lt;p&gt;进程规则、文件规则、网络规则、dlp、waf都是在监控组下的功能。本次我们通过源码的方式来深入了解文件规则是如何实现的。
@@ -3076,7 +3279,7 @@ filter protocol all pref 49152 u32 fh 800::800 order 2048 key ht 800 bkt 0 termi
       </item>
     
       <item>
-        <title>Neuvector源码分析之 合规性检测</title>
+        <title>Neuvector源码之 合规性检测</title>
         <description>&lt;h2 id=&quot;背景&quot;&gt;背景&lt;/h2&gt;
 &lt;p&gt;Neuvector安全基线支持 CIS Benchmark 标准，可对容器、镜像、Register、主机、kubernetes 进行安全标准检查，多维度展现容器资产的基线合规情况并帮助建立容器运行环境下的最佳基线配置，减少攻击面
 NeuVector 的合规性审核包括 CIS 基线测试、自定义检查、机密审核以及 PCI、GDPR 和其他法规的行业标准模板扫描。本文将通过源码的方式分析合规性检测的具体实现&lt;/p&gt;
@@ -3613,23 +3816,23 @@ ip netns exec ns1 ip neigh add 169.254.1.1 dev nsvth lladdr ee:ee:ee:ee:ee:ee
 17
 18
 &lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;# 创建namespace和虚拟网卡
-ip netns add ns2
-ip link add tap1 type veth peer name nsvth netns ns2
+ip netns add ns1
+ip link add tap1 type veth peer name nsvth netns ns1
 ip link set tap1 up
-ip netns exec ns2 ip link set lo up
-ip netns exec ns2 ip link set nsvth up
+ip netns exec ns1 ip link set lo up
+ip netns exec ns1 ip link set nsvth up
 
 
 # 配置路由和IP地址
-ip netns exec ns2 ip addr add 10.244.104.0/24 dev nsvth
+ip netns exec ns1 ip addr add 10.244.104.0/24 dev nsvth
 ip r add 10.244.104.0/32 dev tap1
-ip netns exec ns2 ip r add 169.254.1.1 dev nsvth
-ip netns exec ns2 ip r add default via 169.254.1.1 dev nsvth
+ip netns exec ns1 ip r add 169.254.1.1 dev nsvth
+ip netns exec ns1 ip r add default via 169.254.1.1 dev nsvth
 
 
 # 配置neigh
 ip link set address ee:ee:ee:ee:ee:ee dev tap1
-ip netns exec ns2 ip neigh add 169.254.1.1 dev nsvth lladdr ee:ee:ee:ee:ee:ee
+ip netns exec ns1 ip neigh add 169.254.1.1 dev nsvth lladdr ee:ee:ee:ee:ee:ee
 &lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
 
 &lt;p&gt;每个节点启动bird
@@ -3638,7 +3841,7 @@ ip netns exec ns2 ip neigh add 169.254.1.1 dev nsvth lladdr ee:ee:ee:ee:ee:ee
 &lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
 2
 3
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;docker run --name calico-temp -d calico/node:v3.11.1 sleep 200
+&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;docker run --name calico-temp -d calico/node:v3.11.1 sleep 3600
 docker cp calico-temp:/usr/bin/bird /usr/bin
 docker rm -f calico-temp
 &lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
@@ -3731,20 +3934,6 @@ docker rm -f calico-temp
 84
 85
 86
-87
-88
-89
-90
-91
-92
-93
-94
-95
-96
-97
-98
-99
-100
 &lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;function apply_communities ()
 {
 }
@@ -3809,25 +3998,15 @@ template bgp bgp_template {
 }
 
 # ------------- Node-to-node mesh -------------
-
-
-
-
-
 # For peer /host/node1/ip_addr_v4
 # Skipping ourselves (10.20.30.30)
-
-
-
 
 # For peer /host/node2/ip_addr_v4
 protocol bgp Mesh_10_20_30_31 from bgp_template {
   neighbor 10.20.30.31 as 64512;
   source address 10.20.30.30;  # The local address we use for the TCP connection
-  passive on; # Mesh is unidirectional, peer will connect to us.
+  #passive on; # Mesh is unidirectional, peer will connect to us.
 }
-
-
 
 # For peer /host/node3/ip_addr_v4
 #protocol bgp Mesh_10_20_30_32 from bgp_template {
@@ -3836,14 +4015,10 @@ protocol bgp Mesh_10_20_30_31 from bgp_template {
 #  passive on; # Mesh is unidirectional, peer will connect to us.
 #}
 
-
-
 # ------------- Global peers -------------
 # No global peers configured.
 
-
 # ------------- Node-specific peers -------------
-
 # No node-specific peers configured.
 &lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
 
@@ -4032,6 +4207,8 @@ rtt min/avg/max/mdev = 0.299/0.323/0.356/0.024 ms
   &lt;li&gt;bird手册：The BIRD Internet Routing Daemon Project (network.cz)&lt;/li&gt;
 &lt;/ul&gt;
 
+&lt;h2 id=&quot;如果对您有帮忙打个赏&quot;&gt;如果对您有帮忙，打个赏&lt;/h2&gt;
+
 </description>
         <pubDate>Fri, 16 Sep 2022 00:00:00 +0000</pubDate>
         <link>http://0.0.0.0:4000/blog/2022/09/16/calico-bird/</link>
@@ -4045,7 +4222,7 @@ rtt min/avg/max/mdev = 0.299/0.323/0.356/0.024 ms
       </item>
     
       <item>
-        <title>Neuvector源码分析之 dp引流的实现</title>
+        <title>Neuvector源码之 dp引流的实现</title>
         <description>&lt;h2 id=&quot;背景&quot;&gt;背景&lt;/h2&gt;
 &lt;p&gt;在neuvector中通过监听runtime事件来动态维护节点上容器基础信息，在界面支持策略配置、模式管理都对容器流量产生影响。用户从学习模式调整成保护模式时可以对容器流量进行阻断操作，那么agent
 中是如何实现阻断的？
@@ -4439,7 +4616,7 @@ cfg_mac()
       </item>
     
       <item>
-        <title>Neuvector源码分析之 网络抓包</title>
+        <title>Neuvector源码之 网络抓包</title>
         <description>&lt;h2 id=&quot;功能介绍&quot;&gt;功能介绍&lt;/h2&gt;
 
 &lt;p&gt;&lt;img src=&quot;/blog/img/neuvector_tcpdump.png&quot; alt=&quot;neuvector_pcap&quot; /&gt;&lt;/p&gt;
@@ -4868,279 +5045,6 @@ neuvector-service-webui           NodePort    10.68.204.173   &amp;lt;none&amp;g
         <guid isPermaLink="true">http://0.0.0.0:4000/blog/2022/08/09/neuvector-introduce/</guid>
         
         <category>neuvector</category>
-        
-        
-      </item>
-    
-      <item>
-        <title>5分钟快速部署Kubernetes集群</title>
-        <description>&lt;h2 id=&quot;环境信息&quot;&gt;环境信息&lt;/h2&gt;
-
-&lt;ul&gt;
-  &lt;li&gt;操作系统：centos7.6 4C8G&lt;/li&gt;
-  &lt;li&gt;节点个数：1&lt;em&gt;master+2&lt;/em&gt;node&lt;/li&gt;
-  &lt;li&gt;内核版本：3.10.0-1127.el7.x86_64&lt;/li&gt;
-  &lt;li&gt;网络信息：1&lt;em&gt;管理 1&lt;/em&gt;业务&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;h2 id=&quot;准备masternode&quot;&gt;准备（master+node）&lt;/h2&gt;
-
-&lt;p&gt;每个节点修改hostname&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;hostnamectl set-hostname nodex
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;配置/etc/hosts&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;cat /etc/hosts
-179.20.23.30 node1
-179.20.23.31 node2
-179.20.23.32 node3
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;配置免密登录&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;ssh-keygen
-ssh-copy-id node1
-ssh-copy-id node2
-ssh-copy-id node3
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;同步hosts文件&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;scp /etc/hosts node2:/etc
-scp /etc/hosts node3:/etc
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;配置内核参数&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;vi /etc/sysctl.conf
-net.ipv4.conf.all.forwarding=1
-net.bridge.bridge-nf-call-iptables = 1
-net.bridge.bridge-nf-call-arptables = 1
-net.ipv4.conf.default.rp_filter = 0
-net.ipv4.conf.all.rp_filter = 0
-net.ipv4.conf.default.send_redirects = 0
-
-sysctl -p
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;关闭防火墙&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;systemctl stop firewalld
-systemctl disable firewalld
-setenforce 0
-
-vi /etc/selinux/config
-SELINUX=disabled
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;关闭swap&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;swapoff -a
-vi /etc/sysctl.d/k8s.conf 添加下面一行：
-vm.swappiness=0
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;安装docker-ce&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;yum install -y yum-utils device-mapper-persistent-data lvm2 wget
-wget -O /etc/yum.repos.d/docker-ce.repo https://download.docker.com/linux/centos/docker-ce.repo
-sudo sed -i &apos;s+download.docker.com+mirrors.tuna.tsinghua.edu.cn/docker-ce+&apos; /etc/yum.repos.d/docker-ce.repo
-yum install docker-ce -y
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;安装kubectl kubeadm kubelet(版本自定义)&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;cat &amp;lt;&amp;lt;EOF &amp;gt; /etc/yum.repos.d/kubernetes.repo
-[kubernetes]
-name=Kubernetes
-baseurl=http://mirrors.aliyun.com/kubernetes/yum/repos/kubernetes-el7-x86_64
-enabled=1
-gpgcheck=0
-repo_gpgcheck=0
-EOF
-
-yum install kubelet-1.18.15 kubeadm-1.18.15 kubectl-1.18.15 -y
-systemctl enable kubelet &amp;amp;&amp;amp; sudo systemctl start kubelet
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;预下载镜像（master节点即可）&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;kubeadm config images list --kubernetes-version=v1.18.15
-
-cat images.sh 
-#!/bin/bash
-images=(kube-proxy:v1.18.15 kube-scheduler:v1.18.15 kube-controller-manager:v1.18.15 kube-apiserver:v1.18.15 etcd:3.4.3-0 pause:3.2 coredns:1.6.7)
-for imageName in ${images[@]} ; do
-docker pull harbor.archeros.cn/huayun-kubernetes/amd64/$imageName
-docker tag harbor.archeros.cn/huayun-kubernetes/amd64/$imageName k8s.gcr.io/$imageName
-docker rmi harbor.archeros.cn/huayun-kubernetes/amd64/$imageName
-done
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;h2 id=&quot;部署master节点&quot;&gt;部署master节点&lt;/h2&gt;
-
-&lt;p&gt;创建配置文件&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;vi kubeadm.yaml 
-apiVersion: kubeadm.k8s.io/v1beta2
-kind: InitConfiguration
-localAPIEndpoint:
-  advertiseAddress: &quot;179.20.23.33&quot;
-  bindPort: 6443
-nodeRegistration:
-  taints:
-  - effect: PreferNoSchedule
-    key: node-role.kubernetes.io/master
----
-apiVersion: kubeadm.k8s.io/v1beta2
-kind: ClusterConfiguration
-kubernetesVersion: v1.18.15
-networking:
-  podSubnet: 10.244.0.0/16
-  serviceSubnet: 10.96.0.0/16
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;blockquote&gt;
-  &lt;p&gt;配置k8s集群master节点的管理ip和端口
-配置k8s集群版本
-设置pod/service cidr&lt;/p&gt;
-&lt;/blockquote&gt;
-
-&lt;p&gt;开始部署&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;kubeadm init --config=kubeadm.yaml
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;post deploy配置&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-3
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;mkdir -p $HOME/.kube
-sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
-sudo chown $(id -u):$(id -g) $HOME/.kube/config
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;允许master节点作为node节点使用&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;kubectl taint node node1 node-role.kubernetes.io/master-
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;h2 id=&quot;部署node节点&quot;&gt;部署node节点&lt;/h2&gt;
-
-&lt;p&gt;在master节点获取token&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;kubeadm token list |grep &quot;system:bootstrappers:kubeadm:default-node-token&quot; |awk &apos;{print $1}&apos;
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;join集群&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;kubeadm join --token &amp;lt;mastertoken&amp;gt; --discovery-token-unsafe-skip-ca-verification &amp;lt;k8s_master_ip&amp;gt;:6443
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;h2 id=&quot;部署cni&quot;&gt;部署cni&lt;/h2&gt;
-
-&lt;p&gt;此时k8s集群实际已经可以运行，只是无法创建pod资源，这里我们来部署cni组件，以calico为例&lt;/p&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;table class=&quot;rouge-table&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class=&quot;rouge-gutter gl&quot;&gt;&lt;pre class=&quot;lineno&quot;&gt;1
-2
-&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;rouge-code&quot;&gt;&lt;pre&gt;curl https://docs.projectcalico.org/v3.18/manifests/calico.yaml -O
-kubectl apply -f calico.yaml
-&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;blockquote&gt;
-  &lt;p&gt;这里如果需要管理和业务分离部署，可以修改配置文件指定业务网卡&lt;/p&gt;
-&lt;/blockquote&gt;
-
-&lt;h2 id=&quot;总结&quot;&gt;总结&lt;/h2&gt;
-&lt;p&gt;我们这里的大部分准备操作，可以通过制作模板的方式提高效率，在实际的开发验证或者学习中可以极大节省我们的环境部署时间&lt;/p&gt;
-</description>
-        <pubDate>Tue, 09 Aug 2022 00:00:00 +0000</pubDate>
-        <link>http://0.0.0.0:4000/blog/2022/08/09/k8s-deploy/</link>
-        <guid isPermaLink="true">http://0.0.0.0:4000/blog/2022/08/09/k8s-deploy/</guid>
-        
-        <category>kubernetes</category>
-        
-        <category>部署</category>
-        
-        <category>kubeadm</category>
         
         
       </item>
