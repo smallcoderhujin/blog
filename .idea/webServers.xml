@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="WebServers">
+    <option name="servers">
+      <webServer id="d2dbe19a-2aad-41e4-97ee-dcf476acce91" name="git">
+        <fileTransfer accessType="SFTP" host="179.20.23.4" port="22" sshConfigId="fdccc3c3-ea60-4c58-8cae-c48be1b35533" sshConfig="root@179.20.23.4:22 password">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" keepAliveTimeout="0" passiveMode="true" shareSSLContext="true" />
+          </advancedOptions>
+        </fileTransfer>
+      </webServer>
+    </option>
+  </component>
+</project>

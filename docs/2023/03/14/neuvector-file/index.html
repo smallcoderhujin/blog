@@ -11,22 +11,11 @@
     <meta name="theme-color" content="#000000">
     
     <!-- Open Graph -->
-    <meta property="og:title" content="Neuvector源码分析之 文件管理 - 胡进的博客 | Hujin's Blog">
+    <meta property="og:title" content="Neuvector源码之 文件管理 - 胡进的博客 | Hujin's Blog">
     
     <meta property="og:type" content="article">
     <meta property="og:description" content="背景
-
-进程规则、文件规则、网络规则、dlp、waf都是在监控组下的功能。本次我们通过源码的方式来深入了解文件规则是如何实现的。
-文件规则支持用户自定义关注的文件、目录，设置规则的学习或者保护模式，相应的如果容器访问到了指定的文件，且文件规则设置保护模式，则对文件的写会产生告警。
-
-架构图
-
-
-
-我们从几个维度来看neuvector的文件管理功能：
-
-
-  页面/接口用户下发的文件规则如何让...">
+">
     
     <meta property="article:published_time" content="2023-03-14T00:00:00Z">
     
@@ -47,7 +36,7 @@
     <meta property="og:url" content="http://0.0.0.0:4000/2023/03/14/neuvector-file/">
     <meta property="og:site_name" content="胡进的博客 | Hujin's Blog">
     
-    <title>Neuvector源码分析之 文件管理 - 胡进的博客 | Hujin's Blog</title>
+    <title>Neuvector源码之 文件管理 - 胡进的博客 | Hujin's Blog</title>
 
     <!-- Web App Manifest -->
     <link rel="manifest" href="/blog/pwa/manifest.json">
@@ -258,7 +247,7 @@
                         <a class="tag" href="/blog/archive/?tag=inotify" title="inotify">inotify</a>
                         
                     </div>
-                    <h1>Neuvector源码分析之 文件管理</h1>
+                    <h1>Neuvector源码之 文件管理</h1>
                     
                     <h2 class="subheading"></h2>
                     <span class="meta">Posted by hujin on March 14, 2023</span>
@@ -1981,6 +1970,13 @@ func (w *FileWatch) addFile(finfo *osutil.FileInfoExt) {
                     </li>
                     
                     
+                    <li class="next">
+                        <a href="/blog/2023/04/06/netns/" data-toggle="tooltip" data-placement="top" title="Docker容器的网络命名空间为什么不可见？">
+                        Next<br>
+                        <span>Docker容器的网络命名空间为什么不可见？</span>
+                        </a>
+                    </li>
+                    
                 </ul>
                 <hr style="visibility: hidden;">
 
@@ -2028,37 +2024,42 @@ func (w *FileWatch) addFile(finfo *osutil.FileInfoExt) {
         
         
         
-                <a data-sort="0020" 
+                <a data-sort="0023" 
                     href="/blog/archive/?tag=kubernetes"
                     title="kubernetes"
                     rel="5">kubernetes</a>
         
-                <a data-sort="0018" 
+                <a data-sort="0021" 
                     href="/blog/archive/?tag=k8s"
                     title="k8s"
                     rel="7">k8s</a>
         
-                <a data-sort="0020" 
+                <a data-sort="0022" 
+                    href="/blog/archive/?tag=neuvector"
+                    title="neuvector"
+                    rel="6">neuvector</a>
+        
+                <a data-sort="0023" 
                     href="/blog/archive/?tag=cni"
                     title="cni"
                     rel="5">cni</a>
         
-                <a data-sort="0020" 
-                    href="/blog/archive/?tag=neuvector"
-                    title="neuvector"
-                    rel="5">neuvector</a>
-        
-                <a data-sort="0022" 
+                <a data-sort="0025" 
                     href="/blog/archive/?tag=istio"
                     title="istio"
                     rel="3">istio</a>
         
-                <a data-sort="0023" 
+                <a data-sort="0026" 
                     href="/blog/archive/?tag=calico"
                     title="calico"
                     rel="2">calico</a>
         
-                <a data-sort="0023" 
+                <a data-sort="0026" 
+                    href="/blog/archive/?tag=docker"
+                    title="docker"
+                    rel="2">docker</a>
+        
+                <a data-sort="0026" 
                     href="/blog/archive/?tag=tungstenfabric"
                     title="tungstenfabric"
                     rel="2">tungstenfabric</a>
@@ -2150,7 +2151,7 @@ func (w *FileWatch) addFile(finfo *osutil.FileInfoExt) {
 </ul>
 
                 <p class="copyright text-muted">
-                    Copyright &copy; Hujin Blog 2023
+                    Copyright &copy; Hujin Blog 2024
                     <br>
                     Powered by <a href="http://hujin.github.com">Hujin Blog</a> |
                     <iframe style="margin-left: 2px; margin-bottom:-5px;" frameborder="0" scrolling="0" width="100px"

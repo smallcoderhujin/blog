@@ -234,9 +234,90 @@
             ">
     			
 <div class="post-preview">
+    <a href="/blog/2024/07/24/sanlock/">
+        <h2 class="post-title">
+            sanlock原理和使用
+        </h2>
+        
+        <h3 class="post-subtitle">
+            
+        </h3>
+        
+        <div class="post-content-preview">
+            
+                介绍
+sanlock 是一个基于 SAN 的分布式锁管理器。集群中的每个节点都各自运行 sanlock 服务，锁的状态都被写到了共享存储上，使用 Disk Paxos 算法读写共享存储以实现对分布式锁的获取、释放和超时。一般认为 SAN 中的 LUN 的可靠性要比集群中的主机高，对主机来说，应用程序进程可能会崩溃、重启，主机的 IP 网络也可能会发生故障，而 SAN 是通过专门的光网连接的，...
+            
+        </div>
+    </a>
+    <p class="post-meta">
+        Posted by hujin on July 24, 2024
+    </p>
+</div>
+<hr>
+
+<div class="post-preview">
+    <a href="/blog/2023/10/16/neuvector-visualization/">
+        <h2 class="post-title">
+            Neuvector源码之 网络流量拓扑
+        </h2>
+        
+        <h3 class="post-subtitle">
+            
+        </h3>
+        
+        <div class="post-content-preview">
+            
+                背景
+
+容器环境通信频繁，包含大量的东西向和南北向通信，通过neuvector的网络活动功能，可以全局查看集群中容器间的流量/访问host的流量/访问外网以及来自外网的流量。
+网络活动功能比较丰富，包含：
+
+  网络抓包
+  模式切换（学习/告警/保护）
+  实时流量查看（方向/协议/端口/数据统计等）
+  容器的自动发现和展示
+
+
+这里我们只深入介绍下实时流量的实现，并讨论下移植到虚拟机场...
+            
+        </div>
+    </a>
+    <p class="post-meta">
+        Posted by hujin on October 16, 2023
+    </p>
+</div>
+<hr>
+
+<div class="post-preview">
+    <a href="/blog/2023/04/06/netns/">
+        <h2 class="post-title">
+            Docker容器的网络命名空间为什么不可见？
+        </h2>
+        
+        <h3 class="post-subtitle">
+            
+        </h3>
+        
+        <div class="post-content-preview">
+            
+                背景
+因为做过openstack的虚拟网络，习惯使用netns去管理linux的网络命名空间，也一直理解容器网络应该是类似的。
+但是实际在使用时（runtime使用docker）发现每个非hostnetwork的容器创建后并不会查看到一个network namespace(通过ip netns ls查看)；
+在使用的runtime是containerd的时候呢，这个namespace又出现了...
+            
+        </div>
+    </a>
+    <p class="post-meta">
+        Posted by hujin on April 6, 2023
+    </p>
+</div>
+<hr>
+
+<div class="post-preview">
     <a href="/blog/2023/03/14/neuvector-file/">
         <h2 class="post-title">
-            Neuvector源码分析之 文件管理
+            Neuvector源码之 文件管理
         </h2>
         
         <h3 class="post-subtitle">
@@ -338,7 +419,7 @@ Why does my container have a rou...
 <div class="post-preview">
     <a href="/blog/2022/09/21/neuvector-bench/">
         <h2 class="post-title">
-            Neuvector源码分析之 合规性检测
+            Neuvector源码之 合规性检测
         </h2>
         
         <h3 class="post-subtitle">
@@ -393,7 +474,7 @@ Calico作为一种常用的Kub...
 <div class="post-preview">
     <a href="/blog/2022/08/23/neuvector-dp/">
         <h2 class="post-title">
-            Neuvector源码分析之 dp引流的实现
+            Neuvector源码之 dp引流的实现
         </h2>
         
         <h3 class="post-subtitle">
@@ -427,7 +508,7 @@ Calico作为一种常用的Kub...
 <div class="post-preview">
     <a href="/blog/2022/08/10/neuvector-tcpdump/">
         <h2 class="post-title">
-            Neuvector源码分析之 网络抓包
+            Neuvector源码之 网络抓包
         </h2>
         
         <h3 class="post-subtitle">
@@ -460,111 +541,6 @@ API接口：
     </a>
     <p class="post-meta">
         Posted by hujin on August 10, 2022
-    </p>
-</div>
-<hr>
-
-<div class="post-preview">
-    <a href="/blog/2022/08/09/neuvector-introduce/">
-        <h2 class="post-title">
-            Neuvector 初探
-        </h2>
-        
-        <h3 class="post-subtitle">
-            
-        </h3>
-        
-        <div class="post-content-preview">
-            
-                介绍
-
-
-
-NeuVector 是业界首个端到端的开源容器安全平台，唯一为容器化工作负载提供企业级零信任安全的解决方案。
-NeuVector 可以提供实时深入的容器网络可视化、东西向容器网络监控、主动隔离和保护、容器主机安全以及
-容器内部安全，容器管理平台无缝集成并且实现应用级容器安全的自动化，适用于各种云环境、跨云或者本地部署等容器生产环境。
-
-我们重点看neuvector的网络功能。 n...
-            
-        </div>
-    </a>
-    <p class="post-meta">
-        Posted by hujin on August 9, 2022
-    </p>
-</div>
-<hr>
-
-<div class="post-preview">
-    <a href="/blog/2022/08/09/k8s-deploy/">
-        <h2 class="post-title">
-            5分钟快速部署Kubernetes集群
-        </h2>
-        
-        <h3 class="post-subtitle">
-            
-        </h3>
-        
-        <div class="post-content-preview">
-            
-                环境信息
-
-
-  操作系统：centos7.6 4C8G
-  节点个数：1master+2node
-  内核版本：3.10.0-1127.el7.x86_64
-  网络信息：1管理 1业务
-
-
-准备（master+node）
-
-每个节点修改hostname
-
-1
-hostnamectl set-hostname nodex
-
-
-配置/etc/hosts
-
-1
-2
-3
-4
-cat /etc/h...
-            
-        </div>
-    </a>
-    <p class="post-meta">
-        Posted by hujin on August 9, 2022
-    </p>
-</div>
-<hr>
-
-<div class="post-preview">
-    <a href="/blog/2022/04/15/istio-bookinfo/">
-        <h2 class="post-title">
-            Istio Bookinfo
-        </h2>
-        
-        <h3 class="post-subtitle">
-            
-        </h3>
-        
-        <div class="post-content-preview">
-            
-                架构图
-
-
-在k8s中通过deployment安装一些微服务并通过service暴露出来，包括
-
-  productpage: python编写，服务主界面，或者叫index页面，页面中会访问其他微服务
-  reviews： java编写，书籍评价微服务
-  details： ruby编写，书籍详情信息微服务
-  ratings： nodejs编写，数据推荐指数微服务，rating serv...
-            
-        </div>
-    </a>
-    <p class="post-meta">
-        Posted by hujin on April 15, 2022
     </p>
 </div>
 <hr>
@@ -605,37 +581,42 @@ cat /etc/h...
         
         
         
-                <a data-sort="0020" 
+                <a data-sort="0023" 
                     href="/blog/archive/?tag=kubernetes"
                     title="kubernetes"
                     rel="5">kubernetes</a>
         
-                <a data-sort="0018" 
+                <a data-sort="0021" 
                     href="/blog/archive/?tag=k8s"
                     title="k8s"
                     rel="7">k8s</a>
         
-                <a data-sort="0020" 
+                <a data-sort="0022" 
+                    href="/blog/archive/?tag=neuvector"
+                    title="neuvector"
+                    rel="6">neuvector</a>
+        
+                <a data-sort="0023" 
                     href="/blog/archive/?tag=cni"
                     title="cni"
                     rel="5">cni</a>
         
-                <a data-sort="0020" 
-                    href="/blog/archive/?tag=neuvector"
-                    title="neuvector"
-                    rel="5">neuvector</a>
-        
-                <a data-sort="0022" 
+                <a data-sort="0025" 
                     href="/blog/archive/?tag=istio"
                     title="istio"
                     rel="3">istio</a>
         
-                <a data-sort="0023" 
+                <a data-sort="0026" 
                     href="/blog/archive/?tag=calico"
                     title="calico"
                     rel="2">calico</a>
         
-                <a data-sort="0023" 
+                <a data-sort="0026" 
+                    href="/blog/archive/?tag=docker"
+                    title="docker"
+                    rel="2">docker</a>
+        
+                <a data-sort="0026" 
                     href="/blog/archive/?tag=tungstenfabric"
                     title="tungstenfabric"
                     rel="2">tungstenfabric</a>
@@ -721,7 +702,7 @@ cat /etc/h...
 </ul>
 
                 <p class="copyright text-muted">
-                    Copyright &copy; Hujin Blog 2023
+                    Copyright &copy; Hujin Blog 2024
                     <br>
                     Powered by <a href="http://hujin.github.com">Hujin Blog</a> |
                     <iframe style="margin-left: 2px; margin-bottom:-5px;" frameborder="0" scrolling="0" width="100px"

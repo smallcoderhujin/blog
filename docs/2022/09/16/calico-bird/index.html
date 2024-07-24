@@ -351,23 +351,23 @@ ip netns exec ns1 ip neigh add 169.254.1.1 dev nsvth lladdr ee:ee:ee:ee:ee:ee
 17
 18
 </pre></td><td class="rouge-code"><pre># 创建namespace和虚拟网卡
-ip netns add ns2
-ip link add tap1 type veth peer name nsvth netns ns2
+ip netns add ns1
+ip link add tap1 type veth peer name nsvth netns ns1
 ip link set tap1 up
-ip netns exec ns2 ip link set lo up
-ip netns exec ns2 ip link set nsvth up
+ip netns exec ns1 ip link set lo up
+ip netns exec ns1 ip link set nsvth up
 
 
 # 配置路由和IP地址
-ip netns exec ns2 ip addr add 10.244.104.0/24 dev nsvth
+ip netns exec ns1 ip addr add 10.244.104.0/24 dev nsvth
 ip r add 10.244.104.0/32 dev tap1
-ip netns exec ns2 ip r add 169.254.1.1 dev nsvth
-ip netns exec ns2 ip r add default via 169.254.1.1 dev nsvth
+ip netns exec ns1 ip r add 169.254.1.1 dev nsvth
+ip netns exec ns1 ip r add default via 169.254.1.1 dev nsvth
 
 
 # 配置neigh
 ip link set address ee:ee:ee:ee:ee:ee dev tap1
-ip netns exec ns2 ip neigh add 169.254.1.1 dev nsvth lladdr ee:ee:ee:ee:ee:ee
+ip netns exec ns1 ip neigh add 169.254.1.1 dev nsvth lladdr ee:ee:ee:ee:ee:ee
 </pre></td></tr></tbody></table></code></pre></div></div>
 
 <p>每个节点启动bird
@@ -376,7 +376,7 @@ ip netns exec ns2 ip neigh add 169.254.1.1 dev nsvth lladdr ee:ee:ee:ee:ee:ee
 <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
 2
 3
-</pre></td><td class="rouge-code"><pre>docker run --name calico-temp -d calico/node:v3.11.1 sleep 200
+</pre></td><td class="rouge-code"><pre>docker run --name calico-temp -d calico/node:v3.11.1 sleep 3600
 docker cp calico-temp:/usr/bin/bird /usr/bin
 docker rm -f calico-temp
 </pre></td></tr></tbody></table></code></pre></div></div>
@@ -469,20 +469,6 @@ docker rm -f calico-temp
 84
 85
 86
-87
-88
-89
-90
-91
-92
-93
-94
-95
-96
-97
-98
-99
-100
 </pre></td><td class="rouge-code"><pre>function apply_communities ()
 {
 }
@@ -547,25 +533,15 @@ template bgp bgp_template {
 }
 
 # ------------- Node-to-node mesh -------------
-
-
-
-
-
 # For peer /host/node1/ip_addr_v4
 # Skipping ourselves (10.20.30.30)
-
-
-
 
 # For peer /host/node2/ip_addr_v4
 protocol bgp Mesh_10_20_30_31 from bgp_template {
   neighbor 10.20.30.31 as 64512;
   source address 10.20.30.30;  # The local address we use for the TCP connection
-  passive on; # Mesh is unidirectional, peer will connect to us.
+  #passive on; # Mesh is unidirectional, peer will connect to us.
 }
-
-
 
 # For peer /host/node3/ip_addr_v4
 #protocol bgp Mesh_10_20_30_32 from bgp_template {
@@ -574,14 +550,10 @@ protocol bgp Mesh_10_20_30_31 from bgp_template {
 #  passive on; # Mesh is unidirectional, peer will connect to us.
 #}
 
-
-
 # ------------- Global peers -------------
 # No global peers configured.
 
-
 # ------------- Node-specific peers -------------
-
 # No node-specific peers configured.
 </pre></td></tr></tbody></table></code></pre></div></div>
 
@@ -770,23 +742,25 @@ rtt min/avg/max/mdev = 0.299/0.323/0.356/0.024 ms
   <li>bird手册：The BIRD Internet Routing Daemon Project (network.cz)</li>
 </ul>
 
+<h2 id="如果对您有帮忙打个赏">如果对您有帮忙，打个赏</h2>
+
 
 
                 <hr style="visibility: hidden;">
                 <ul class="pager">
                     
                     <li class="previous">
-                        <a href="/blog/2022/08/23/neuvector-dp/" data-toggle="tooltip" data-placement="top" title="Neuvector源码分析之 dp引流的实现">
+                        <a href="/blog/2022/08/23/neuvector-dp/" data-toggle="tooltip" data-placement="top" title="Neuvector源码之 dp引流的实现">
                         Previous<br>
-                        <span>Neuvector源码分析之 dp引流的实现</span>
+                        <span>Neuvector源码之 dp引流的实现</span>
                         </a>
                     </li>
                     
                     
                     <li class="next">
-                        <a href="/blog/2022/09/21/neuvector-bench/" data-toggle="tooltip" data-placement="top" title="Neuvector源码分析之 合规性检测">
+                        <a href="/blog/2022/09/21/neuvector-bench/" data-toggle="tooltip" data-placement="top" title="Neuvector源码之 合规性检测">
                         Next<br>
-                        <span>Neuvector源码分析之 合规性检测</span>
+                        <span>Neuvector源码之 合规性检测</span>
                         </a>
                     </li>
                     
@@ -837,37 +811,42 @@ rtt min/avg/max/mdev = 0.299/0.323/0.356/0.024 ms
         
         
         
-                <a data-sort="0020" 
+                <a data-sort="0023" 
                     href="/blog/archive/?tag=kubernetes"
                     title="kubernetes"
                     rel="5">kubernetes</a>
         
-                <a data-sort="0018" 
+                <a data-sort="0021" 
                     href="/blog/archive/?tag=k8s"
                     title="k8s"
                     rel="7">k8s</a>
         
-                <a data-sort="0020" 
+                <a data-sort="0022" 
+                    href="/blog/archive/?tag=neuvector"
+                    title="neuvector"
+                    rel="6">neuvector</a>
+        
+                <a data-sort="0023" 
                     href="/blog/archive/?tag=cni"
                     title="cni"
                     rel="5">cni</a>
         
-                <a data-sort="0020" 
-                    href="/blog/archive/?tag=neuvector"
-                    title="neuvector"
-                    rel="5">neuvector</a>
-        
-                <a data-sort="0022" 
+                <a data-sort="0025" 
                     href="/blog/archive/?tag=istio"
                     title="istio"
                     rel="3">istio</a>
         
-                <a data-sort="0023" 
+                <a data-sort="0026" 
                     href="/blog/archive/?tag=calico"
                     title="calico"
                     rel="2">calico</a>
         
-                <a data-sort="0023" 
+                <a data-sort="0026" 
+                    href="/blog/archive/?tag=docker"
+                    title="docker"
+                    rel="2">docker</a>
+        
+                <a data-sort="0026" 
                     href="/blog/archive/?tag=tungstenfabric"
                     title="tungstenfabric"
                     rel="2">tungstenfabric</a>
@@ -959,7 +938,7 @@ rtt min/avg/max/mdev = 0.299/0.323/0.356/0.024 ms
 </ul>
 
                 <p class="copyright text-muted">
-                    Copyright &copy; Hujin Blog 2023
+                    Copyright &copy; Hujin Blog 2024
                     <br>
                     Powered by <a href="http://hujin.github.com">Hujin Blog</a> |
                     <iframe style="margin-left: 2px; margin-bottom:-5px;" frameborder="0" scrolling="0" width="100px"

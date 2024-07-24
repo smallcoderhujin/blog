@@ -236,6 +236,96 @@
             ">
     			
 <div class="post-preview">
+    <a href="/blog/2021/05/14/k8s-kuryr-neutron/">
+        <h2 class="post-title">
+            Kuryr CNI
+        </h2>
+        
+        <h3 class="post-subtitle">
+            cni
+        </h3>
+        
+        <div class="post-content-preview">
+            
+                背景
+
+当k8s部署在openstack节点或者虚拟机中时，可以使用openstack提供的网络功能实现k8s cni，这里主要对接的是neutron和lbaas模块，社区提供了kuryr的实现方案。
+Kuryr 是 OpenStack Neutron 的子项目，其主要目标是透过该项目来集成 OpenStack 与 Kubernetes 的网络。该项目在 Kubernetes 中实作了原生 ...
+            
+        </div>
+    </a>
+    <p class="post-meta">
+        Posted by hujin on May 14, 2021
+    </p>
+</div>
+<hr>
+
+<div class="post-preview">
+    <a href="/blog/2021/04/06/k8s-go-mod/">
+        <h2 class="post-title">
+            GO MOD使用私有仓库
+        </h2>
+        
+        <h3 class="post-subtitle">
+            go mod gerrit
+        </h3>
+        
+        <div class="post-content-preview">
+            
+                背景
+
+在常见的项目中使用go mod做包管理，在引用第三方包时这个包可能维护在内部私有仓库中，需要解决几个问题：
+
+
+  引用第三方库
+  引用私有仓库时不使用代理
+  使用git方式获取代码
+
+
+替换引用的仓库地址
+这里直接修改代码中的引用工作量太大了，可以通过在go.mod中添加replace的方式：
+
+
+  github.com/gophercloud/gophercloud =&g...
+            
+        </div>
+    </a>
+    <p class="post-meta">
+        Posted by hujin on April 6, 2021
+    </p>
+</div>
+<hr>
+
+<div class="post-preview">
+    <a href="/blog/2021/03/24/k8s-csi-cinder/">
+        <h2 class="post-title">
+            Cinder CSI
+        </h2>
+        
+        <h3 class="post-subtitle">
+            
+        </h3>
+        
+        <div class="post-content-preview">
+            
+                背景
+由于openstack cinder提供丰富的后端存储服务，当k8s部署在openstack的虚拟机中时，使用cinder 的csi提供存储服务可以非常方便对接不同的后端存储
+
+要求
+
+  分别部署openstack和k8s集群
+  openstack cinder使用v3 api
+  openstack nova和cinder在keystone中的endpoint url对应的ip地...
+            
+        </div>
+    </a>
+    <p class="post-meta">
+        Posted by hujin on March 24, 2021
+    </p>
+</div>
+<hr>
+
+<div class="post-preview">
     <a href="/blog/2021/03/04/k8s-gdb/">
         <h2 class="post-title">
             Golang Debug -- gdb
@@ -447,37 +537,42 @@ OIDC是一种 OAuth2 认证方式， 被某些 OAuth2 提供者支持，例如 A
         
         
         
-                <a data-sort="0020" 
+                <a data-sort="0023" 
                     href="/blog/archive/?tag=kubernetes"
                     title="kubernetes"
                     rel="5">kubernetes</a>
         
-                <a data-sort="0018" 
+                <a data-sort="0021" 
                     href="/blog/archive/?tag=k8s"
                     title="k8s"
                     rel="7">k8s</a>
         
-                <a data-sort="0020" 
+                <a data-sort="0022" 
+                    href="/blog/archive/?tag=neuvector"
+                    title="neuvector"
+                    rel="6">neuvector</a>
+        
+                <a data-sort="0023" 
                     href="/blog/archive/?tag=cni"
                     title="cni"
                     rel="5">cni</a>
         
-                <a data-sort="0020" 
-                    href="/blog/archive/?tag=neuvector"
-                    title="neuvector"
-                    rel="5">neuvector</a>
-        
-                <a data-sort="0022" 
+                <a data-sort="0025" 
                     href="/blog/archive/?tag=istio"
                     title="istio"
                     rel="3">istio</a>
         
-                <a data-sort="0023" 
+                <a data-sort="0026" 
                     href="/blog/archive/?tag=calico"
                     title="calico"
                     rel="2">calico</a>
         
-                <a data-sort="0023" 
+                <a data-sort="0026" 
+                    href="/blog/archive/?tag=docker"
+                    title="docker"
+                    rel="2">docker</a>
+        
+                <a data-sort="0026" 
                     href="/blog/archive/?tag=tungstenfabric"
                     title="tungstenfabric"
                     rel="2">tungstenfabric</a>
@@ -563,7 +658,7 @@ OIDC是一种 OAuth2 认证方式， 被某些 OAuth2 提供者支持，例如 A
 </ul>
 
                 <p class="copyright text-muted">
-                    Copyright &copy; Hujin Blog 2023
+                    Copyright &copy; Hujin Blog 2024
                     <br>
                     Powered by <a href="http://hujin.github.com">Hujin Blog</a> |
                     <iframe style="margin-left: 2px; margin-bottom:-5px;" frameborder="0" scrolling="0" width="100px"
