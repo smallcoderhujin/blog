@@ -287,7 +287,7 @@ sanlock 是一个基于 SAN 的分布式锁管理器。集群中的每个节点�
   <li>原理是在向共享存储写完数据，并等待足够长的时间后再读，如果发现数据没有被起他节点更改，就认为没有冲突并成功获取了租约的所有权。</li>
   <li>从原理上来看Delta Lease 的获取需要比较长的时间，但比较省空间</li>
   <li>把所有的 Delta Lease 磁盘块连续的保存在一个文件或者裸磁盘设备里，就形成了一个 sanlock 的 lockspace</li>
-  <li>每个节点每隔20s发送一次心跳，更新lockspace lease的timestamp属性</li>
+  <li>每个节点每隔20s发送一次心跳，更新lockspace lease的 timestamp 属性</li>
   <li>一旦一个节点获取到某个lockspace的delta lease后（加入这个lockspace），表示这个节点上的进程可以获取此lockspace中的resource锁</li>
 </ul>
 
