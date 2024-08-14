@@ -16,7 +16,16 @@
     <meta property="og:type" content="article">
     <meta property="og:description" content="背景
 当前社区支持多个cni插件，当前集群底层网络实现变化后存在切换CNI插件的需求。由于cni插件主要在pod网卡创建和删除流程中使用，切换CNI插件后，要求pod重建，服务和网络都会中断
-">
+
+这里需要一种更加平滑的切换方式，在保证页面和网络不中断的情况下切换CNI
+
+架构
+
+
+
+上图可以看到，一个pod可以同时有多个网卡，其中eth0是默认网卡，也就是默认路由指向的网卡
+
+net0和net...">
     
     <meta property="article:published_time" content="2021-06-28T00:00:00Z">
     
@@ -31,7 +40,7 @@
     <meta property="article:tag" content="multus">
     
     
-    <meta property="og:image" content="http://0.0.0.0:4000/blog/img/avatar-hux-ny.jpg">
+    <meta property="og:image" content="http://0.0.0.0:4000/blog/img/post-sample-image.jpg">
     <meta property="og:url" content="http://0.0.0.0:4000/2021/06/28/k8s-multus/">
     <meta property="og:site_name" content="胡进的博客 | Hujin's Blog">
     

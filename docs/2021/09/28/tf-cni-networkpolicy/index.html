@@ -16,7 +16,16 @@
     <meta property="og:type" content="article">
     <meta property="og:description" content="背景
 tungstenfabric cni通过watch kubernetes apiserver中指定的资源，并在sdn中创建对应的网络设备来实现对应功能。本文重点介绍cni针对networkpolicy的处理，根据源码逐步分析。
-">
+
+架构&amp;流程图
+
+
+
+源码解析
+
+在process方法中会处理networkpolicy的创建、更新和删除。这里我们先看下创建和更新
+
+创建和更新方法中...">
     
     <meta property="article:published_time" content="2021-09-28T00:00:00Z">
     
@@ -33,7 +42,7 @@ tungstenfabric cni通过watch kubernetes apiserver中指定的资源，并在sdn
     <meta property="article:tag" content="networkpolicy">
     
     
-    <meta property="og:image" content="http://0.0.0.0:4000/blog/img/avatar-hux-ny.jpg">
+    <meta property="og:image" content="http://0.0.0.0:4000/blog/img/post-sample-image.jpg">
     <meta property="og:url" content="http://0.0.0.0:4000/2021/09/28/tf-cni-networkpolicy/">
     <meta property="og:site_name" content="胡进的博客 | Hujin's Blog">
     

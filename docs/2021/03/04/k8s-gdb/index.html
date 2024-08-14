@@ -15,7 +15,33 @@
     
     <meta property="og:type" content="article">
     <meta property="og:description" content="获取源码并编译
-">
+
+1
+2
+3
+4
+5
+git clone https://github.com/coredns/coredns.git
+cd coredns
+go build -gcflags "-N -l" coredns.go
+
+yum install -y gdb
+
+
+debug
+
+1
+2
+3
+gdb coredns
+b coredns.go:11
+run
+
+
+参考
+
+
+  https...">
     
     <meta property="article:published_time" content="2021-03-04T00:00:00Z">
     
@@ -28,7 +54,7 @@
     <meta property="article:tag" content="gdb">
     
     
-    <meta property="og:image" content="http://0.0.0.0:4000/blog/img/avatar-hux-ny.jpg">
+    <meta property="og:image" content="http://0.0.0.0:4000/blog/img/post-sample-image.jpg">
     <meta property="og:url" content="http://0.0.0.0:4000/2021/03/04/k8s-gdb/">
     <meta property="og:site_name" content="胡进的博客 | Hujin's Blog">
     

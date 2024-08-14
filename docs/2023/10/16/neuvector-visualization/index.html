@@ -15,7 +15,17 @@
     
     <meta property="og:type" content="article">
     <meta property="og:description" content="背景
-">
+
+容器环境通信频繁，包含大量的东西向和南北向通信，通过neuvector的网络活动功能，可以全局查看集群中容器间的流量/访问host的流量/访问外网以及来自外网的流量。
+网络活动功能比较丰富，包含：
+
+  网络抓包
+  模式切换（学习/告警/保护）
+  实时流量查看（方向/协议/端口/数据统计等）
+  容器的自动发现和展示
+
+
+这里我们只深入介绍下实时流量的实现，并讨论下移植到虚拟机场...">
     
     <meta property="article:published_time" content="2023-10-16T00:00:00Z">
     
@@ -28,7 +38,7 @@
     <meta property="article:tag" content="网络流量拓扑">
     
     
-    <meta property="og:image" content="http://0.0.0.0:4000/blog/img/avatar-hux-ny.jpg">
+    <meta property="og:image" content="http://0.0.0.0:4000/blog/img/post-sample-image.jpg">
     <meta property="og:url" content="http://0.0.0.0:4000/2023/10/16/neuvector-visualization/">
     <meta property="og:site_name" content="胡进的博客 | Hujin's Blog">
     

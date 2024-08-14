@@ -16,7 +16,15 @@
     <meta property="og:type" content="article">
     <meta property="og:description" content="架构
 
-">
+
+搭建
+
+正常使用kubeadm等工具部署的集群中默认都已经部署有coredns，以下为手动部署的流程：
+
+  创建一个serviceaccount用来做鉴权用
+  创建clusterrole对象system:coredns
+  绑定serviceaccount和clusterrole
+  创建coredns的配置configmap，在后面创建deployment时引用。这里需要注意...">
     
     <meta property="article:published_time" content="2021-01-18T00:00:00Z">
     
@@ -29,7 +37,7 @@
     <meta property="article:tag" content="coredns">
     
     
-    <meta property="og:image" content="http://0.0.0.0:4000/blog/img/avatar-hux-ny.jpg">
+    <meta property="og:image" content="http://0.0.0.0:4000/blog/img/post-sample-image.jpg">
     <meta property="og:url" content="http://0.0.0.0:4000/2021/01/18/k8s-coredns/">
     <meta property="og:site_name" content="胡进的博客 | Hujin's Blog">
     

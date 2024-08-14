@@ -15,7 +15,24 @@
     
     <meta property="og:type" content="article">
     <meta property="og:description" content="功能介绍
-">
+
+
+
+抓包功能是针对容器的功能，用户在界面选择某个容器点击抓包功能，可以控制抓包开始和结束，可以选择抓包时间；完成后可以下载对应的pcap格式的文件，
+在本地的wireshark中直接打开进行分析。底层实际还是通过进入容器的网络namespace，执行tcpdump命令来实现。
+
+说明下：hostnetwork的容器暂不支持抓包功能
+
+API接口：
+
+1
+2
+3
+4
+5
+6
+7
+8...">
     
     <meta property="article:published_time" content="2022-08-10T00:00:00Z">
     
@@ -30,7 +47,7 @@
     <meta property="article:tag" content="抓包">
     
     
-    <meta property="og:image" content="http://0.0.0.0:4000/blog/img/avatar-hux-ny.jpg">
+    <meta property="og:image" content="http://0.0.0.0:4000/blog/img/post-sample-image.jpg">
     <meta property="og:url" content="http://0.0.0.0:4000/2022/08/10/neuvector-tcpdump/">
     <meta property="og:site_name" content="胡进的博客 | Hujin's Blog">
     

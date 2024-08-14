@@ -16,7 +16,14 @@
     <meta property="og:type" content="article">
     <meta property="og:description" content="背景
 Calico支持多种网络模式，包括vxlan/ipip/bgp，其中vxlan和ipip属于overlay类型，在嵌套部署模式比较通用，但网络性能相对bgp会低一些。这主要是由于bgp模式下没有数据报文的封包和解包操作
-">
+
+本文会将calico中bgp相关的操作流程抽离，通过demo的方式来介绍calico中bgp网络的实现
+
+架构
+calico架构
+
+
+Calico作为一种常用的Kub...">
     
     <meta property="article:published_time" content="2022-09-16T00:00:00Z">
     
@@ -29,7 +36,7 @@ Calico支持多种网络模式，包括vxlan/ipip/bgp，其中vxlan和ipip属于
     <meta property="article:tag" content="bgp">
     
     
-    <meta property="og:image" content="http://0.0.0.0:4000/blog/img/avatar-hux-ny.jpg">
+    <meta property="og:image" content="http://0.0.0.0:4000/blog/img/post-sample-image.jpg">
     <meta property="og:url" content="http://0.0.0.0:4000/2022/09/16/calico-bird/">
     <meta property="og:site_name" content="胡进的博客 | Hujin's Blog">
     

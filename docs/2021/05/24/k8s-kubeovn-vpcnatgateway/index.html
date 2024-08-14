@@ -16,7 +16,24 @@
     <meta property="og:type" content="article">
     <meta property="og:description" content="功能
 用来给k8s中pod/service/ingress等网络资源访问外部网络
-">
+
+支持功能
+
+
+  指定外部网络出口物理网卡
+  指定多子网以及子网的网关
+  浮动IP功能
+  端口转发功能
+  静态路由规则
+  SNAT功能
+
+
+原理
+
+
+
+  创建一个nat gateway deployment，副本数是1
+  通过configmap获取pod对应的镜像文件路径，创建nat gatew...">
     
     <meta property="article:published_time" content="2021-05-24T00:00:00Z">
     
@@ -33,7 +50,7 @@
     <meta property="article:tag" content="vpc-nat-gateway">
     
     
-    <meta property="og:image" content="http://0.0.0.0:4000/blog/img/avatar-hux-ny.jpg">
+    <meta property="og:image" content="http://0.0.0.0:4000/blog/img/post-sample-image.jpg">
     <meta property="og:url" content="http://0.0.0.0:4000/2021/05/24/k8s-kubeovn-vpcnatgateway/">
     <meta property="og:site_name" content="胡进的博客 | Hujin's Blog">
     
