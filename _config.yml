@@ -72,7 +72,7 @@ ga_domain: smallcoderhujin.github.io/blog/
 # Sidebar settings
 sidebar: true                           # whether or not using Sidebar.
 sidebar-about-description: "For the next quantum leap<br>离开世界之前，一切都是过程"
-sidebar-avatar: /blog/img/avatar-hux-ny.jpg      # use absolute URL, seeing it's used in both `/` and `/about/`
+sidebar-avatar: /blog/img/post-sample-image.jpg      # use absolute URL, seeing it's used in both `/` and `/about/`
 
 
 
