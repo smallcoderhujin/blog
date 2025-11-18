@@ -1,0 +1,1515 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="google-site-verification" content="xBT4GhYoi5qRD5tr338pgPM5OWHHIDR6mNg1a3euekI" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="description" content="Hujin，Openstack & SDN & Kubernetes Lover，Software Engineer，| 与你一起发现更大的世界">
+    <meta name="keywords"  content="Openstack, Kubernetes, Neutron， SDN， Tungsten Fabric">
+    <meta name="theme-color" content="#000000">
+    
+    <!-- Open Graph -->
+    <meta property="og:title" content="VLLM 源码 —— 单机多卡模块间的通信 - 胡进的博客 | Hujin's Blog">
+    
+    <meta property="og:type" content="article">
+    <meta property="og:description" content="背景
+在了解了单机单卡的模型加载过程后，我们看看单机多卡的场景。单机单卡流程简单，但是在实际场景中要想运行真正的大模型需要的显卡数量肯定不可能是1张，这里我们再看看单机多卡的情况下的整体流程
+
+整体流程
+借用猿姐的神图
+整体架构：
+
+
+分为三大块：
+
+  process0：AsyncLLM
+  process1: Executor+scheduler
+  process2: Worker
+
+...">
+    
+    <meta property="article:published_time" content="2025-11-17T00:00:00Z">
+    
+    
+    <meta property="article:author" content="hujin">
+    
+    
+    <meta property="article:tag" content="vllm">
+    
+    
+    <meta property="og:image" content="http://0.0.0.0:4000/blog/img/post-sample-image.jpg">
+    <meta property="og:url" content="http://0.0.0.0:4000/2025/11/17/vllm-communication/">
+    <meta property="og:site_name" content="胡进的博客 | Hujin's Blog">
+    
+    <title>VLLM 源码 —— 单机多卡模块间的通信 - 胡进的博客 | Hujin's Blog</title>
+
+    <!-- Web App Manifest -->
+    <link rel="manifest" href="/blog/pwa/manifest.json">
+
+    <!-- Favicon -->
+    <link rel="shortcut icon" href="/blog/img/favicon.ico">
+    
+    <!-- Canonical URL -->
+    <link rel="canonical" href="http://0.0.0.0:4000/blog/2025/11/17/vllm-communication/">
+
+    <!-- Bootstrap Core CSS -->
+    <link rel="stylesheet" href="/blog/css/bootstrap.min.css">
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="/blog/css/hux-blog.min.css">
+
+    <!-- Custom Fonts -->
+    <!-- <link href="http://maxcdn.bootstrapcdn.com/font-awesome/4.3.0/css/font-awesome.min.css" rel="stylesheet" type="text/css"> -->
+    <!-- Hujin change font-awesome CDN to qiniu -->
+    <link href="//cdnjs.cloudflare.com/ajax/libs/font-awesome/4.6.3/css/font-awesome.min.css" rel="stylesheet" type="text/css">
+
+
+    <!-- HTML5 Shim and Respond.js IE8 support of HTML5 elements and media queries -->
+    <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
+    <!--[if lt IE 9]>
+        <script src="https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"></script>
+        <script src="https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"></script>
+    <![endif]-->
+
+    <!-- ga & ba script hoook -->
+    <script></script>
+</head>
+
+
+<!-- hack iOS CSS :active style -->
+<body ontouchstart="">
+
+    <!-- Navigation -->
+
+<nav class="navbar navbar-default navbar-custom navbar-fixed-top invert">
+    
+        <div class="container-fluid">
+            <!-- Brand and toggle get grouped for better mobile display -->
+            <div class="navbar-header page-scroll">
+                <button type="button" class="navbar-toggle">
+                    <span class="sr-only">Toggle navigation</span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </button>
+                <a class="navbar-brand" href="/blog/">Hujin Blog</a>
+            </div>
+
+            <!-- Collect the nav links, forms, and other content for toggling -->
+            <div id="huxblog_navbar">
+                <div class="navbar-collapse">
+                    <ul class="nav navbar-nav navbar-right">
+                        <li>
+                            <a href="/blog/">Home</a>
+                        </li>
+                        
+                        
+                        
+                        
+                        <li>
+                            <a href="/blog/about/">About</a>
+                        </li>
+                        
+                        
+                        
+                        <li>
+                            <a href="/blog/archive/">Archive</a>
+                        </li>
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        <li class="search-icon">
+                            <a href="javascript:void(0)">
+                                <i class="fa fa-search"></i>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            <!-- /.navbar-collapse -->
+        </div>
+        <!-- /.container -->
+    </nav>
+
+    <script>
+        // Drop Bootstarp low-performance Navbar
+        // Use customize navbar with high-quality material design animation
+        // in high-perf jank-free CSS3 implementation
+        var $body = document.body;
+        var $toggle = document.querySelector('.navbar-toggle');
+        var $navbar = document.querySelector('#huxblog_navbar');
+        var $collapse = document.querySelector('.navbar-collapse');
+
+        var __HuxNav__ = {
+            close: function () {
+                $navbar.className = " ";
+                // wait until animation end.
+                setTimeout(function () {
+                    // prevent frequently toggle
+                    if ($navbar.className.indexOf('in') < 0) {
+                        $collapse.style.height = "0px"
+                    }
+                }, 400)
+            },
+            open: function () {
+                $collapse.style.height = "auto"
+                $navbar.className += " in";
+            }
+        }
+
+        // Bind Event
+        $toggle.addEventListener('click', function (e) {
+            if ($navbar.className.indexOf('in') > 0) {
+                __HuxNav__.close()
+            } else {
+                __HuxNav__.open()
+            }
+        })
+
+        /**
+         * Since Fastclick is used to delegate 'touchstart' globally
+         * to hack 300ms delay in iOS by performing a fake 'click',
+         * Using 'e.stopPropagation' to stop 'touchstart' event from 
+         * $toggle/$collapse will break global delegation.
+         * 
+         * Instead, we use a 'e.target' filter to prevent handler
+         * added to document close HuxNav.  
+         *
+         * Also, we use 'click' instead of 'touchstart' as compromise
+         */
+        document.addEventListener('click', function (e) {
+            if (e.target == $toggle) return;
+            if (e.target.className == 'icon-bar') return;
+            __HuxNav__.close();
+        })
+    </script>
+    <!-- Search -->
+<div class="search-page">
+  <div class="search-icon-close-container">
+    <span class="search-icon-close">
+      <i class="fa fa-chevron-down"></i>
+    </span>
+  </div>
+  <div class="search-main container">
+    <div class="row">
+      <div class="col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1">
+        <form></form>
+        <input type="text" id="search-input" placeholder="$ grep...">
+        </form>
+        <div id="search-results" class="mini-post-list"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+    <!-- Image to hack wechat -->
+<!-- <img src="/img/icon_wechat.png" width="0" height="0"> -->
+<!-- <img src="/blog/img/home-bg.jpg" width="0" height="0"> -->
+
+<!-- Post Header -->
+
+
+
+<style type="text/css">
+    header.intro-header{
+        position: relative;
+        background-image: url('/blog/img/home-bg.jpg');
+        background: ;
+    }
+
+    
+</style>
+
+<header class="intro-header style-text" >
+
+    <div class="header-mask"></div>
+    
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1">
+                <div class="post-heading">
+                    <div class="tags">
+                        
+                        <a class="tag" href="/blog/archive/?tag=vllm" title="vllm">vllm</a>
+                        
+                    </div>
+                    <h1>VLLM 源码 —— 单机多卡模块间的通信</h1>
+                    
+                    <h2 class="subheading"></h2>
+                    <span class="meta">Posted by hujin on November 17, 2025</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</header>
+
+
+
+
+
+
+<!-- Post Content -->
+<article>
+    <div class="container">
+        <div class="row">
+
+    <!-- Post Container -->
+            <div class="
+                col-lg-8 col-lg-offset-2
+                col-md-10 col-md-offset-1
+                post-container">
+
+                <!-- Multi-Lingual -->
+                
+
+				<h2 id="背景">背景</h2>
+<p>在了解了单机单卡的模型加载过程后，我们看看单机多卡的场景。单机单卡流程简单，但是在实际场景中要想运行真正的大模型需要的显卡数量肯定不可能是1张，这里我们再看看单机多卡的情况下的整体流程</p>
+
+<h3 id="整体流程">整体流程</h3>
+<p>借用猿姐的神图
+整体架构：
+<img src="/blog/img/vllm01.png" alt="vllm file" /></p>
+
+<p>分为三大块：</p>
+<ul>
+  <li>process0：AsyncLLM</li>
+  <li>process1: Executor+scheduler</li>
+  <li>process2: Worker</li>
+</ul>
+
+<p>其中executor-&gt;worker架构：
+<img src="/blog/img/vllm02.png" alt="vllm file" /></p>
+<blockquote>
+  <p>executor-&gt;worker的流程中，executor是一个独立的进程，每个worker是一个独立的进程，图中为了方便只画了一个worker来说明</p>
+</blockquote>
+
+<h2 id="process0asyncllm">process0：AsyncLLM</h2>
+<p>主要工作：</p>
+<ul>
+  <li>生成vllm配置</li>
+  <li>加载分词器</li>
+  <li>创建input_process：preprocess input request，通过engine_core的input_socket发送</li>
+  <li>创建output_process：获取engine_core output_socket返回的结果，进行处理后放入outputs_queue</li>
+  <li>创建engine_core: 创建一个调用engine的client，上面的input_socket和output_socket都是在这里创建的</li>
+  <li>创建dp_size对应数量的core_engine进程并启动</li>
+</ul>
+
+<h3 id="asyncllm初始化">AsyncLLM初始化</h3>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+</pre></td><td class="rouge-code"><pre>class AsyncLLM(EngineClient):
+    def __init__(
+        ...
+    ) -&gt; None:
+        ...
+        # 加载分词器
+        if self.model_config.skip_tokenizer_init:
+            tokenizer = None
+        else:
+            tokenizer = init_tokenizer_from_configs(self.model_config)
+
+        # input_process，用来预处理request并通过input_socket发送到enginecore_proc
+        self.processor = Processor(self.vllm_config, tokenizer)
+        self.io_processor = get_io_processor(
+            self.vllm_config,
+            self.model_config.io_processor_plugin,
+        )
+
+        # 在初始化的最后用output_process循环处理output_socket收到的数据
+        self.output_processor = OutputProcessor(
+            self.tokenizer, log_stats=self.log_stats
+        )
+        ...
+        # EngineCore (starts the engine in background process).
+        self.engine_core = EngineCoreClient.make_async_mp_client(
+            vllm_config=vllm_config,
+            executor_class=executor_class,
+            log_stats=self.log_stats,
+            client_addresses=client_addresses,
+            client_count=client_count,
+            client_index=client_index,
+        )
+        ...
+						
+        # 一直在循环处理从output_socket中获取的数据
+        self.output_handler: asyncio.Task | None = None
+        try:
+            # Start output handler eagerly if we are in the asyncio eventloop.
+            asyncio.get_running_loop()
+            self._run_output_handler()
+        except RuntimeError:
+            pass
+        ...
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<h3 id="创建socket">创建socket</h3>
+<p>这里在AsyncLLM初始化engine_core_manager对象时，会创建两个zmq socket，分别是input_socket和output_socket。
+这里的两个socket会在input_process和output_process中被使用
+同时AsyncMPClient中还会创建output_queue，output_process将output_socket收到的数据处理好后会放入output_queue中
+到这里可以看到input_socket和output_socket都是ZMQ 连接</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+55
+56
+57
+58
+59
+</pre></td><td class="rouge-code"><pre>class MPClient(EngineCoreClient):
+    def __init__(
+        self,
+        asyncio_mode: bool,
+        vllm_config: VllmConfig,
+        executor_class: type[Executor],
+        log_stats: bool,
+        client_addresses: dict[str, str] | None = None,
+    ):
+        self.vllm_config = vllm_config
+        # Serialization setup.
+        self.encoder = MsgpackEncoder()
+        self.decoder = MsgpackDecoder(EngineCoreOutputs)
+
+        # ZMQ setup.
+        sync_ctx = zmq.Context(io_threads=2)
+        self.ctx = zmq.asyncio.Context(sync_ctx) if asyncio_mode else sync_ctx
+        ...
+        self.resources = BackgroundResources(ctx=sync_ctx)
+        self._finalizer = weakref.finalize(self, self.resources)
+        success = False
+        try:
+            # State used for data parallel.
+            self.engines_running = False
+
+            self.stats_update_address: str | None = None
+            if client_addresses:
+                # Engines are managed externally to this client.
+                input_address = client_addresses["input_address"]
+                output_address = client_addresses["output_address"]
+                self.stats_update_address = client_addresses.get("stats_update_address")
+            else:
+                # 加载模型库和权重文件，内部还有rpc的建立，我们后面详细看
+                with launch_core_engines(vllm_config, executor_class, log_stats) as (
+                    engine_manager,
+                    coordinator,
+                    addresses,
+                ):
+                    self.resources.coordinator = coordinator
+                    self.resources.engine_manager = engine_manager
+
+                (input_address,) = addresses.inputs
+                (output_address,) = addresses.outputs
+                self.stats_update_address = addresses.frontend_stats_publish_address
+                if coordinator is not None:
+                    assert self.stats_update_address == (
+                        coordinator.get_stats_publish_address()
+                    )
+
+            # 创建 input 和 output sockets.
+            # input_socket是发送端，支持多个core_engine来连接
+            self.input_socket = self.resources.input_socket = make_zmq_socket(
+                self.ctx, input_address, zmq.ROUTER, bind=True
+            )
+            # 对于output_socket，这里的socket type是PULL，表示是接收端，和图中箭头一致
+            self.resources.output_socket = make_zmq_socket(
+                self.ctx, output_address, zmq.PULL
+            )
+						...
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<h3 id="创建engine_core_manger">创建engine_core_manger</h3>
+<p>根据dp_size来创建对应数量的engine_core进程并启动
+这里的target_fn参数是EngineCoreProc.run_engine_core函数
+handshake_address参数是ZMQ input和output地址，且在前面已经创建连接</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+</pre></td><td class="rouge-code"><pre>class CoreEngineProcManager:
+    def __init__(
+        ...
+    ):
+        ...
+        self.processes: list[BaseProcess] = []
+        local_dp_ranks = []
+        # 这里根据dp_size来创建对应数量的engine_core进程
+        for index in range(local_engine_count):
+            local_index = local_start_index + index
+            global_index = start_index + index
+
+            # Start EngineCore in background process.
+            local_dp_ranks.append(local_index)
+            self.processes.append(
+                context.Process(
+                    target=target_fn,
+                    name=f"EngineCore_DP{global_index}",
+                    kwargs=common_kwargs
+                    | {
+                        "dp_rank": global_index,
+                        "local_dp_rank": local_index,
+                    },
+                )
+            )
+        ...
+        data_parallel = vllm_config.parallel_config.data_parallel_size &gt; 1
+        try:
+            for proc, local_dp_rank in zip(self.processes, local_dp_ranks):
+                    ...
+                    proc.start()
+        finally:
+            # Kill other procs if not all are running.
+            if self.finished_procs():
+                self.close()
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<h2 id="process-1-engine_core">process 1: engine_core</h2>
+<p>到这里基本可以看到process0和process1之间的通信是通过传进来的handshake_address来传递地址的
+通过两个amq的input_socket和output_socket进行通信的</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+</pre></td><td class="rouge-code"><pre>class EngineCoreProc(EngineCore):
+    ...
+    def __init__(
+        ...
+    ):
+        self.input_queue = queue.Queue[tuple[EngineCoreRequestType, Any]]()
+        self.output_queue = queue.Queue[tuple[int, EngineCoreOutputs] | bytes]()
+        ...
+        with self._perform_handshakes(
+            handshake_address,
+            identity,
+            local_client,
+            vllm_config,
+            client_handshake_address,
+        ) as addresses:
+            ...
+            super().__init__(
+                vllm_config, executor_class, log_stats, executor_fail_callback
+            )
+
+            ...
+            # 这里的input_socket是AMQ的连接，在process_input_sockets中连接
+            ready_event = threading.Event()
+            input_thread = threading.Thread(
+                target=self.process_input_sockets,
+                args=(
+                    addresses.inputs,
+                    addresses.coordinator_input,
+                    identity,
+                    ready_event,
+                ),
+                daemon=True,
+            )
+            input_thread.start()
+
+            # 创建output_socket，将output_queue中的数据发送出去
+            self.output_thread = threading.Thread(
+                target=self.process_output_sockets,
+                args=(
+                    addresses.outputs,
+                    addresses.coordinator_output,
+                    self.engine_index,
+                ),
+                daemon=True,
+            )
+            self.output_thread.start()
+            ...
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<h3 id="初始化executor">初始化executor</h3>
+<p>在父类EngineCore中直接初始化了executor</p>
+
+<p>在获取executor_class的时候单机多卡和单机单卡不一样了，从uni变成了mp
+具体的判断逻辑可以参考vllm/config/parallel.py中的__post_init__函数</p>
+
+<p>有4种类型Executor：</p>
+<ul>
+  <li>mp：MultiprocExecutor
+适用场景：单机多卡。当单机的卡数满足分布式配置，且没有正在运行的ray时使用mp
+在mp的情况下，Executor成为一个主进程，其下的若干个workers构成了它的子进程们</li>
+  <li>ray：RayDistributedExecutor
+适用场景：多机多卡
+在ray的情况下，Executor成为一个ray driver process，其下管控若干个worker process</li>
+  <li>uni：UniProcExecutor
+适用场景：单卡或 Neuron环境</li>
+  <li>external_launcher：ExecutorWithExternalLauncher
+适用场景：想要用自定义的外部工具（例如Slurm）来做分布式管理</li>
+</ul>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+</pre></td><td class="rouge-code"><pre><span class="n">vllm</span> <span class="o">/</span> <span class="n">config</span> <span class="o">/</span> <span class="n">parallel</span><span class="p">.</span><span class="n">py</span>
+<span class="k">def</span> <span class="nf">__post_init</span><span class="p">():</span>
+    <span class="bp">...</span>
+    <span class="c1"># world_size=pp_size*tp_size，因此如果是单机多卡，则pp_size=1，tp_size是大于1的
+</span>    <span class="k">if</span> <span class="n">self</span><span class="p">.</span><span class="n">distributed_executor_backend</span> <span class="ow">is</span> <span class="bp">None</span> <span class="ow">and</span> <span class="n">self</span><span class="p">.</span><span class="n">world_size</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="c1"># We use multiprocessing by default if world_size fits on the
+</span>        <span class="c1"># current node and we aren't in a ray placement group.
+</span>        <span class="kn">from</span> <span class="n">vllm.v1.executor</span> <span class="kn">import</span> <span class="n">ray_utils</span>
+        <span class="c1"># 默认是mp
+</span>        <span class="n">backend</span><span class="p">:</span> <span class="n">DistributedExecutorBackend</span> <span class="o">=</span> <span class="sh">"</span><span class="s">mp</span><span class="sh">"</span>
+        <span class="n">ray_found</span> <span class="o">=</span> <span class="n">ray_utils</span><span class="p">.</span><span class="nf">ray_is_available</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">current_platform</span><span class="p">.</span><span class="nf">is_tpu</span><span class="p">()</span> <span class="ow">and</span> <span class="n">envs</span><span class="p">.</span><span class="n">VLLM_XLA_USE_SPMD</span><span class="p">:</span>
+            <span class="n">backend</span> <span class="o">=</span> <span class="sh">"</span><span class="s">uni</span><span class="sh">"</span>
+        <span class="nf">elif </span><span class="p">(</span>
+                <span class="n">current_platform</span><span class="p">.</span><span class="nf">is_cuda</span><span class="p">()</span>
+                <span class="ow">and</span> <span class="nf">cuda_device_count_stateless</span><span class="p">()</span> <span class="o">&lt;</span> <span class="n">self</span><span class="p">.</span><span class="n">world_size</span>
+        <span class="p">):</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">ray_found</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="nc">ValueError</span><span class="p">(</span>
+                    <span class="sh">"</span><span class="s">Unable to load Ray: </span><span class="sh">"</span>
+                    <span class="sa">f</span><span class="sh">"</span><span class="si">{</span><span class="n">ray_utils</span><span class="p">.</span><span class="n">ray_import_err</span><span class="si">}</span><span class="s">. Ray is </span><span class="sh">"</span>
+                    <span class="sh">"</span><span class="s">required for multi-node inference, </span><span class="sh">"</span>
+                    <span class="sh">"</span><span class="s">please install Ray with `pip install </span><span class="sh">"</span>
+                    <span class="sh">"</span><span class="s">ray`.</span><span class="sh">"</span>
+                <span class="p">)</span>
+            <span class="c1"># 当前是N卡，但是数量小于world_size，说明是多节点分布式推理，后端是ray
+</span>            <span class="n">backend</span> <span class="o">=</span> <span class="sh">"</span><span class="s">ray</span><span class="sh">"</span>
+        <span class="k">elif</span> <span class="n">self</span><span class="p">.</span><span class="n">data_parallel_backend</span> <span class="o">==</span> <span class="sh">"</span><span class="s">ray</span><span class="sh">"</span><span class="p">:</span>
+            <span class="n">logger</span><span class="p">.</span><span class="nf">info</span><span class="p">(</span>
+                <span class="sh">"</span><span class="s">Using ray distributed inference because </span><span class="sh">"</span>
+                <span class="sh">"</span><span class="s">data_parallel_backend is ray</span><span class="sh">"</span>
+            <span class="p">)</span>
+            <span class="n">backend</span> <span class="o">=</span> <span class="sh">"</span><span class="s">ray</span><span class="sh">"</span>
+        <span class="k">elif</span> <span class="n">ray_found</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">self</span><span class="p">.</span><span class="n">placement_group</span><span class="p">:</span>
+                <span class="n">backend</span> <span class="o">=</span> <span class="sh">"</span><span class="s">ray</span><span class="sh">"</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="kn">from</span> <span class="n">ray</span> <span class="kn">import</span> <span class="n">is_initialized</span> <span class="k">as</span> <span class="n">ray_is_initialized</span>
+                <span class="k">if</span> <span class="nf">ray_is_initialized</span><span class="p">():</span>
+                    <span class="kn">from</span> <span class="n">ray.util</span> <span class="kn">import</span> <span class="n">get_current_placement_group</span>
+                    <span class="k">if</span> <span class="nf">get_current_placement_group</span><span class="p">():</span>
+                        <span class="n">backend</span> <span class="o">=</span> <span class="sh">"</span><span class="s">ray</span><span class="sh">"</span>
+        <span class="n">self</span><span class="p">.</span><span class="n">distributed_executor_backend</span> <span class="o">=</span> <span class="n">backend</span>
+        <span class="n">logger</span><span class="p">.</span><span class="nf">debug</span><span class="p">(</span><span class="sh">"</span><span class="s">Defaulting to use %s for distributed inference</span><span class="sh">"</span><span class="p">,</span> <span class="n">backend</span><span class="p">)</span>
+
+    <span class="c1"># 单机单卡world_size=1了，所以excutor_backend就是uni
+</span>    <span class="k">if</span> <span class="n">self</span><span class="p">.</span><span class="n">distributed_executor_backend</span> <span class="ow">is</span> <span class="bp">None</span> <span class="ow">and</span> <span class="n">self</span><span class="p">.</span><span class="n">world_size</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="n">self</span><span class="p">.</span><span class="n">distributed_executor_backend</span> <span class="o">=</span> <span class="sh">"</span><span class="s">uni</span><span class="sh">"</span>
+    <span class="k">if</span> <span class="n">self</span><span class="p">.</span><span class="n">max_parallel_loading_workers</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">logger</span><span class="p">.</span><span class="nf">warning</span><span class="p">(</span>
+            <span class="sh">"</span><span class="s">max_parallel_loading_workers is currently </span><span class="sh">"</span>
+            <span class="sh">"</span><span class="s">not supported and will be ignored.</span><span class="sh">"</span>
+        <span class="p">)</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<h3 id="创建worker进程">创建worker进程</h3>
+<p>这里rpc_broadcast_mq和worker_response_mq是用来executor&lt;-&gt;worker之间通信的zmq socket
+这里的worker数量是pp_size<em>tp_size，也就是节点数</em>节点中GPU卡数</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+</pre></td><td class="rouge-code"><pre>class MultiprocExecutor(Executor):
+    supports_pp: bool = True
+    def _init_executor(self) -&gt; None:
+        ...
+        assert self.world_size == tensor_parallel_size * pp_parallel_size, (
+            f"world_size ({self.world_size}) must be equal to the "
+            f"tensor_parallel_size ({tensor_parallel_size}) x pipeline"
+            f"_parallel_size ({pp_parallel_size}). "
+        )
+        ...
+        # 设置share memory模式中最大的数据传输值，这里是16M
+        max_chunk_bytes = envs.VLLM_MQ_MAX_CHUNK_BYTES_MB * 1024 * 1024
+        # executor&lt;--&gt;worker之间的input通信连接，这里如果是本地通信使用share memory方式
+        # 如果是跨节点的或者数据量超过16M后使用zmq socket方式，细节可以查看MessageQueue
+        self.rpc_broadcast_mq = MessageQueue(
+            self.world_size, self.world_size, max_chunk_bytes=max_chunk_bytes
+        )
+        scheduler_output_handle = self.rpc_broadcast_mq.export_handle()
+        # 根据world_size数量创建对应数量的worker，可以认为是节点数*每个节点上的gpu数量=world_size
+        try:
+            for rank in range(self.world_size):
+                unready_workers.append(
+                    WorkerProc.make_worker_process(
+                        vllm_config=self.vllm_config,
+                        local_rank=rank,
+                        rank=rank,
+                        distributed_init_method=distributed_init_method,
+                        input_shm_handle=scheduler_output_handle,
+                        shared_worker_lock=shared_worker_lock,
+                    )
+                )
+            # 等待所有worker中的input/output socket和executor建立连接成功
+            ...
+</pre></td></tr></tbody></table></code></pre></div></div>
+<p>对于本地的worker，数据量大于16M使用zmq socket通信，小于16M的数据通过share memory的方式传递的，也就是图中rpc部分（small input/output data）</p>
+
+<p>到了这里我们做个总结：</p>
+<ul>
+  <li>core_engine_manager和core_engine之间通过zmq socket进行通信，将input queue中的数据通过input socket发送到core_engine。接受output socket中的数据处理后放到output queue中</li>
+  <li>core_engine(executor)和worker之间通过大于16M数据的通过zmq socket进行通信，小于16M的时候如果是本地通信通过share memory通信，不然还是用zmq socket</li>
+</ul>
+
+<h2 id="process2-worker">process2： worker</h2>
+<p>这里的distributed_init_method包含了input socket的地址，在worker中使用rpc_broadcast_mq去进行通信
+worker_response_mq是output socket，executor会从这里获取output数据的</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+</pre></td><td class="rouge-code"><pre>class WorkerProc:
+    READY_STR = "READY"
+    def __init__(
+        ...
+    ):
+        self.rank = rank
+        wrapper = WorkerWrapperBase(vllm_config=vllm_config, rpc_rank=rank)
+        # TODO: move `init_worker` to executor level as a collective rpc call
+        all_kwargs: list[dict] = [
+            {} for _ in range(vllm_config.parallel_config.world_size)
+        ]
+        is_driver_worker = rank % vllm_config.parallel_config.tensor_parallel_size == 0
+        all_kwargs[rank] = {
+            "vllm_config": vllm_config,
+            "local_rank": local_rank,
+            "rank": rank,
+            "distributed_init_method": distributed_init_method,
+            "is_driver_worker": is_driver_worker,
+            "shared_worker_lock": shared_worker_lock,
+        }
+        wrapper.init_worker(all_kwargs)
+        self.worker = wrapper
+
+        # 连接executor的rpc_broadcast_mq
+        self.rpc_broadcast_mq = MessageQueue.create_from_handle(
+            input_shm_handle, self.worker.rank
+        )
+
+        # 创建worker_response_mq，方式和创建rpc_broadcast_mq一致
+        self.worker_response_mq = MessageQueue(1, 1)
+				...
+				# 初始化gpu设备
+        self.worker.init_device()
+
+        # Set process title and log prefix
+        self.setup_proc_title_and_log_prefix(
+            enable_ep=vllm_config.parallel_config.enable_expert_parallel
+        )
+
+        # 加载模型
+        self.worker.load_model()
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>从上面可以看出，单机多卡的场景下（多级多卡也是这样的），executor只有一个，每张卡会创建一个worker与之对应。
+每个worker需要和executor通过rpc_broadcast_mq接受input数据，同时每个executor会通过worker_response_mq来接受worker的output数据</p>
+
+<h3 id="设备准备">设备准备</h3>
+<p>在为每张GPU卡创建对应的worker时，会执行init_device函数，这里会根据GPU卡的厂商调用对应的init_device函数
+看起来要支持国产GPU卡，厂商在这里是需要修改vllm代码，调用厂商自己的GPU驱动</p>
+
+<h3 id="模型准备">模型准备</h3>
+<p>和上一篇中模型加载流程基本是一致的，只是变成了每个worker都需要加载了，这里遗漏了一个问题，就是分布式推理场景下每张GPU卡的kv cache申请流程分析</p>
+
+<h2 id="几个遗留问题">几个遗留问题</h2>
+<ul>
+  <li>kv cache的管理：后面新建一篇文章再详细讲解
+    <ul>
+      <li>模型加载在kv cache之前，那么是否有可能模型权重文件直接将GPU显存打满</li>
+    </ul>
+  </li>
+  <li>调度：后面新建一篇文章再详细讲解</li>
+  <li>多个worker如何只绑定到指定gpu卡上的
+这里看看我们创建worker时指定的参数，注意local_rank参数，是一个index，这里就是gpu的编号
+    <pre><code class="language-vllm/v1/executor/multiproc_executor.py">class MultiprocExecutor(Executor):
+  supports_pp: bool = True
+
+  def _init_executor(self) -&gt; None:
+      ...
+      self.world_size = self.parallel_config.world_size
+      tensor_parallel_size = self.parallel_config.tensor_parallel_size
+      pp_parallel_size = self.parallel_config.pipeline_parallel_size
+      assert self.world_size == tensor_parallel_size * pp_parallel_size, (
+          f"world_size ({self.world_size}) must be equal to the "
+          f"tensor_parallel_size ({tensor_parallel_size}) x pipeline"
+          f"_parallel_size ({pp_parallel_size}). "
+      )
+      ...
+      try:
+          for rank in range(self.world_size):
+              unready_workers.append(
+                  WorkerProc.make_worker_process(
+                      vllm_config=self.vllm_config,
+                      local_rank=rank,
+                      rank=rank,
+                      distributed_init_method=distributed_init_method,
+                      input_shm_handle=scheduler_output_handle,
+                      shared_worker_lock=shared_worker_lock,
+                  )
+              )
+        ...
+</code></pre>
+    <p>在看看这个rank最终是怎么使用的，注重调用了torch的init_process_group函数</p>
+  </li>
+  <li>
+    <h2 id="这里的rank和local-rank的区别说明很清晰local-rank表面当前节点上的gpu编号rank是全局的">这里的rank和local rank的区别说明很清晰。local rank表面当前节点上的GPU编号，rank是全局的</h2>
+    <pre><code class="language-vllm/distributed/parallel_state.py">class GroupCoordinator:
+  # available attributes:
+  rank: int  # global rank
+  ranks: list[int]  # global ranks in the group
+  world_size: int  # size of the group
+  # difference between `local_rank` and `rank_in_group`:
+  # if we have a group of size 4 across two nodes:
+  # Process | Node | Rank | Local Rank | Rank in Group
+  #   0     |   0  |  0   |     0      |       0
+  #   1     |   0  |  1   |     1      |       1
+  #   2     |   1  |  2   |     0      |       2
+  #   3     |   1  |  3   |     1      |       3
+  local_rank: int  # local rank used to assign devices
+  rank_in_group: int  # rank inside the group
+  cpu_group: ProcessGroup  # group for CPU communication
+  device_group: ProcessGroup  # group for device communication
+  # device communicator (if use_device_communicator=True)
+  device_communicator: DeviceCommunicatorBase | None
+  mq_broadcaster: Any | None  # shared memory broadcaster
+
+  def __init__(
+      ...
+  ):
+      ...
+      self.rank = torch.distributed.get_rank()
+      self.local_rank = local_rank
+
+      self_device_group = None
+      self_cpu_group = None
+      ...
+      # 来了，这里将worker和节点上具体的gpu进行绑定
+      if current_platform.is_cuda_alike():
+          self.device = torch.device(f"cuda:{local_rank}")
+      elif current_platform.is_xpu():
+          self.device = torch.device(f"xpu:{local_rank}")
+      elif current_platform.is_out_of_tree():
+          self.device = torch.device(f"{current_platform.device_name}:{local_rank}")
+      else:
+          self.device = torch.device("cpu")
+</code></pre>
+  </li>
+</ul>
+
+
+
+                <hr style="visibility: hidden;">
+                <ul class="pager">
+                    
+                    <li class="previous">
+                        <a href="/blog/2025/11/10/vllm-load-model/" data-toggle="tooltip" data-placement="top" title="VLLM 源码 —— 单机单卡模型的加载">
+                        Previous<br>
+                        <span>VLLM 源码 —— 单机单卡模型的加载</span>
+                        </a>
+                    </li>
+                    
+                    
+                </ul>
+                <hr style="visibility: hidden;">
+
+                
+
+                
+            </div>  
+
+    <!-- Side Catalog Container -->
+        
+            <div class="
+                col-lg-2 col-lg-offset-0
+                visible-lg-block
+                sidebar-container
+                catalog-container">
+                <div class="side-catalog">
+                    <hr class="hidden-sm hidden-xs">
+                    <h5>
+                        <a class="catalog-toggle" href="#">CATALOG</a>
+                    </h5>
+                    <ul class="catalog-body"></ul>
+                </div>
+            </div>
+        
+
+    <!-- Sidebar Container -->
+            <div class="
+                col-lg-8 col-lg-offset-2
+                col-md-10 col-md-offset-1
+                sidebar-container">
+
+                <!-- Featured Tags -->
+                
+
+
+<section>
+    
+        <hr class="hidden-sm hidden-xs">
+    
+    <h5><a href="/blog/archive/">FEATURED TAGS</a></h5>
+    <div class="tags">
+        
+        
+        
+        
+        
+        
+                <a data-sort="0025" 
+                    href="/blog/archive/?tag=kubernetes"
+                    title="kubernetes"
+                    rel="5">kubernetes</a>
+        
+                <a data-sort="0023" 
+                    href="/blog/archive/?tag=k8s"
+                    title="k8s"
+                    rel="7">k8s</a>
+        
+                <a data-sort="0024" 
+                    href="/blog/archive/?tag=neuvector"
+                    title="neuvector"
+                    rel="6">neuvector</a>
+        
+                <a data-sort="0025" 
+                    href="/blog/archive/?tag=cni"
+                    title="cni"
+                    rel="5">cni</a>
+        
+                <a data-sort="0027" 
+                    href="/blog/archive/?tag=istio"
+                    title="istio"
+                    rel="3">istio</a>
+        
+                <a data-sort="0028" 
+                    href="/blog/archive/?tag=calico"
+                    title="calico"
+                    rel="2">calico</a>
+        
+                <a data-sort="0028" 
+                    href="/blog/archive/?tag=docker"
+                    title="docker"
+                    rel="2">docker</a>
+        
+                <a data-sort="0028" 
+                    href="/blog/archive/?tag=tungstenfabric"
+                    title="tungstenfabric"
+                    rel="2">tungstenfabric</a>
+        
+                <a data-sort="0028" 
+                    href="/blog/archive/?tag=vllm"
+                    title="vllm"
+                    rel="2">vllm</a>
+    </div>
+</section>
+
+
+                <!-- Friends Blog -->
+                <!---->
+            </div>
+        </div>
+    </div>
+</article>
+
+<!-- add support for mathjax by voleking-->
+
+
+
+
+
+
+
+
+
+<!-- async load function -->
+<script>
+    function async(u, c) {
+      var d = document, t = 'script',
+          o = d.createElement(t),
+          s = d.getElementsByTagName(t)[0];
+      o.src = u;
+      if (c) { o.addEventListener('load', function (e) { c(null, e); }, false); }
+      s.parentNode.insertBefore(o, s);
+    }
+</script>
+<!-- anchor-js, Doc:http://bryanbraun.github.io/anchorjs/ -->
+<script>
+    async("//cdnjs.cloudflare.com/ajax/libs/anchor-js/1.1.1/anchor.min.js",function(){
+        anchors.options = {
+          visible: 'hover',
+          placement: 'right',
+          // icon: '#'
+        };
+        anchors.add().remove('.intro-header h1').remove('.subheading').remove('.sidebar-container h5');
+    })
+</script>
+<style>
+    /* place left on bigger screen */
+    @media all and (min-width: 800px) {
+        .anchorjs-link{
+            position: absolute;
+            left: -0.75em;
+            font-size: 1.1em;
+            margin-top : -0.1em;
+        }
+    }
+</style>
+
+
+
+    <!-- Footer -->
+<footer>
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1">
+                <!-- SNS Link -->
+                
+
+
+<ul class="list-inline text-center">
+
+
+  
+  
+  
+  
+  
+  
+  <li>
+    <a target="_blank" href="https://github.com/guokehujin">
+      <span class="fa-stack fa-lg">
+        <i class="fa fa-circle fa-stack-2x"></i>
+        <i class="fa fa-github fa-stack-1x fa-inverse"></i>
+      </span>
+    </a>
+  </li>
+  
+  
+</ul>
+
+                <p class="copyright text-muted">
+                    Copyright &copy; Hujin Blog 2025
+                    <br>
+                    Powered by <a href="http://hujin.github.com">Hujin Blog</a> |
+                    <iframe style="margin-left: 2px; margin-bottom:-5px;" frameborder="0" scrolling="0" width="100px"
+                        height="20px"
+                        src="https://ghbtns.com/github-btn.html?user=huxpro&repo=huxpro.github.io&type=star&count=true">
+                    </iframe>
+                </p>
+            </div>
+        </div>
+    </div>
+</footer>
+
+<!-- jQuery -->
+<script src="/blog/js/jquery.min.js "></script>
+
+<!-- Bootstrap Core JavaScript -->
+<!-- Currently, only navbar scroll-down effect at desktop still depends on this -->
+<script src="/blog/js/bootstrap.min.js "></script>
+
+<!-- Custom Theme JavaScript -->
+<script src="/blog/js/hux-blog.min.js "></script>
+
+<!-- Simple Jekyll Search -->
+<script src="/blog/js/simple-jekyll-search.min.js"></script>
+
+<!-- Service Worker -->
+
+<script src="/blog/js/snackbar.js "></script>
+<script src="/blog/js/sw-registration.js "></script>
+
+
+<!-- async load function -->
+<script>
+    function async(u, c) {
+        var d = document, t = 'script',
+            o = d.createElement(t),
+            s = d.getElementsByTagName(t)[0];
+        o.src = u;
+        if (c) { o.addEventListener('load', function (e) { c(null, e); }, false); }
+        s.parentNode.insertBefore(o, s);
+    }
+</script>
+
+<!--
+     Because of the native support for backtick-style fenced code blocks
+     right within the Markdown is landed in Github Pages,
+     From V1.6, There is no need for Highlight.js,
+     so Huxblog drops it officially.
+
+     - https://github.com/blog/2100-github-pages-now-faster-and-simpler-with-jekyll-3-0
+     - https://help.github.com/articles/creating-and-highlighting-code-blocks/
+     - https://github.com/jneen/rouge/wiki/list-of-supported-languages-and-lexers
+-->
+<!--
+    <script>
+        async("http://cdn.bootcss.com/highlight.js/8.6/highlight.min.js", function(){
+            hljs.initHighlightingOnLoad();
+        })
+    </script>
+    <link href="http://cdn.bootcss.com/highlight.js/8.6/styles/github.min.css" rel="stylesheet">
+-->
+
+
+
+
+
+
+
+<!--fastClick.js -->
+<script>
+    async("//cdnjs.cloudflare.com/ajax/libs/fastclick/1.0.6/fastclick.min.js", function () {
+        var $nav = document.querySelector("nav");
+        if ($nav) FastClick.attach($nav);
+    })
+</script>
+
+
+<!-- Google Analytics -->
+
+<script>
+    // dynamic User by Hujin
+    var _gaId = 'UA-49627206-1';
+    var _gaDomain = 'smallcoderhujin.github.io/blog/';
+
+    // Originial
+    (function (i, s, o, g, r, a, m) {
+        i['GoogleAnalyticsObject'] = r; i[r] = i[r] || function () {
+            (i[r].q = i[r].q || []).push(arguments)
+        }, i[r].l = 1 * new Date(); a = s.createElement(o),
+            m = s.getElementsByTagName(o)[0]; a.async = 1; a.src = g; m.parentNode.insertBefore(a, m)
+    })(window, document, 'script', '//www.google-analytics.com/analytics.js', 'ga');
+
+    ga('create', _gaId, _gaDomain);
+    ga('send', 'pageview');
+</script>
+
+
+
+<!-- Baidu Tongji -->
+
+
+
+<!-- Side Catalog -->
+
+<script type="text/javascript">
+    function generateCatalog(selector) {
+
+        // interop with multilangual 
+        if ('' == 'true') {
+            _containerSelector = 'div.post-container.active'
+        } else {
+            _containerSelector = 'div.post-container'
+        }
+
+        // init
+        var P = $(_containerSelector), a, n, t, l, i, c;
+        a = P.find('h1,h2,h3,h4,h5,h6');
+
+        // clean
+        $(selector).html('')
+
+        // appending
+        a.each(function () {
+            n = $(this).prop('tagName').toLowerCase();
+            i = "#" + $(this).prop('id');
+            t = $(this).text();
+            c = $('<a href="' + i + '" rel="nofollow">' + t + '</a>');
+            l = $('<li class="' + n + '_nav"></li>').append(c);
+            $(selector).append(l);
+        });
+        return true;
+    }
+
+    generateCatalog(".catalog-body");
+
+    // toggle side catalog
+    $(".catalog-toggle").click((function (e) {
+        e.preventDefault();
+        $('.side-catalog').toggleClass("fold")
+    }))
+
+    /*
+     * Doc: https://github.com/davist11/jQuery-One-Page-Nav
+     * Fork by Hujin to support padding
+     */
+    async("/blog/js/jquery.nav.js", function () {
+        $('.catalog-body').onePageNav({
+            currentClass: "active",
+            changeHash: !1,
+            easing: "swing",
+            filter: "",
+            scrollSpeed: 700,
+            scrollOffset: 0,
+            scrollThreshold: .2,
+            begin: null,
+            end: null,
+            scrollChange: null,
+            padding: 80
+        });
+    });
+</script>
+
+
+
+<!-- Multi-Lingual -->
+
+
+<!-- Simple Jekyll Search -->
+<script>
+    // https://stackoverflow.com/questions/1912501/unescape-html-entities-in-javascript
+    function htmlDecode(input) {
+        var e = document.createElement('textarea');
+        e.innerHTML = input;
+        // handle case of empty input
+        return e.childNodes.length === 0 ? "" : e.childNodes[0].nodeValue;
+    }
+
+    SimpleJekyllSearch({
+        searchInput: document.getElementById('search-input'),
+        resultsContainer: document.getElementById('search-results'),
+        json: '/search.json',
+        searchResultTemplate: '<div class="post-preview item"><a href="{url}"><h2 class="post-title">{title}</h2><h3 class="post-subtitle">{subtitle}</h3><hr></a></div>',
+        noResultsText: 'No results',
+        limit: 50,
+        fuzzy: false,
+        // a hack to get escaped subtitle unescaped. for some reason, 
+        // post.subtitle w/o escape filter nuke entire search.
+        templateMiddleware: function (prop, value, template) {
+            if (prop === 'subtitle' || prop === 'title') {
+                if (value.indexOf("code")) {
+                    return htmlDecode(value);
+                } else {
+                    return value;
+                }
+            }
+        }
+    });
+
+    $(document).ready(function () {
+        var $searchPage = $('.search-page');
+        var $searchOpen = $('.search-icon');
+        var $searchClose = $('.search-icon-close');
+        var $searchInput = $('#search-input');
+        var $body = $('body');
+
+        $searchOpen.on('click', function (e) {
+            e.preventDefault();
+            $searchPage.toggleClass('search-active');
+            var prevClasses = $body.attr('class') || '';
+            setTimeout(function () {
+                $body.addClass('no-scroll');
+            }, 400)
+
+            if ($searchPage.hasClass('search-active')) {
+                $searchClose.on('click', function (e) {
+                    e.preventDefault();
+                    $searchPage.removeClass('search-active');
+                    $body.attr('class', prevClasses);  // from closure 
+                });
+                $searchInput.focus();
+            }
+        });
+    });
+</script>
+
+
+<!-- Image to hack wechat -->
+<img src="/img/icon_wechat.png" width="0" height="0" />
+<!-- Migrate from head to bottom, no longer block render and still work -->
+
+</body>
+
+</html>

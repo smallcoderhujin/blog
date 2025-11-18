@@ -1,6 +1,22 @@
 [
   
     {
+      "title"    : "VLLM 源码 —— 单机多卡模块间的通信",
+      "subtitle" : "",
+      "tags"     : "vllm",
+      "url"      : "/blog/2025/11/17/vllm-communication/",
+      "date"     : "2025-11-17 00:00:00 +0000"
+    } ,
+  
+    {
+      "title"    : "VLLM 源码 —— 单机单卡模型的加载",
+      "subtitle" : "",
+      "tags"     : "vllm",
+      "url"      : "/blog/2025/11/10/vllm-load-model/",
+      "date"     : "2025-11-10 00:00:00 +0000"
+    } ,
+  
+    {
       "title"    : "sanlock原理和使用",
       "subtitle" : "",
       "tags"     : "sanlock, lvmlockd",
